@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<movepattern version="5">
+	<move id="0" index="0" loop="1" movelock="20" actionlock="50">
+		<frame image="my-image.bmp" index="0" unknown="0" xtexoffset="5" ytexoffset="65531" texwidth="100" texheight="100" xoffset="5" yoffset="-5" duration="5" rendergroup="0">
+			<traits damage="0" proration="0" chipdamage="0" spiritdamage="0" untech="0" power="0" limit="0" onhitplayerstun="0" onhitenemystun="0" onblockplayerstun="0" onblockenemystun="0" onhitcardgain="0" onblockcardgain="0" onairhitsetsequence="0" ongroundhitsetsequence="0" xspeed="0" yspeed="0" onhitsfx="0" onhiteffect="0" attacklevel="0"/>
+			<effect xpivot="0" ypivot="0" xpositionextra="0" ypositionextra="0" xposition="5" yposition="-5" unknown02="0" xspeed="5" yspeed="-5"/>
+		</frame>
+		<frame image="my-image.bmp" index="1" unknown="0" xtexoffset="5" ytexoffset="65531" texwidth="100" texheight="100" xoffset="5" yoffset="-5" duration="5" rendergroup="2">
+			<blend mode="0" color="ffffffff" xscale="200" yscale="200" vertflip="0" horzflip="180" angle="-30"/>
+			<traits damage="100" proration="100" chipdamage="100" spiritdamage="100" untech="100" power="100" limit="100" onhitplayerstun="10" onhitenemystun="10" onblockplayerstun="10" onblockenemystun="10" onhitcardgain="100" onblockcardgain="100" onairhitsetsequence="0" ongroundhitsetsequence="0" xspeed="50" yspeed="-50" onhitsfx="1" onhiteffect="1" attacklevel="0"/>
+			<collision>
+				<box left="-20" up="20" right="20" down="-20"/>
+			</collision>
+			<hit>
+				<box left="-30" up="30" right="30" down="-30"/>
+			</hit>
+			<attack>
+				<box left="-40" up="40" right="40" down="-40" unknown="0"/>
+			</attack>
+			<effect xpivot="0" ypivot="0" xpositionextra="0" ypositionextra="0" xposition="5" yposition="-5" unknown02="0" xspeed="5" yspeed="-5"/>
+		</frame>
+	</move>
+</movepattern>

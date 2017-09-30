@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<animpattern version="5">
+	<animation id="0" index="0" loop="0">
+		<frame image="my-image.bmp" index="0" unknown="0" xtexoffset="0" ytexoffset="0" texwidth="32" texheight="32" xoffset="0" yoffset="0" duration="1" rendergroup="0"/>
+	</animation>
+	<animation id="1" index="0" loop="1">
+		<frame image="my-image.bmp" index="0" unknown="0" xtexoffset="5" ytexoffset="65531" texwidth="32" texheight="32" xoffset="5" yoffset="-5" duration="1" rendergroup="2">
+			<blend mode="1" color="ffffffff" xscale="200" yscale="200" vertflip="0" horzflip="0" angle="30"/>
+		</frame>
+		<frame image="my-image.bmp" index="1" unknown="0" xtexoffset="5" ytexoffset="65531" texwidth="32" texheight="32" xoffset="5" yoffset="-5" duration="1" rendergroup="2">
+			<blend mode="0" color="ffffffff" xscale="50" yscale="50" vertflip="1" horzflip="1" angle="-30"/>
+		</frame>
+	</animation>
+</animpattern>

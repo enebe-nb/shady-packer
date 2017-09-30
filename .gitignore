@@ -1,0 +1,3 @@
+build*
+deploy*
+src/test.cpp

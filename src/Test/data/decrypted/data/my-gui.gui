@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layout version="4">
+	<static id="0" xposition="20" yposition="-20" mirror="0">
+		<image name="my-image.bmp" xposition="10" yposition="-10" width="6" height="4"/>
+	</static>
+	<mutable id="1" xposition="30" yposition="-30"/>
+	<sliderhorz id="2" xposition="40" yposition="-40" mirror="0">
+		<image name="my-image.bmp" xposition="10" yposition="-10" width="6" height="4"/>
+	</sliderhorz>
+	<slidervert id="3" xposition="50" yposition="-50" mirror="1">
+		<image name="my-image.bmp" xposition="10" yposition="-10" width="6" height="4"/>
+	</slidervert>
+	<number id="4" xposition="60" yposition="-60" width="6" height="4" fontspacing="10" textspacing="10" size="2" floatsize="1">
+		<image name="my-image.bmp" xposition="10" yposition="-10" width="6" height="4"/>
+	</number>
+</layout>

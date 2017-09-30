@@ -1,0 +1,12 @@
+[submodule "thirdparty/rapidxml"]
+	path = thirdparty/rapidxml
+	url = https://github.com/valnoel/rapidxml.git
+[submodule "thirdparty/nuklear"]
+	path = thirdparty/nuklear
+	url = https://github.com/vurtun/nuklear.git
+[submodule "thirdparty/sdl2-cmake"]
+	path = thirdparty/sdl2-cmake
+	url = https://github.com/tcbrindle/sdl2-cmake-scripts.git
+[submodule "thirdparty/tinyfiledialogs"]
+	path = thirdparty/tinyfiledialogs
+	url = https://git.code.sf.net/p/tinyfiledialogs/code

@@ -1,0 +1,87 @@
+#pragma once
+#include "baseentry.hpp"
+#include <stack>
+
+namespace ShadyCore {
+	class StreamFilter : public std::streambuf {
+	protected:
+		std::streambuf* base;
+		std::stack<int_type> pool;
+		std::streamoff pos = 0;
+		std::streamsize size;
+
+		virtual char_type filter(char_type) = 0;
+		virtual void seek(off_type, std::ios::seekdir) = 0;
+	public:
+		inline StreamFilter(std::streambuf* base, std::streamsize size) : base(base), size(size) {};
+
+		// DISALLOWED
+		int_type pbackfail(int_type) override { throw; }
+		void imbue(const std::locale&) override { throw; }
+		std::streambuf* setbuf(char_type*, std::streamsize) override { throw; }
+		std::streamsize showmanyc() override { throw; }
+
+		pos_type seekoff(off_type, std::ios::seekdir, std::ios::openmode) override;
+		pos_type seekpos(pos_type, std::ios::openmode) override;
+
+		std::streamsize xsgetn(char_type*, std::streamsize) override;
+		int_type underflow() override;
+		int_type uflow() override;
+		std::streamsize xsputn(const char_type*, std::streamsize) override;
+		int_type overflow(int_type) override;
+		int sync() override { return base->pubsync(); }
+	};
+
+	class DataListFilter : public StreamFilter {
+	private:
+		static const unsigned short TABLE_SIZE = 624;
+		static const unsigned short TABLE_SHIFT = 397;
+		static const unsigned long MATRIX_A = 0x9908b0dfUL;
+		static const unsigned long UPPER_MASK = 0x80000000UL;
+		static const unsigned long LOWER_MASK = 0x7fffffffUL;
+
+		unsigned long table[TABLE_SIZE];
+		unsigned long seed;
+		int index;
+		int key[2];
+
+		void init();
+		char_type randValue();
+		char_type filter(char_type value) override;
+		void seek(off_type, std::ios::seekdir) override;
+	public:
+		inline DataListFilter(std::streambuf* base, unsigned long seed, std::streamsize size) : StreamFilter(base, size), seed(seed) { init(); }
+	};
+
+	class DataFileFilter : public StreamFilter {
+	private:
+		unsigned int offset;
+		int key;
+
+		inline char_type filter(char_type value) override final { return value ^ key; }
+		void seek(off_type, std::ios::seekdir) override;
+	public:
+		DataFileFilter(std::streambuf* base, unsigned int offset, unsigned int size)
+			: StreamFilter(base, size), offset(offset) { key = (offset >> 1) | 0x23; }
+		inline DataFileFilter(unsigned int offset, unsigned int size) : DataFileFilter(0, offset, size) {};
+
+		inline void setBaseBuffer(std::streambuf* b) { base = b; pos = 0; }
+		inline const std::streambuf* getBaseBuffer() const { return base; }
+	};
+
+	class DataPackageEntry : public BasePackageEntry {
+	private:
+		const char* packageFilename;
+		unsigned int packageOffset;
+		std::istream fileStream;
+		DataFileFilter fileFilter;
+	public:
+		inline DataPackageEntry(const char* packageFilename, const char* name, unsigned int offset, unsigned int size)
+			: BasePackageEntry(name, size), packageFilename(packageFilename), fileStream(&fileFilter), fileFilter(offset, size), packageOffset(offset) {}
+
+		inline EntryType getType() const override final { return TYPE_DATA; }
+		inline bool isOpen() const override final { return fileFilter.getBaseBuffer(); }
+		std::istream& open() override;
+		void close() override;
+	};
+}
