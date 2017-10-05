@@ -41,7 +41,8 @@ void FileEntrySuite::testFileTemporary() {
 	boost::filesystem::copy_file("test-data/decrypted/data/my-text.txt", tempFile);
 	TS_ASSERT(boost::filesystem::exists(tempFile));
 
-	ShadyCore::FilePackageEntry* entry = new ShadyCore::FilePackageEntry("data/my-text.txt", tempFile.string().c_str(), true);
+	char buffer[255]; strcpy(buffer, tempFile.string().c_str());
+	ShadyCore::FilePackageEntry* entry = new ShadyCore::FilePackageEntry("data/my-text.txt", buffer, true);
 	std::istream& input = entry->open();
 	std::ifstream expected("test-data/decrypted/data/my-text.txt");
 	TS_ASSERT_STREAM(input, expected);

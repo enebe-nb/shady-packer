@@ -15,17 +15,27 @@ ShadyCli::Command* ShadyCli::Command::parseArguments(int argc, char* argv[]) {
 	return 0;
 }
 
-void ShadyCli::ConvertCommand::processFile(boost::filesystem::path filename) {
+void ShadyCli::ConvertCommand::processFile(boost::filesystem::path filename, boost::filesystem::path& path) {
 	std::ifstream input(filename.native(), std::fstream::binary);
 	const ShadyCore::FileType& type = ShadyCore::FileType::get(filename.generic_string().c_str(), input);
-	filename.replace_extension(type.inverseExt);
-	std::ofstream output(filename.native(), std::fstream::binary);
-	ShadyCore::convertResource(type, input, output);
+	if (type == ShadyCore::FileType::TYPE_UNKNOWN || type == ShadyCore::FileType::TYPE_PACKAGE) {
+		if (copyUnknown) {
+			boost::filesystem::create_directories(path);
+			boost::filesystem::copy_file(filename, path / filename.filename());
+		}
+	} else {
+		filename = path / filename.filename().replace_extension(type.inverseExt);
+		boost::filesystem::create_directories(path);
+		std::ofstream output(filename.native(), std::fstream::binary);
+		ShadyCore::convertResource(type, input, output);
+	}
 }
 
 ShadyCli::ConvertCommand::ConvertCommand(int argc, char* argv[]) {
 	boost::program_options::options_description options = boost::program_options::options_description("Convert Command");
 	options.add_options()
+		("copy-unknown", "Copy files that can't be converted")
+		("output", boost::program_options::value<std::string>()->default_value("."), "Target directory to save")
 		("files", boost::program_options::value< std::vector<std::string> >(), "List of files to convert");
 
     boost::program_options::positional_options_description positional;
@@ -37,21 +47,24 @@ ShadyCli::ConvertCommand::ConvertCommand(int argc, char* argv[]) {
         .positional(positional)
         .run(), map);
 
+	copyUnknown = map.count("copy-unknown");
+	output = map["output"].as<std::string>();
 	files = map["files"].as< std::vector<std::string> >();
 }
 
 void ShadyCli::ConvertCommand::run() {
+	boost::filesystem::path outputPath(output);
 	size_t size = files.size();
 	for (size_t i = 0; i < size; ++i) {
 		boost::filesystem::path path(files[i]);
 		if (boost::filesystem::is_directory(path)) {
             for (boost::filesystem::recursive_directory_iterator iter(path), end; iter != end; ++iter) {
                 if (!boost::filesystem::is_directory(iter->path())) {
-                    processFile(iter->path());
+                    processFile(iter->path(), outputPath / boost::filesystem::relative(iter->path().parent_path(), path));
                 }
             }
 		} else if (boost::filesystem::exists(path)) {
-			processFile(path);
+			processFile(path, boost::filesystem::path(output));
 		}
 	}
 }
@@ -59,7 +72,7 @@ void ShadyCli::ConvertCommand::run() {
 void ShadyCli::ExtractCommand::processFile(boost::filesystem::path filename) {
 	ShadyCore::Package package;
     package.appendPackage(filename.string().c_str());
-	package.save(target.c_str(), ShadyCore::Package::DATA_MODE, 0);
+	package.save(target.c_str(), ShadyCore::Package::DIR_MODE, 0);
 }
 
 ShadyCli::ExtractCommand::ExtractCommand(int argc, char* argv[]) {

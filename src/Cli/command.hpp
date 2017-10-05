@@ -12,7 +12,9 @@ namespace ShadyCli {
 	class ConvertCommand : public Command {
 	private:
 		std::vector<std::string> files;
-        void processFile(boost::filesystem::path);
+		std::string output;
+		bool copyUnknown;
+		void processFile(boost::filesystem::path, boost::filesystem::path&);
 	public:
 		ConvertCommand(int, char*[]);
 		void run();
