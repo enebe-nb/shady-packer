@@ -13,9 +13,9 @@ void ShadyCore::Image::initialize(uint32_t w, uint32_t h, uint32_t p, uint8_t b)
 
 uint16_t ShadyCore::Palette::packColor(uint32_t color, bool transparent) {
 	uint16_t pcolor = !transparent;
-	pcolor = (pcolor << 5) + ((color >> 19) & 0x1F);
-	pcolor = (pcolor << 5) + ((color >> 11) & 0x1F);
 	pcolor = (pcolor << 5) + ((color >> 3) & 0x1F);
+	pcolor = (pcolor << 5) + ((color >> 11) & 0x1F);
+	pcolor = (pcolor << 5) + ((color >> 19) & 0x1F);
 	return pcolor;
 }
 

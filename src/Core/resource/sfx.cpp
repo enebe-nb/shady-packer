@@ -95,7 +95,7 @@ void ShadyCore::ResourceEWriter::accept(Sfx& resource) {
 }
 
 void ShadyCore::ResourceDReader::accept(LabelResource& resource) {
-	char name[32];
+	char name[32]; name[0] = '\0';
 	double offset, size;
 
 	input >> std::skipws >> offset >> size >> name;
@@ -108,7 +108,10 @@ void ShadyCore::ResourceEReader::accept(LabelResource& resource) {
 	ShadyUtil::RiffDocument riff(input);
 
 	uint8_t buffer[32];
-	riff.read("SFPLSFPI", buffer);
+	if (riff.size("SFPLSFPI"))
+		riff.read("SFPLSFPI", buffer);
+	else
+		buffer[0] = '\0';
 	resource.initialize((char*)buffer);
 	riff.read("SFPLcue ", buffer, 8, 4);
 	resource.setOffset(*(uint32_t*)buffer);
