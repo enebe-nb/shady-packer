@@ -6,6 +6,7 @@
 #include <map>
 #include <mutex>
 #include <functional>
+#include <cstring>
 
 namespace ShadyCore {
     class StreamPackageEntry : public BasePackageEntry {
@@ -74,16 +75,16 @@ namespace ShadyCore {
 		inline iterator begin() { return iterator(entries.begin()); }
         inline iterator end() { return iterator(entries.end()); }
 		inline iterator findFile(const char* name) { return iterator(entries.find(name)); }
-		
+
 		void appendPackage(const char*);
 		void appendFile(const char*, const char *, bool = false);
 		void appendFile(const char*, std::istream&);
-		
+
 		iterator detachFile(iterator iter);
 		inline void detachFile(const char* name) { auto iter = entries.find(name); if (iter != entries.end()) detachFile(iter); }
 		iterator renameFile(iterator iter, const char* name);
 		inline void renameFile(const char* oldName, const char* newName) { auto iter = entries.find(oldName); if (iter != entries.end()) renameFile(iter, newName); }
-		
+
 		void save(const char*, Mode, Callback*);
 		inline unsigned int size() { return entries.size(); }
 		inline bool empty() { return entries.empty(); }

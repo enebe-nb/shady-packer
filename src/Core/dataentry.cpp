@@ -3,6 +3,7 @@
 #include <fstream>
 #include <boost/filesystem.hpp>
 #include <cmath>
+#include <cstring>
 
 std::streamsize ShadyCore::StreamFilter::xsgetn(char_type* buffer, std::streamsize count) {
 	int buffered = 0;

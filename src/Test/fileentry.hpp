@@ -71,13 +71,14 @@ void FileEntrySuite::testPackageRead() {
 void FileEntrySuite::testPackageAppend() {
 	ShadyCore::Package package;
 	package.appendFile("file-test", "test-data/decrypted/data/my-text.txt");
-	package.appendFile("stream-test", std::ifstream("test-data/decrypted/data/my-text.txt", std::ios::binary));
+    std::ifstream input("test-data/decrypted/data/my-text.txt", std::ios::binary);
+	package.appendFile("stream-test", input);
 
 	std::ifstream expected("test-data/decrypted/data/my-text.txt", std::ios::binary);
 	std::istream& fileInput = package.findFile("file-test")->open();
 	TS_ASSERT_STREAM(fileInput, expected);
 	package.findFile("file-test")->close();
-	
+
 	expected.clear(); expected.seekg(0);
 	std::istream& streamInput = package.findFile("stream-test")->open();
 	TS_ASSERT_STREAM(streamInput, expected);

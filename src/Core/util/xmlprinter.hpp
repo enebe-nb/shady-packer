@@ -13,7 +13,6 @@ namespace ShadyUtil {
 		bool isOpened = false;
     public:
 		inline XmlPrinter(std::ostream& output) : output(output) { output << "<?xml version=\"1.0\" encoding=\"utf-8\"?>"; }
-		inline ~XmlPrinter() { if (stack.size()) throw; }
 		void openNode(const char*);
 		void appendAttribute(const char*, const char*);
 		inline void appendAttribute(const char* name, int8_t value, bool hex = false) { char buffer[21]; snprintf(buffer, 21, hex ? "%" PRIx8 : "%" PRIi8, value); appendAttribute(name, buffer); }

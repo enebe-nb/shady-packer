@@ -15,7 +15,7 @@ ShadyCli::Command* ShadyCli::Command::parseArguments(int argc, char* argv[]) {
 	return 0;
 }
 
-void ShadyCli::ConvertCommand::processFile(boost::filesystem::path filename, boost::filesystem::path& path) {
+void ShadyCli::ConvertCommand::processFile(boost::filesystem::path filename, boost::filesystem::path path) {
 	std::ifstream input(filename.native(), std::fstream::binary);
 	const ShadyCore::FileType& type = ShadyCore::FileType::get(filename.generic_string().c_str(), input);
 	if (type == ShadyCore::FileType::TYPE_UNKNOWN || type == ShadyCore::FileType::TYPE_PACKAGE) {

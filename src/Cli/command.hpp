@@ -14,7 +14,7 @@ namespace ShadyCli {
 		std::vector<std::string> files;
 		std::string output;
 		bool copyUnknown;
-		void processFile(boost::filesystem::path, boost::filesystem::path&);
+		void processFile(boost::filesystem::path, boost::filesystem::path);
 	public:
 		ConvertCommand(int, char*[]);
 		void run();
