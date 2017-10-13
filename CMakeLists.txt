@@ -5,7 +5,7 @@ project(shady-packer)
 set(Boost_USE_STATIC_LIBS ON)
 set(Boost_USE_MULTITHREADED ON)
 set(Boost_USE_STATIC_RUNTIME OFF)
-find_package(Boost REQUIRED COMPONENTS filesystem program_options)
+find_package(Boost REQUIRED COMPONENTS filesystem)
 include_directories(${Boost_INCLUDE_DIRS})
 
 # LIBPNG Library
@@ -31,6 +31,7 @@ find_package(CxxTest)
 
 # Submodules Linking
 include_directories("${CMAKE_SOURCE_DIR}/thirdparty/rapidxml")
+include_directories("${CMAKE_SOURCE_DIR}/thirdparty/cxxopts/include")
 include_directories("${CMAKE_SOURCE_DIR}/thirdparty/nuklear")
 include_directories("${CMAKE_SOURCE_DIR}/thirdparty/tinyfiledialogs")
 set(TINYFILEDIALOGS_SOURCE "${CMAKE_SOURCE_DIR}/thirdparty/tinyfiledialogs/tinyfiledialogs.c")
@@ -80,6 +81,9 @@ target_compile_definitions(shady-packer-core PRIVATE
 set(SRC_CLI
 	src/Cli/command.hpp
 	src/Cli/command.cpp
+	src/Cli/convert.cpp
+	src/Cli/merge.cpp
+	src/Cli/pack.cpp
 )
 source_group("Source Files" FILES ${SRC_CLI})
 add_executable(shady-packer-cli ${SRC_CLI})

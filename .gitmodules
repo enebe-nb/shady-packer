@@ -10,3 +10,6 @@
 [submodule "thirdparty/tinyfiledialogs"]
 	path = thirdparty/tinyfiledialogs
 	url = https://git.code.sf.net/p/tinyfiledialogs/code
+[submodule "thirdparty/cxxopts"]
+	path = thirdparty/cxxopts
+	url = https://github.com/jarro2783/cxxopts.git
