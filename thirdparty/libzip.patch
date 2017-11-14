@@ -1,0 +1,42 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index b979444..4c962f4 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -95,7 +95,6 @@ CHECK_TYPE_SIZE("ssize_t" SSIZE_T_LIBZIP)
+ 
+ TEST_BIG_ENDIAN(WORDS_BIGENDIAN)
+ 
+-FIND_PACKAGE(ZLIB REQUIRED)
+ INCLUDE_DIRECTORIES(${ZLIB_INCLUDE_DIR})
+ set(CMAKE_REQUIRED_INCLUDES ${ZLIB_INCLUDE_DIR})
+ IF(ZLIB_VERSION_STRING VERSION_LESS "1.1.2")
+diff --git a/cmake-zipconf.h.in b/cmake-zipconf.h.in
+index 17edc6c..5fced32 100644
+--- a/cmake-zipconf.h.in
++++ b/cmake-zipconf.h.in
+@@ -110,7 +110,11 @@ typedef unsigned long long zip_uint64_t;
+ #define ZIP_INT16_MAX	 0x7fff
+ #define ZIP_UINT16_MAX	 0xffff
+ 
++#ifdef __i386__
++#define ZIP_INT32_MIN	 (-ZIP_INT32_MAX-1LL)
++#else
+ #define ZIP_INT32_MIN	-0x80000000L
++#endif
+ #define ZIP_INT32_MAX	 0x7fffffffL
+ #define ZIP_UINT32_MAX	 0xffffffffLU
+ 
+diff --git a/lib/CMakeLists.txt b/lib/CMakeLists.txt
+index 8bf304b..6d7a7b2 100644
+--- a/lib/CMakeLists.txt
++++ b/lib/CMakeLists.txt
+@@ -198,6 +198,9 @@ ENDIF(NOT HAVE_MKSTEMP)
+ ADD_LIBRARY(zip ${LIBZIP_SOURCES} ${LIBZIP_EXTRA_FILES} ${LIBZIP_OPSYS_FILES})
+ SET_TARGET_PROPERTIES(zip PROPERTIES VERSION 3.0 SOVERSION 3 )
+ TARGET_LINK_LIBRARIES(zip ${ZLIB_LIBRARY} ${OPTIONAL_LIBRARY})
++ADD_LIBRARY(zipstatic ${LIBZIP_SOURCES} ${LIBZIP_EXTRA_FILES} ${LIBZIP_OPSYS_FILES})
++SET_TARGET_PROPERTIES(zipstatic PROPERTIES VERSION 3.0 SOVERSION 3 )
++TARGET_LINK_LIBRARIES(zipstatic ${ZLIB_LIBRARY} ${OPTIONAL_LIBRARY})
+ INSTALL(TARGETS zip
+   RUNTIME DESTINATION bin
+   ARCHIVE DESTINATION lib

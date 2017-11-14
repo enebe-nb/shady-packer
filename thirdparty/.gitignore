@@ -1,0 +1,9 @@
+alsa-lib/
+boost/
+cxxopts/
+cxxtest/
+libpng/
+libzip/
+rapidxml/
+rtaudio/
+zlib/
