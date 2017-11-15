@@ -13,7 +13,7 @@ void ShadyCli::ConvertCommand::buildOptions(cxxopts::Options& options) {
 }
 
 void ShadyCli::ConvertCommand::processFile(boost::filesystem::path filename, boost::filesystem::path targetPath, bool copyUnknown) {
-	std::ifstream input(filename.native(), std::fstream::binary);
+	std::ifstream input(filename.string(), std::fstream::binary);
 	const ShadyCore::FileType& type = ShadyCore::FileType::get(filename.generic_string().c_str(), input);
 	if (type == ShadyCore::FileType::TYPE_UNKNOWN || type == ShadyCore::FileType::TYPE_PACKAGE) {
 		if (copyUnknown) {
@@ -25,7 +25,7 @@ void ShadyCli::ConvertCommand::processFile(boost::filesystem::path filename, boo
 		boost::filesystem::path targetName = targetPath / filename.filename().replace_extension(type.inverseExt);
         printf("Converting %s -> %s\n", filename.generic_string().c_str(), targetName.generic_string().c_str());
 		boost::filesystem::create_directories(targetPath);
-		std::ofstream output(targetName.native(), std::fstream::binary);
+		std::ofstream output(targetName.string(), std::fstream::binary);
 		ShadyCore::convertResource(type, input, output);
 	}
 }

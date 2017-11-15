@@ -140,7 +140,7 @@ void DataEntrySuite::testListFilter() {
 	for (const char* data : dataArray) {
 		unsigned char nameSize;
 		char* name;
-		
+
 		input.ignore(8);
 		input.read((char*)&nameSize, 1);
 		name = new char[nameSize + 1];
@@ -173,7 +173,7 @@ void DataEntrySuite::testPackageWrite() {
 	ShadyCore::Package package;
 	package.appendPackage("test-data/encrypted");
 	boost::filesystem::path tempFile = boost::filesystem::temp_directory_path() / boost::filesystem::unique_path();
-	package.save(tempFile.string().c_str(), ShadyCore::Package::DATA_MODE, 0);
+	package.save(tempFile.string().c_str(), ShadyCore::Package::DATA_MODE, 0, 0);
 
 	boost::filesystem::ifstream input(tempFile, std::ios::binary);
 	TS_ASSERT(input.good());

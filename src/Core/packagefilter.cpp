@@ -383,7 +383,7 @@ static bool FilterUnderlineToSlash(ShadyCore::PackageFilter& filter, ShadyCore::
 	return false;
 }
 
-void ShadyCore::PackageFilter::apply(Package& package, Filter filterType, Callback* callback) {
+void ShadyCore::PackageFilter::apply(Package& package, Filter filterType, Callback* callback, void* userData) {
 	auto filterFunc =
 		filterType == FILTER_FROM_ZIP_TEXT_EXTENSION ? FilterFromZipTextFileExtension :
 		filterType == FILTER_TO_ZIP_TEXT_EXTENSION ? FilterToZipTextFileExtension :
@@ -397,7 +397,7 @@ void ShadyCore::PackageFilter::apply(Package& package, Filter filterType, Callba
 	filter.iter = package.begin();
 	unsigned int i = 1;
 	while (filter.iter != package.end()) {
-		if (callback) callback(filter.iter->getName(), i, package.size());
+		if (callback) callback(userData, filter.iter->getName(), i, package.size());
 		if (!filterFunc(filter, *filter.iter)) ++filter.iter;
 		else ++i;
 	}

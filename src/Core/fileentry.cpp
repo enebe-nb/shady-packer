@@ -40,7 +40,7 @@ void ShadyCore::Package::appendFile(const char* name, std::istream& input) {
 	addOrReplace(new FilePackageEntry(allocateString(name), allocateString(tempFile.string().c_str()), true));
 }
 
-void ShadyCore::Package::saveDirectory(const char* directory, Callback* callback) {
+void ShadyCore::Package::saveDirectory(const char* directory, Callback* callback, void* userData) {
 	char buffer[4096];
 	if (!boost::filesystem::exists(directory)) {
 		boost::filesystem::create_directories(directory);
@@ -55,9 +55,9 @@ void ShadyCore::Package::saveDirectory(const char* directory, Callback* callback
 		if (!boost::filesystem::exists(filename.parent_path()))
 			boost::filesystem::create_directories(filename.parent_path());
 
-		if (callback) callback(entry.first, ++index, fileCount);
+		if (callback) callback(userData, entry.first, ++index, fileCount);
 		boost::filesystem::path tempFile = boost::filesystem::temp_directory_path() / boost::filesystem::unique_path();
-		std::ofstream output(tempFile.native(), std::ios::binary);
+		std::ofstream output(tempFile.string(), std::ios::binary);
 		std::istream& input = entry.second->open();
 
 		int read = input.read(buffer, 4096).gcount();

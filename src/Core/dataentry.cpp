@@ -209,7 +209,7 @@ void ShadyCore::Package::appendDataPackage(std::istream& input, const char* file
 	}
 }
 
-void ShadyCore::Package::saveData(std::ostream& output, Callback* callback) {
+void ShadyCore::Package::saveData(std::ostream& output, Callback* callback, void* userData) {
 	unsigned short fileCount = entries.size();
 	unsigned int listSize = 0;
 	for (auto entry : entries) {
@@ -234,7 +234,7 @@ void ShadyCore::Package::saveData(std::ostream& output, Callback* callback) {
 	unsigned int index = 0;
 	curOffset = listSize + 6;
 	for (auto entry : entries) {
-		if (callback) callback(entry.first, ++index, fileCount);
+		if (callback) callback(userData, entry.first, ++index, fileCount);
 		std::ostream fileOutput(new DataFileFilter(output.rdbuf(), curOffset, entry.second->getSize()));
 		std::istream& input = entry.second->open();
 

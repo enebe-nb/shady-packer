@@ -113,13 +113,13 @@ void ZipEntrySuite::testPackageWrite() {
 	boost::filesystem::path tempFile = boost::filesystem::temp_directory_path() / boost::filesystem::unique_path();
 	ShadyCore::Package package;
 	package.appendPackage("test-data/zip-extracted");
-	package.save(tempFile.string().c_str(), ShadyCore::Package::ZIP_MODE, 0);
+	package.save(tempFile.string().c_str(), ShadyCore::Package::ZIP_MODE, 0, 0);
 	package.clear();
 
 	ShadyCore::Package expectedPackage;
 	package.appendPackage(tempFile.string().c_str());
 	expectedPackage.appendPackage("test-data/zip-package.dat");
-	
+
 	TS_ASSERT_EQUALS(package.size(), 10);
 	for (auto& entry : package) {
 		std::istream& input = entry.open();

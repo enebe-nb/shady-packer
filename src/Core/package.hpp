@@ -36,9 +36,9 @@ namespace ShadyCore {
 
 	class Package : public ShadyUtil::StrAllocator, public std::mutex {
     private:
-        typedef void (Callback)(const char *, unsigned int, unsigned int);
+        typedef void (Callback)(void*, const char*, unsigned int, unsigned int);
         struct entryCompare { inline bool operator() (const char* left, const char* right) const { return strcmp(left, right) < 0; } };
-		typedef std::map<const char *, BasePackageEntry*, entryCompare> MapType;
+		typedef std::map<const char*, BasePackageEntry*, entryCompare> MapType;
         MapType entries;
 
         bool addOrReplace(BasePackageEntry*);
@@ -46,9 +46,9 @@ namespace ShadyCore {
         void appendDataPackage(std::istream&, const char*);
         void appendDirPackage(const char*);
         void appendZipPackage(std::istream&, const char*);
-		void saveData(std::ostream&, Callback*);
-		void saveDirectory(const char*, Callback*);
-        void saveZip(std::ostream&, Callback*);
+		void saveData(std::ostream&, Callback*, void*);
+		void saveDirectory(const char*, Callback*, void*);
+        void saveZip(std::ostream&, Callback*, void*);
 	public:
 		enum Mode { DATA_MODE, ZIP_MODE, DIR_MODE };
 
@@ -85,7 +85,7 @@ namespace ShadyCore {
 		iterator renameFile(iterator iter, const char* name);
 		inline void renameFile(const char* oldName, const char* newName) { auto iter = entries.find(oldName); if (iter != entries.end()) renameFile(iter, newName); }
 
-		void save(const char*, Mode, Callback*);
+		void save(const char*, Mode, Callback*, void*);
 		inline unsigned int size() { return entries.size(); }
 		inline bool empty() { return entries.empty(); }
 		void clear();
@@ -93,7 +93,7 @@ namespace ShadyCore {
 
 	class PackageFilter {
 	private:
-		typedef void (Callback)(const char *, unsigned int, unsigned int);
+		typedef void (Callback)(void*, const char *, unsigned int, unsigned int);
 		Package& package;
 		Package::iterator iter;
 		inline PackageFilter(Package& package) : package(package) {}
@@ -108,7 +108,7 @@ namespace ShadyCore {
 			FILTER_UNDERLINE_TO_SLASH,
 		};
 
-		static void apply(Package&, Filter, Callback*);
+		static void apply(Package&, Filter, Callback*, void*);
 		bool renameEntry(const char*);
 		bool convertEntry(const FileType&);
 		bool convertData(const FileType&);

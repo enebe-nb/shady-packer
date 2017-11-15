@@ -50,8 +50,8 @@ namespace ShadyCore {
 
         inline const uint8_t* getData() const { return data; }
         inline uint8_t* getData() { return data; }
-		inline uint32_t getColor(int index) const { index *= 3; return (index == 0 ? 0x00 : 0xff << 24) + ((uint32_t)data[index]) + ((uint32_t)data[index + 1] << 8) + ((uint32_t)data[index + 2] << 16); }
-		inline void setColor(int index, uint32_t value) { index *= 3; data[index] = value; data[index + 1] = value >> 8; data[index + 2] = value >> 16; }
+		inline uint32_t getColor(int index) const { index *= 3; return (index == 0 ? 0x00 : 0xff << 24) + ((uint32_t)data[index] << 16) + ((uint32_t)data[index + 1] << 8) + ((uint32_t)data[index + 2]); }
+		inline void setColor(int index, uint32_t value) { index *= 3; data[index] = value >> 16; data[index + 1] = value >> 8; data[index + 2] = value; }
 
 		static uint16_t packColor(uint32_t color, bool = false);
 		static uint32_t unpackColor(uint16_t color);

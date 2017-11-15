@@ -57,8 +57,8 @@ void ReaderWriterSuite::testPackageRead() {
 		ShadyCore::Package package;
 		package.appendFile(data[0], data[0]);
 		package.appendFile(data[1], data[1]);
-		package.save(zipFile.string().c_str(), ShadyCore::Package::ZIP_MODE, 0);
-		package.save(dataFile.string().c_str(), ShadyCore::Package::DATA_MODE, 0);
+		package.save(zipFile.string().c_str(), ShadyCore::Package::ZIP_MODE, 0, 0);
+		package.save(dataFile.string().c_str(), ShadyCore::Package::DATA_MODE, 0, 0);
 		package.clear();
 
 		for (auto file : { zipFile, dataFile }) {

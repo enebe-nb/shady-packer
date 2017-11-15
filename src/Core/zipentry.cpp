@@ -193,9 +193,10 @@ static zip_int64_t zipOutputFunc(void* userdata, void* data, zip_uint64_t len, z
 	throw; // Force unsupported error
 }
 
-static void(*zipProgressDelegate)(const char*, unsigned int, unsigned int) = 0;
+static void* zipProgressData = 0;
+static void(*zipProgressDelegate)(void*, const char*, unsigned int, unsigned int) = 0;
 static void zipProgress(double percent) {
-	if (zipProgressDelegate) zipProgressDelegate("Compressing Zip", percent * 1000, 1000);
+	if (zipProgressDelegate) zipProgressDelegate(zipProgressData, "Compressing Zip", percent * 1000, 1000);
 }
 
 //-------------------------------------------------------------
@@ -219,7 +220,7 @@ void ShadyCore::Package::appendZipPackage(std::istream& input, const char* filen
 	delete entry;
 }
 
-void ShadyCore::Package::saveZip(std::ostream& output, Callback* callback) {
+void ShadyCore::Package::saveZip(std::ostream& output, Callback* callback, void* userData) {
 	zip_source_t* outputSource = zip_source_function_create(zipOutputFunc, &output, 0);
 	zip_t* file = zip_open_from_source(outputSource, ZIP_CREATE | ZIP_TRUNCATE | ZIP_CHECKCONS, 0);
 
@@ -229,6 +230,7 @@ void ShadyCore::Package::saveZip(std::ostream& output, Callback* callback) {
 	}
 
 	zipProgressDelegate = callback;
+    zipProgressData = userData;
 	zip_register_progress_callback(file, zipProgress);
 	zip_close(file);
 }

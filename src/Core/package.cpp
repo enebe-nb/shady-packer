@@ -58,17 +58,17 @@ ShadyCore::Package::iterator ShadyCore::Package::renameFile(iterator iter, const
 	return entries.erase(iter.iter);
 }
 
-void ShadyCore::Package::save(const char* filename, Mode mode, Callback* callback) {
-	if (mode == DIR_MODE) return saveDirectory(filename, callback);
+void ShadyCore::Package::save(const char* filename, Mode mode, Callback* callback, void* userData) {
+	if (mode == DIR_MODE) return saveDirectory(filename, callback, userData);
 
 	boost::filesystem::path target = boost::filesystem::absolute(filename);
 	if (!boost::filesystem::exists(target.parent_path()))
 		boost::filesystem::create_directories(target.parent_path());
 
     boost::filesystem::path tempFile = boost::filesystem::temp_directory_path() / boost::filesystem::unique_path();
-	std::ofstream output(tempFile.native(), std::ios::binary);
-	if (mode == DATA_MODE) saveData(output, callback);
-    if (mode == ZIP_MODE) saveZip(output, callback);
+	std::ofstream output(tempFile.string(), std::ios::binary);
+	if (mode == DATA_MODE) saveData(output, callback, userData);
+    if (mode == ZIP_MODE) saveZip(output, callback, userData);
 	output.close();
 
     boost::filesystem::copy_file(tempFile, target, boost::filesystem::copy_option::overwrite_if_exists);

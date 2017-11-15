@@ -20,25 +20,25 @@ static inline ShadyCore::PackageFilter::Filter getFilter(std::string filter) {
     return (ShadyCore::PackageFilter::Filter)-1;
 }
 
-static void outputCallback(const char * name, unsigned int index, unsigned int size) {
+static void outputCallback(void*, const char * name, unsigned int index, unsigned int size) {
     printf("\r\x1B[K%03d/%03d -> %40s", index, size, name);
     fflush(stdout);
 }
 
 static inline void filterDefault(ShadyCore::Package& package, ShadyCore::Package::Mode mode) {
-	ShadyCore::PackageFilter::apply(package, ShadyCore::PackageFilter::FILTER_FROM_ZIP_TEXT_EXTENSION, outputCallback);
+	ShadyCore::PackageFilter::apply(package, ShadyCore::PackageFilter::FILTER_FROM_ZIP_TEXT_EXTENSION, outputCallback,0);
 	switch (mode) {
 	case ShadyCore::Package::DATA_MODE:
-		ShadyCore::PackageFilter::apply(package, ShadyCore::PackageFilter::FILTER_ENCRYPT_ALL, outputCallback);
-		ShadyCore::PackageFilter::apply(package, ShadyCore::PackageFilter::FILTER_UNDERLINE_TO_SLASH, outputCallback);
+		ShadyCore::PackageFilter::apply(package, ShadyCore::PackageFilter::FILTER_ENCRYPT_ALL, outputCallback, 0);
+		ShadyCore::PackageFilter::apply(package, ShadyCore::PackageFilter::FILTER_UNDERLINE_TO_SLASH, outputCallback, 0);
 		break;
 	case ShadyCore::Package::DIR_MODE:
-		ShadyCore::PackageFilter::apply(package, ShadyCore::PackageFilter::FILTER_DECRYPT_ALL, outputCallback);
+		ShadyCore::PackageFilter::apply(package, ShadyCore::PackageFilter::FILTER_DECRYPT_ALL, outputCallback, 0);
 		break;
 	case ShadyCore::Package::ZIP_MODE:
-		ShadyCore::PackageFilter::apply(package, ShadyCore::PackageFilter::FILTER_TO_ZIP_CONVERTER, outputCallback);
-		ShadyCore::PackageFilter::apply(package, ShadyCore::PackageFilter::FILTER_TO_ZIP_TEXT_EXTENSION, outputCallback);
-		ShadyCore::PackageFilter::apply(package, ShadyCore::PackageFilter::FILTER_SLASH_TO_UNDERLINE, outputCallback);
+		ShadyCore::PackageFilter::apply(package, ShadyCore::PackageFilter::FILTER_TO_ZIP_CONVERTER, outputCallback, 0);
+		ShadyCore::PackageFilter::apply(package, ShadyCore::PackageFilter::FILTER_TO_ZIP_TEXT_EXTENSION, outputCallback, 0);
+		ShadyCore::PackageFilter::apply(package, ShadyCore::PackageFilter::FILTER_SLASH_TO_UNDERLINE, outputCallback, 0);
 		break;
 	}
 }
@@ -95,11 +95,11 @@ void ShadyCli::PackCommand::run(const cxxopts::Options& options) {
 			filterDefault(package, mode);
         } else {
             printf("\r\x1B[KApplying filter \"%s\".\n", filters[i].c_str());
-            ShadyCore::PackageFilter::apply(package, filter, outputCallback);
+            ShadyCore::PackageFilter::apply(package, filter, outputCallback, 0);
         }
     }
 
     printf("\r\x1B[KSaving to disk.\n");
-	package.save(output.c_str(), mode, outputCallback);
+	package.save(output.c_str(), mode, outputCallback, 0);
     printf("\n");
 }

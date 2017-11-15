@@ -77,7 +77,7 @@ void ShadyCli::MergeCommand::processPalette(ShadyCore::Palette* palette, boost::
     if (!boost::filesystem::is_regular_file(filename)) return; // ignore
     if (filename.extension() != ".png") return; // ignore
 
-    std::fstream file(filename.native(), std::ios::in | std::ios::out | std::ios::binary);
+    std::fstream file(filename.string(), std::ios::in | std::ios::out | std::ios::binary);
     if (!isPNG(file)) return;
 
 	png_structp pngData = png_create_read_struct(PNG_LIBPNG_VER_STRING, 0, pngError, pngWarning);

@@ -92,7 +92,7 @@ void FileEntrySuite::testPackageWrite() {
 	package.appendPackage("test-data/decrypted");
 
 	boost::filesystem::path tempFile = boost::filesystem::temp_directory_path() / boost::filesystem::unique_path();
-	package.save(tempFile.string().c_str(), ShadyCore::Package::DIR_MODE, 0);
+	package.save(tempFile.string().c_str(), ShadyCore::Package::DIR_MODE, 0, 0);
 
 	for (boost::filesystem::recursive_directory_iterator iter("test-data/decrypted"), e; iter != e; ++iter) {
 		boost::filesystem::path fileName = tempFile / boost::filesystem::relative(iter->path(), "test-data/decrypted");

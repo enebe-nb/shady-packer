@@ -11,25 +11,28 @@ void ShadyCore::Image::initialize(uint32_t w, uint32_t h, uint32_t p, uint8_t b)
 	raw = new uint8_t[width * height * (bitsPerPixel == 8 ? 1 : 4)];
 }
 
+// TODO review
 uint16_t ShadyCore::Palette::packColor(uint32_t color, bool transparent) {
 	uint16_t pcolor = !transparent;
-	pcolor = (pcolor << 5) + ((color >> 3) & 0x1F);
-	pcolor = (pcolor << 5) + ((color >> 11) & 0x1F);
 	pcolor = (pcolor << 5) + ((color >> 19) & 0x1F);
+	pcolor = (pcolor << 5) + ((color >> 11) & 0x1F);
+	pcolor = (pcolor << 5) + ((color >> 3) & 0x1F);
 	return pcolor;
 }
 
 uint32_t ShadyCore::Palette::unpackColor(uint16_t color) {
 	uint32_t ucolor;
 
-	// Reverse order
-	ucolor = (color << 3) & 0xF8;
+	//ucolor = (color << 3) & 0xF8;
+	ucolor = (color >> 7) & 0xF8;
 	ucolor += (ucolor >> 5) & 0x07;
 	ucolor = ucolor << 8;
+	//ucolor += (color >> 2) & 0xF8;
 	ucolor += (color >> 2) & 0xF8;
 	ucolor += (ucolor >> 5) & 0x07;
 	ucolor = ucolor << 8;
-	ucolor += (color >> 7) & 0xF8;
+	//ucolor += (color >> 7) & 0xF8;
+	ucolor += (color << 3) & 0xF8;
 	ucolor += (ucolor >> 5) & 0x07;
 
 	return ucolor;
