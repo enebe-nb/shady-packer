@@ -13,7 +13,7 @@ static char zipPackages[2048];
 static int zipPackageCount;
 
 extern const BYTE TARGET_HASH[16];
-__declspec(selectany) const BYTE TARGET_HASH[16] =
+/*__declspec(selectany)*/ const BYTE TARGET_HASH[16] =
 {
 	// ver1.10
 	// 0x26, 0x8a, 0xfd, 0x82, 0x76, 0x90, 0x3e, 0x16, 0x71, 0x6c, 0x14, 0x29, 0xc6, 0x95, 0x9c, 0x9d
@@ -61,7 +61,7 @@ zip_t* appendZipPackage(zip_t* target, const char* path) {
 
 void LoadZipPackages() {
 	int err = 0;
-	zip_t* target = zip_open("th123e.dat", ZIP_CREATE, &err);
+	zip_t* target = zip_open("th123e.dat", ZIP_CREATE | ZIP_TRUNCATE, &err);
 	if (!target) return;
 	std::stack<zip_t*> children;
 
@@ -104,6 +104,23 @@ void LoadSettings(LPCSTR profilePath) {
 	}
 }
 
+LONG CompareFileTime(const char* left, const char* right) {
+	HANDLE file;
+	FILETIME leftTime, rightTime;
+	
+	file = ::CreateFile(left, 0, FILE_SHARE_READ, 0, OPEN_EXISTING, 0, 0);
+	if (file == INVALID_HANDLE_VALUE) return -1;
+	::GetFileTime(file, 0, 0, &leftTime);
+	::CloseHandle(file);
+	
+	file = ::CreateFile(right, 0, FILE_SHARE_READ, 0, OPEN_EXISTING, 0, 0);
+	if (file == INVALID_HANDLE_VALUE) return 1;
+	::GetFileTime(file, 0, 0, &rightTime);
+	::CloseHandle(file);
+	
+	return ::CompareFileTime(&leftTime, &rightTime);
+}
+
 extern "C" __declspec(dllexport) bool CheckVersion(const BYTE hash[16]) {
 	return ::memcmp(TARGET_HASH, hash, sizeof TARGET_HASH) == 0;
 }
@@ -120,8 +137,11 @@ extern "C" __declspec(dllexport) bool Initialize(HMODULE hMyModule, HMODULE hPar
 	TamperCall(0x007FB85F, reinterpret_cast<DWORD>(LoadDataPackages));
 	::VirtualProtect(reinterpret_cast<LPVOID>(TEXT_SECTION_OFFSET), TEXT_SECTION_SIZE, dwOldProtect, &dwOldProtect);
 
-	//LoadZipPackages();
-
+	::PathAppend(basePath, "shady-loader.ini");
+	LONG result = CompareFileTime(basePath, "th123e.dat");
+	::PathRemoveFileSpec(basePath);
+	if (result > 0) LoadZipPackages();
+	
 	return TRUE;
 }
 
