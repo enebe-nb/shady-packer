@@ -1,81 +1,64 @@
 #include "dialog.hpp"
-#include "application.hpp"
 
-#include <mutex>
-
-static std::mutex mutex;
-static unsigned int curProgress = 0, maxProgress = 1;
-static char* currentName = 0;
-
-void ShadyGui::DialogWindow::draw(nk_context* context, int width, int height) {
-	int w = width, h = height;
-	getPreferredSize(w, h);
-
-	if (nk_begin(context, getName(), nk_rect((width - w) / 2, (height - h) / 2, w, h), NK_WINDOW_TITLE | NK_WINDOW_BORDER | NK_WINDOW_NO_SCROLLBAR)) {
-		onGuiLayout(context);
-	} nk_end(context);
+void ShadyGui::LongTaskDialog::taskThread(LongTaskDialog* self) {
+    self->running = true;
+    self->runTask();
+    self->running = false;
+    self->notify();
 }
 
-static void taskCallback(const char* name, unsigned int cur, unsigned int max) {
-	mutex.lock();
-	if (currentName) delete[] currentName;
-	currentName = new char[strlen(name) + 1];
-	strcpy(currentName, name);
-	curProgress = cur;
-	maxProgress = max;
-	mutex.unlock();
+ShadyGui::LongTaskDialog::LongTaskDialog(const Glib::ustring& name, bool modal) : Gtk::Dialog(name, modal) {
+    auto container = get_content_area();
+    container->add(label);
+    container->add(progress);
+    dispatcher.connect(sigc::mem_fun(*this, &LongTaskDialog::on_notify));
+    show_all_children();
 }
 
-void ShadyGui::LongTaskDialog::onGuiLayout(nk_context* context) {
-	if (!running) {
-		running = true;
-		std::thread(taskThread, this).detach();
-	}
-
-	mutex.lock();
-	if (currentName) {
-		nk_layout_row_dynamic(context, 20, 1);
-		nk_prog(context, curProgress, maxProgress, 0);
-		nk_layout_row_dynamic(context, 12, 1);
-		nk_label(context, currentName, NK_TEXT_LEFT);
-	} mutex.unlock();
-	return;
+void ShadyGui::LongTaskDialog::on_notify() {
+    if (running) {
+        mutex.lock();
+        label.set_text(curLabel);
+        progress.set_fraction(curProgress);
+        mutex.unlock();
+    } else {
+        thread->join();
+        delete thread;
+        response(Gtk::RESPONSE_NONE);
+    }
 }
 
-void ShadyGui::SavePackageTask::run() {
-	ShadyCore::PackageFilter::apply(application->getPackage(), ShadyCore::PackageFilter::FILTER_FROM_ZIP_TEXT_EXTENSION, taskCallback);
+void ShadyGui::LongTaskDialog::on_show() {
+    Gtk::Dialog::on_show();
+    if (!running) {
+        thread = new std::thread(taskThread, this);
+    }
+}
+
+void ShadyGui::SavePackageTask::runTask() {
+    auto callback = (void(*)(void*, const char*, unsigned int, unsigned int)) &SavePackageTask::callback;
+	ShadyCore::PackageFilter::apply(package, ShadyCore::PackageFilter::FILTER_FROM_ZIP_TEXT_EXTENSION, callback, this);
 	switch (mode) {
 	case ShadyCore::Package::DATA_MODE:
-		ShadyCore::PackageFilter::apply(application->getPackage(), ShadyCore::PackageFilter::FILTER_ENCRYPT_ALL, taskCallback);
-		ShadyCore::PackageFilter::apply(application->getPackage(), ShadyCore::PackageFilter::FILTER_UNDERLINE_TO_SLASH, taskCallback);
+		ShadyCore::PackageFilter::apply(package, ShadyCore::PackageFilter::FILTER_ENCRYPT_ALL, callback, this);
+		ShadyCore::PackageFilter::apply(package, ShadyCore::PackageFilter::FILTER_UNDERLINE_TO_SLASH, callback, this);
 		break;
 	case ShadyCore::Package::DIR_MODE:
-		ShadyCore::PackageFilter::apply(application->getPackage(), ShadyCore::PackageFilter::FILTER_DECRYPT_ALL, taskCallback);
+		ShadyCore::PackageFilter::apply(package, ShadyCore::PackageFilter::FILTER_DECRYPT_ALL, callback, this);
 		break;
 	case ShadyCore::Package::ZIP_MODE:
-		ShadyCore::PackageFilter::apply(application->getPackage(), ShadyCore::PackageFilter::FILTER_TO_ZIP_CONVERTER, taskCallback);
-		ShadyCore::PackageFilter::apply(application->getPackage(), ShadyCore::PackageFilter::FILTER_TO_ZIP_TEXT_EXTENSION, taskCallback);
-		ShadyCore::PackageFilter::apply(application->getPackage(), ShadyCore::PackageFilter::FILTER_SLASH_TO_UNDERLINE, taskCallback);
+		ShadyCore::PackageFilter::apply(package, ShadyCore::PackageFilter::FILTER_TO_ZIP_CONVERTER, callback, this);
+		ShadyCore::PackageFilter::apply(package, ShadyCore::PackageFilter::FILTER_TO_ZIP_TEXT_EXTENSION, callback, this);
+		ShadyCore::PackageFilter::apply(package, ShadyCore::PackageFilter::FILTER_SLASH_TO_UNDERLINE, callback, this);
 		break;
 	}
-	application->getPackage().save(target.string().c_str(), mode, taskCallback);
+	package.save(target.c_str(), mode, callback, this);
 }
 
-void ShadyGui::ConfirmDialog::onGuiLayout(nk_context* context) {
-	nk_layout_row_dynamic(context, 40, 1);
-	nk_label_wrap(context, message);
-	
-	nk_layout_row_template_begin(context, 26);
-	nk_layout_row_template_push_dynamic(context);
-	nk_layout_row_template_push_static(context, 50);
-	nk_layout_row_template_push_static(context, 50);
-	nk_layout_row_template_end(context);
-	nk_spacing(context, 1);
-	if (nk_button_label(context, "Yes")) {
-		callback(userdata, true);
-		closed = true;
-	} else if (nk_button_label(context, "No")) {
-		callback(userdata, false);
-		closed = true;
-	}
+void ShadyGui::SavePackageTask::callback(SavePackageTask* self, const char* filename, unsigned int index, unsigned int length) {
+    self->mutex.lock();
+    self->curLabel = filename;
+    self->curProgress = index / (float) length;
+    self->mutex.unlock();
+    self->notify();
 }

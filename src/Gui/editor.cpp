@@ -1,140 +1,227 @@
 #include "editor.hpp"
-#include "dialog.hpp"
-#include "application.hpp"
 
-#include <tinyfiledialogs.h>
+#include <giomm/simpleactiongroup.h>
+#include <gtkmm/filechooserdialog.h>
+#include <gtkmm/messagedialog.h>
+#include <gtkmm/box.h>
+#include <gtkmm/grid.h>
+#include <gtkmm/scrolledwindow.h>
+#include <gtkmm/stock.h>
+#include <gtkmm/builder.h>
+#include <gtkmm/menu.h>
+#include <fstream>
+#include <sstream>
+#include <epoxy/gl.h>
 
-#define NK_EDITORWINDOW_FLAGS \
-	NK_WINDOW_BORDER | \
-	NK_WINDOW_MOVABLE | \
-	NK_WINDOW_SCALABLE | \
-	NK_WINDOW_CLOSABLE | \
-	NK_WINDOW_TITLE | \
-	NK_WINDOW_SCROLL_AUTO_HIDE
+static const char editorMenuUI[] =
+"<interface>"
+    "<menu id='menu'>"
+        "<submenu>"
+            "<attribute name='label'>_File</attribute>"
+            "<item>"
+                "<attribute name='label'>_Save</attribute>"
+                "<attribute name='action'>editor.save</attribute>"
+            "</item>"
+            "<item>"
+                "<attribute name='label'>E_xport</attribute>"
+                "<attribute name='action'>editor.export</attribute>"
+            "</item>"
+        "</submenu>"
+    "</menu>"
+"</interface>";
 
-static int editorNameCounter = 0;
+ShadyGui::EditorWindow::EditorWindow(ApplicationWindow* parent, ShadyCore::BasePackageEntry& entry)
+	: Gtk::Window(), parent(parent), type(ShadyCore::FileType::get(entry)) {
+    set_title(entry.getName());
 
-ShadyGui::EditorWindow::EditorWindow(Application* application, ShadyCore::BasePackageEntry& entry)
-	: Window(application)
-	, type(ShadyCore::FileType::get(entry)) {
-	sprintf(name, "Editor%08x", editorNameCounter++);
+    ShadyCore::Resource* resource = ShadyCore::readResource(type, entry.open()); entry.close();
+    if (!resource) {
+        add(*Gtk::manage(new Gtk::Label("This resource can't be read.")));
+        return;
+    }
+
 	switch (type.type) {
-		case ShadyCore::FileType::TYPE_IMAGE: component = new ImageEditor; break;
-		case ShadyCore::FileType::TYPE_LABEL: component = new LabelEditor; break;
-		case ShadyCore::FileType::TYPE_SFX: component = new AudioEditor; break;
+		case ShadyCore::FileType::TYPE_IMAGE: component = new ImageEditor(parent, this, resource, entry.getName()); break;
+		case ShadyCore::FileType::TYPE_LABEL: component = new LabelEditor(parent, this, resource, entry.getName()); break;
+		case ShadyCore::FileType::TYPE_SFX: component = new AudioEditor(parent, this, resource, entry.getName()); break;
 		//case ShadyCore::FileType::TYPE_TEXT: component = new TextEditor; break;
-		case ShadyCore::FileType::TYPE_PALETTE: component = new PaletteEditor; break;
-		default: throw; // TODO Unsupported
+		case ShadyCore::FileType::TYPE_PALETTE: component = new PaletteEditor(parent, this, resource, entry.getName()); break;
+		default:
+            delete resource;
+            add(*Gtk::manage(new Gtk::Label("This editor wasn't implemented.")));
+            return;
 	}
 
-	component->application = application;
-	component->resource = ShadyCore::readResource(type, entry.open()); entry.close();
-	component->path = entry.getName();
-	component->initialize();
-	if (!component->resource) throw; // TODO better handling
+    Gtk::Box* container = Gtk::manage(new Gtk::Box());
+    container->set_orientation(Gtk::ORIENTATION_VERTICAL);
+    add(*container);
+
+    auto actionGroup = Gio::SimpleActionGroup::create();
+    actionGroup->add_action("save", sigc::mem_fun(*this, &EditorWindow::onCmdSave));
+    actionGroup->add_action("export", sigc::mem_fun(*this, &EditorWindow::onCmdExport));
+    insert_action_group("editor", actionGroup);
+
+    auto builder = Gtk::Builder::create_from_string(component->getMenuUI());
+    Gtk::MenuBar* menubar = Gtk::manage(new Gtk::MenuBar(
+        Glib::RefPtr<Gio::MenuModel>::cast_dynamic(builder->get_object("menu"))));
+    container->pack_start(*menubar, Gtk::PACK_SHRINK);
+
+    Gtk::ScrolledWindow* scroll = Gtk::manage(new Gtk::ScrolledWindow());
+    scroll->set_policy(Gtk::POLICY_AUTOMATIC, Gtk::POLICY_AUTOMATIC);
+    scroll->add(*component->getContent());
+    container->pack_start(*scroll, Gtk::PACK_EXPAND_WIDGET);
 }
 
-ShadyGui::EditorWindow::~EditorWindow() { delete component; }
-
-void ShadyGui::EditorWindow::draw(nk_context* context, int width, int height) {
-	int w = width, h = height;
-	component->getPreferredSize(w, h);
-
-	if (nk_begin_titled(context, getName(), component->path, nk_rect((width - w) / 2, (height - h) / 2, w, h)
-		, NK_EDITORWINDOW_FLAGS | (application->isDialogOpen() ? NK_WINDOW_ROM : 0))) {
-		component->onGuiLayout(context);
-		
-		nk_layout_row_dynamic(context, 20, 3);
-		if (nk_button_label(context, "Import")) {
-			const char* pattern[] = { type.normalExt, type.inverseExt };
-			const char * result = tinyfd_openFileDialog("Load a Resource File", "", 2, pattern, 0, 0);
-			if (result) {
-				std::ifstream input(result, std::ios::binary);
-				bool isNormal = strcmp(type.normalExt, result + strlen(result) - strlen(type.normalExt)) == 0;
-				ShadyCore::readResource(component->resource, input, isNormal == type.isEncrypted);
-				component->isModified = true;
-				component->initialize();
-			}
-		}
-		if (nk_button_label(context, "Export")) {
-			const char* pattern[] = { type.normalExt, type.inverseExt };
-			const char* result = tinyfd_saveFileDialog("Export a Resource File", "", 2, pattern, 0);
-			if (result) {
-				std::ofstream output(result, std::ios::binary);
-				bool isNormal = strcmp(type.normalExt, result + strlen(result) - strlen(type.normalExt)) == 0;
-				ShadyCore::writeResource(component->resource, output, isNormal == type.isEncrypted);
-				// TODO verify extension
-			}
-		} if (component->isModified) if (nk_button_label(context, "Save")) {
-			const ShadyCore::FileType& type = ShadyCore::FileType::get(*application->getPackage().findFile(component->path));
-			boost::filesystem::path tempFile = boost::filesystem::temp_directory_path() / boost::filesystem::unique_path();
-			std::ofstream output(tempFile.native(), std::ios::binary);
-			ShadyCore::writeResource(component->resource, output, type.isEncrypted);
-			output.close();
-
-			application->getPackage().appendFile(component->path, tempFile.generic_string().c_str(), true);
-			application->setPackageModified(true);
-		}
-
-		nk_end(context);
-	} else {
-		nk_end(context);
-		if (component->isModified) {
-			nk_window_show(context, getName(), NK_SHOWN);
-			application->open(new ConfirmDialog(application, this, (ConfirmDialog::Callback)&closeCallback
-				, "Unsaved modifications", "This editor has unsaved modifcations, do you want discard them?"));
-		} else closed = true;
-	}
-
-	if (closed) nk_window_close(context, getName());
+void ShadyGui::EditorWindow::onCmdSave() {
+    std::stringstream datastream;
+    ShadyCore::writeResource(component->resource, datastream, type.isEncrypted);
+    parent->getPackage().appendFile(component->path.c_str(), datastream);
+    parent->signal_package.emit(true);
+    component->isModified = false;
 }
 
-ShadyGui::EditorWindow::EditorComponent::~EditorComponent() { delete resource; }
-ShadyGui::ImageEditor::~ImageEditor() { if (renderer.getPalette()) delete renderer.getPalette(); }
+void ShadyGui::EditorWindow::onCmdExport() {
+    Gtk::FileChooserDialog dialog("Select where to save", Gtk::FILE_CHOOSER_ACTION_SAVE);
 
-static bool stepResource(ShadyCore::Resource* resource, const char*& path, ShadyCore::Package& package, ShadyCore::FileType::Type type, bool forward) {
-	for (auto iter = package.findFile(path); forward ? ++iter != package.end() : iter-- != package.begin();) {
-		const ShadyCore::FileType& iterType = ShadyCore::FileType::get(*iter);
-		if (iterType == type) {
-			ShadyCore::readResource(resource, iter->open(), iterType.isEncrypted); iter->close();
-			path = iter->getName();
-			return true;
-		}
-	} return false;
+    dialog.set_transient_for(*this);
+    dialog.add_button("_Cancel", Gtk::RESPONSE_CANCEL);
+    dialog.add_button("Save", Gtk::RESPONSE_OK);
+    dialog.set_do_overwrite_confirmation(true);
+
+    auto filter = Gtk::FileFilter::create();
+    filter->set_name(type.normalExt);
+    filter->add_pattern(Glib::ustring("*") + type.normalExt);
+    dialog.add_filter(filter);
+    filter = Gtk::FileFilter::create();
+    filter->set_name(type.inverseExt);
+    filter->add_pattern(Glib::ustring("*") + type.inverseExt);
+    dialog.add_filter(filter);
+
+    int result = dialog.run();
+    dialog.hide();
+    if (result == Gtk::RESPONSE_OK) {
+        std::ofstream output(dialog.get_filename().c_str(), std::ios::binary);
+        ShadyCore::writeResource(component->resource, output,
+            dialog.get_filter()->get_name() == type.normalExt ? type.isEncrypted : !type.isEncrypted);
+    }
 }
 
-static ShadyCore::Palette* loadPalette(ShadyCore::Package& package, const char* path, int index) {
-	char buffer[256];
+ShadyGui::EditorWindow::~EditorWindow() { if(component) delete component; }
+ShadyGui::EditorWindow::EditorComponent::~EditorComponent() { if(resource) delete resource; }
 
-	const char* e = strrchr(path, '/');
-	if (!e) e = strrchr(path, '_');
-	if (!e) return 0;
+ShadyGui::LabelEditor::LabelEditor(ApplicationWindow* parent, EditorWindow* window, ShadyCore::Resource* resource, const char* path)
+    : EditorWindow::EditorComponent(parent, window, resource, path) {
+    window->set_default_size(300, 200);
+    ShadyCore::LabelResource* label = (ShadyCore::LabelResource*)resource;
+    inputName.set_text(label->getName());
+    inputOffset.set_text(Glib::ustring::format(label->getOffset() / 44100.f));
+    inputSize.set_text(Glib::ustring::format(label->getSize() / 44100.f));
 
-	ShadyCore::Package::iterator iter;
-	memcpy(buffer, path, e - path + 1);
-	sprintf(buffer + (e - path) + 1, "palette%03d.act", index);
-	if ((iter = package.findFile(buffer)) != package.end()) {
-		ShadyCore::Palette* palette = new ShadyCore::Palette;
-		ShadyCore::readResource(palette, iter->open(), false);
-		iter->close();
-		return palette;
-	}
+    inputName.signal_changed().connect(sigc::bind(sigc::mem_fun(*this, &LabelEditor::onChanged), &inputName));
+    inputOffset.signal_changed().connect(sigc::bind(sigc::mem_fun(*this, &LabelEditor::onChanged), &inputOffset));
+    inputSize.signal_changed().connect(sigc::bind(sigc::mem_fun(*this, &LabelEditor::onChanged), &inputSize));
+}
 
-	sprintf(buffer + (e - path) + 1, "palette%03d.pal", index);
-	if ((iter = package.findFile(buffer)) != package.end()) {
-		ShadyCore::Palette* palette = new ShadyCore::Palette;
-		ShadyCore::readResource(palette, iter->open(), true);
-		iter->close();
-		return palette;
-	}
+const char* ShadyGui::LabelEditor::getMenuUI() { return editorMenuUI; }
+Gtk::Widget* ShadyGui::LabelEditor::getContent() {
+    Gtk::Grid* container = Gtk::manage(new Gtk::Grid);
+    container->set_size_request(200, 70);
+    container->set_column_homogeneous(true);
+    Gtk::Label* label = Gtk::manage(new Gtk::Label("Name"));
+    container->attach(*label, 0, 0, 1, 1);
+    container->attach(inputName, 1, 0, 2, 1);
+    label = Gtk::manage(new Gtk::Label("Offset"));
+    container->attach(*label, 0, 1, 1, 1);
+    container->attach(inputOffset, 1, 1, 2, 1);
+    label = Gtk::manage(new Gtk::Label("Size"));
+    container->attach(*label, 0, 2, 1, 1);
+    container->attach(inputSize, 1, 2, 2, 1);
+    return container;
+}
 
-	return 0;
+void ShadyGui::LabelEditor::onChanged(Gtk::Entry* input) {
+    ShadyCore::LabelResource* label = (ShadyCore::LabelResource*)resource;
+    if (input == &inputName) {
+        uint32_t offset = label->getOffset();
+        uint32_t size = label->getSize();
+        label->initialize(inputName.get_text().c_str());
+        label->setOffset(offset);
+        label->setSize(size);
+        isModified = true;
+    } else {
+        double offset, size;
+        std::stringstream offsetStr(inputOffset.get_text());
+        std::stringstream sizeStr(inputSize.get_text());
+        if ((bool)(offsetStr >> offset) && (bool)(sizeStr >> size)) {
+            label->setOffset(offset * 44100);
+            label->setSize(size * 44100);
+            isModified = true;
+            printf("Modified\n");
+        }
+    }
+}
+
+ShadyGui::AudioEditor::AudioEditor(ApplicationWindow* parent, EditorWindow* window, ShadyCore::Resource* resource, const char* path)
+    : EditorWindow::EditorComponent(parent, window, resource, path) {
+    window->set_default_size(200, 80);
+    renderer.setAudio((ShadyCore::Sfx*)resource);
+}
+
+const char* ShadyGui::AudioEditor::getMenuUI() { return editorMenuUI; }
+Gtk::Widget* ShadyGui::AudioEditor::getContent() {
+    Gtk::Box* container = Gtk::manage(new Gtk::Box);
+    container->set_size_request(200, 20);
+    container->set_orientation(Gtk::ORIENTATION_HORIZONTAL);
+    Gtk::Button* button = Gtk::manage(new Gtk::Button(Gtk::Stock::MEDIA_STOP));
+    button->signal_clicked().connect(sigc::mem_fun(*this, &AudioEditor::onStop));
+    container->pack_start(*button, Gtk::PACK_EXPAND_WIDGET);
+    button = Gtk::manage(new Gtk::Button(Gtk::Stock::MEDIA_PLAY));
+    button->signal_clicked().connect(sigc::mem_fun(*this, &AudioEditor::onPlay));
+    container->pack_start(*button, Gtk::PACK_EXPAND_WIDGET);
+    button = Gtk::manage(new Gtk::Button(Gtk::Stock::OPEN));
+    button->signal_clicked().connect(sigc::mem_fun(*this, &AudioEditor::onLoad));
+    container->pack_start(*button, Gtk::PACK_EXPAND_WIDGET);
+    return container;
+}
+
+void ShadyGui::AudioEditor::onStop() { renderer.stopAudio(); }
+void ShadyGui::AudioEditor::onPlay() { renderer.playAudio(); }
+void ShadyGui::AudioEditor::onLoad() {
+    Gtk::FileChooserDialog dialog(*window, "Select a sound file to load", Gtk::FILE_CHOOSER_ACTION_OPEN);
+
+    //dialog.set_transient_for(*parent);
+    dialog.add_button("_Cancel", Gtk::RESPONSE_CANCEL);
+    dialog.add_button("Open", Gtk::RESPONSE_OK);
+
+    auto filter = Gtk::FileFilter::create();
+    filter->set_name("Sound Files");
+    filter->add_pattern("*.wav");
+    filter->add_pattern("*.cv3");
+    dialog.add_filter(filter);
+
+    int result = dialog.run();
+    dialog.hide();
+    if (result == Gtk::RESPONSE_OK) {
+        renderer.stopAudio();
+        std::ifstream input(dialog.get_filename().c_str(), std::ios::binary);
+        const ShadyCore::FileType& type = ShadyCore::FileType::get(dialog.get_filename().c_str(), input);
+        ShadyCore::Resource* newResource = ShadyCore::readResource(type, input);
+        if (newResource) {
+            delete resource;
+            resource = newResource;
+            isModified = true;
+        } else {
+            Gtk::MessageDialog dialog(*window, "Load failed", false, Gtk::MESSAGE_WARNING, Gtk::BUTTONS_CLOSE);
+            dialog.set_secondary_text("Sound file load failed.");
+            dialog.run();
+        }
+    }
 }
 
 static ShadyCore::Image* loadImage(ShadyCore::Package& package, const char* path, int& index) {
 	const char* e = strrchr(path, '/');
 	if (!e) e = strrchr(path, '_');
-	if (!e) return 0;
+	if (!e) e = path - 1;
 
 	int i = 0;
 	const char *firstFound = 0, *lastFound = 0;
@@ -170,203 +257,215 @@ static ShadyCore::Image* loadImage(ShadyCore::Package& package, const char* path
 	return (ShadyCore::Image*)resource;
 }
 
-void ShadyGui::ImageEditor::setPalette(ShadyCore::Palette* palette) {
-	if (palette) {
-		if (renderer.getPalette()) delete renderer.getPalette();
-		renderer.setPalette(palette);
-	}
-}
+static ShadyCore::Palette* loadPalette(ShadyCore::Package& package, const char* path, int index) {
+	char buffer[256];
 
-void ShadyGui::ImageEditor::getPreferredSize(int& width, int& height) const {
-	width = std::min((unsigned)width, ((ShadyCore::Image*)resource)->getWidth() + 22);
-	height = std::min((unsigned)height, ((ShadyCore::Image*)resource)->getHeight() + 76);
-}
+	const char* e = strrchr(path, '/');
+	if (!e) e = strrchr(path, '_');
+	if (!e) e = path - 1;
 
-void ShadyGui::ImageEditor::initialize() {
-	renderer.setImage(dynamic_cast<ShadyCore::Image*>(resource));
-	
-	if (((ShadyCore::Image*)resource)->getBitsPerPixel() == 8) {
-		setPalette(loadPalette(application->getPackage(), path, curPalette));
-	}
-}
-
-void ShadyGui::ImageEditor::onGuiLayout(nk_context* context) {
-	if (!isModified) if (nk_input_is_key_pressed(&context->input, NK_KEY_UP)) {
-		setPalette(loadPalette(application->getPackage(), path, --curPalette < 0 ? (curPalette = 7) : curPalette));
-	} else if (nk_input_is_key_pressed(&context->input, NK_KEY_DOWN)) {
-		setPalette(loadPalette(application->getPackage(), path, ++curPalette > 7 ? (curPalette = 0) : curPalette));
-	} else if (nk_input_is_key_pressed(&context->input, NK_KEY_LEFT)) {
-		stepResource(resource, path, application->getPackage(), ShadyCore::FileType::TYPE_IMAGE, false);
-		renderer.setImage((ShadyCore::Image*)resource);
-		if (((ShadyCore::Image*)resource)->getBitsPerPixel() == 8) setPalette(loadPalette(application->getPackage(), path, curPalette));
-	} else if (nk_input_is_key_pressed(&context->input, NK_KEY_RIGHT)) {
-		stepResource(resource, path, application->getPackage(), ShadyCore::FileType::TYPE_IMAGE, true);
-		renderer.setImage((ShadyCore::Image*)resource);
-		if (((ShadyCore::Image*)resource)->getBitsPerPixel() == 8) setPalette(loadPalette(application->getPackage(), path, curPalette));
+	ShadyCore::Package::iterator iter;
+	memcpy(buffer, path, e - path + 1);
+	sprintf(buffer + (e - path) + 1, "palette%03d.act", index);
+	if ((iter = package.findFile(buffer)) != package.end()) {
+		ShadyCore::Palette* palette = new ShadyCore::Palette;
+		ShadyCore::readResource(palette, iter->open(), false);
+		iter->close();
+		return palette;
 	}
 
-	nk_layout_row_dynamic(context, nk_window_get_height(context) - 76, 1);
-	if (nk_window_has_focus(context)
-		&& context->input.mouse.buttons[NK_BUTTON_LEFT].down
-		&& nk_input_has_mouse_click_down_in_rect(&context->input, NK_BUTTON_LEFT, nk_window_get_content_region(context), true)
-		&& nk_widget_has_mouse_click_down(context, NK_BUTTON_LEFT, true)) {
-
-		renderer.setPosition(renderer.getPositionX() + context->input.mouse.delta.x, renderer.getPositionY() + context->input.mouse.delta.y);
+	sprintf(buffer + (e - path) + 1, "palette%03d.pal", index);
+	if ((iter = package.findFile(buffer)) != package.end()) {
+		ShadyCore::Palette* palette = new ShadyCore::Palette;
+		ShadyCore::readResource(palette, iter->open(), true);
+		iter->close();
+		return palette;
 	}
-	
-	renderer.draw(context);
+
+	return 0;
 }
 
-void ShadyGui::AudioEditor::initialize() {
-	renderer.setAudio(dynamic_cast<ShadyCore::Sfx*>(resource));
+static const char imageEditorMenuUI[] =
+"<interface>"
+    "<menu id='menu'>"
+        "<submenu>"
+            "<attribute name='label'>_View</attribute>"
+            "<item>"
+                "<attribute name='label'>_Previous Image</attribute>"
+                "<attribute name='action'>image.previous</attribute>"
+            "</item>"
+            "<item>"
+                "<attribute name='label'>_Next Image</attribute>"
+                "<attribute name='action'>image.next</attribute>"
+            "</item>"
+            "<item>"
+                "<attribute name='label'>Previous Palette</attribute>"
+                "<attribute name='action'>image.previouspalette</attribute>"
+            "</item>"
+            "<item>"
+                "<attribute name='label'>Next Palette</attribute>"
+                "<attribute name='action'>image.nextpalette</attribute>"
+            "</item>"
+        "</submenu>"
+    "</menu>"
+"</interface>";
+
+ShadyGui::ImageEditor::ImageEditor(ApplicationWindow* parent, EditorWindow* window, ShadyCore::Resource* resource, const char* path)
+    : EditorWindow::EditorComponent(parent, window, resource, path) {
+	canvas.setImage((ShadyCore::Image*)resource);
+    palette = loadPalette(parent->getPackage(), path, curPalette);
+	canvas.setPalette(palette);
+
+    window->set_default_size(400, 400);
+    window->add_events(Gdk::KEY_PRESS_MASK);
+    window->signal_key_press_event().connect(sigc::mem_fun(*this, &ImageEditor::onKeyPress), false);
+    auto actionGroup = Gio::SimpleActionGroup::create();
+    actionGroup->add_action("previous", sigc::bind(sigc::mem_fun(*this, &ImageEditor::onCmdImage), false));
+    actionGroup->add_action("next", sigc::bind(sigc::mem_fun(*this, &ImageEditor::onCmdImage), true));
+    actionGroup->add_action("previouspalette", sigc::bind(sigc::mem_fun(*this, &ImageEditor::onCmdPalette), false));
+    actionGroup->add_action("nextpalette", sigc::bind(sigc::mem_fun(*this, &ImageEditor::onCmdPalette), true));
+    window->insert_action_group("image", actionGroup);
 }
 
-void ShadyGui::AudioEditor::onGuiLayout(nk_context* context) {
-	nk_layout_row_template_begin(context, 20);
-	nk_layout_row_template_push_static(context, 50);
-	nk_layout_row_template_end(context);
+ShadyGui::ImageEditor::~ImageEditor() { if (palette) delete palette; }
+const char* ShadyGui::ImageEditor::getMenuUI() { return imageEditorMenuUI; }
+Gtk::Widget* ShadyGui::ImageEditor::getContent() { return &canvas; }
 
-	if (nk_button_label(context, "Play")) {
-		renderer.play();
-	}
+void ShadyGui::ImageEditor::onCmdImage(bool isNext) {
+    if (isModified) {
+        Gtk::MessageDialog dialog(*window, "Disabled operation", false, Gtk::MESSAGE_WARNING, Gtk::BUTTONS_CLOSE);
+        dialog.set_secondary_text("You must save the image before this operation.");
+        dialog.run();
+        return;
+    }
+
+    ShadyCore::Package& package = parent->getPackage();
+    for (auto iter = package.findFile(path.c_str()); isNext ? ++iter != package.end() : iter-- != package.begin();) {
+        const ShadyCore::FileType& iterType = ShadyCore::FileType::get(*iter);
+        if (iterType == ShadyCore::FileType::TYPE_IMAGE) {
+            ShadyCore::readResource(resource, iter->open(), iterType.isEncrypted); iter->close();
+            canvas.setImage((ShadyCore::Image*)resource);
+            window->set_title(path = iter->getName());
+            return;
+        }
+    }
 }
 
-void ShadyGui::LabelEditor::initialize() {
-	strcpy(inputName, ((ShadyCore::LabelResource*)resource)->getName());
-	sprintf(inputOffset, "%f", ((ShadyCore::LabelResource*)resource)->getOffset() / 44100.f);
-	sprintf(inputSize, "%f", ((ShadyCore::LabelResource*)resource)->getSize() / 44100.f);
+void ShadyGui::ImageEditor::onCmdPalette(bool isNext) {
+    if (palette) delete palette;
+
+    if (isNext) palette = loadPalette(parent->getPackage(), path.c_str(), ++curPalette > 7 ? (curPalette = 0) : curPalette);
+    else palette = loadPalette(parent->getPackage(), path.c_str(), --curPalette < 0 ? (curPalette = 7) : curPalette);
+
+    canvas.setPalette(palette);
 }
 
-void ShadyGui::LabelEditor::onGuiLayout(nk_context* context) {
-	nk_layout_row_template_begin(context, 20);
-	nk_layout_row_template_push_static(context, 80);
-	nk_layout_row_template_push_dynamic(context);
-	nk_layout_row_template_end(context);
-
-	nk_label(context, "Name:", NK_TEXT_LEFT);
-	nk_edit_string_zero_terminated(context, NK_EDIT_READ_ONLY, inputName, 255, 0);
-	
-	nk_label(context, "Loop Start:", NK_TEXT_LEFT);
-	if (nk_edit_string_zero_terminated(context, NK_EDIT_FIELD, inputOffset, 255, nk_filter_float) & (NK_EDIT_ACTIVE | NK_EDIT_COMMITED)) {
-		((ShadyCore::LabelResource*)resource)->setOffset(atof(inputOffset) * 44100.f);
-		isModified = true;
-	}
-	
-	nk_label(context, "Loop Dur.:", NK_TEXT_LEFT);
-	if (nk_edit_string_zero_terminated(context, NK_EDIT_FIELD, inputSize, 255, nk_filter_float) & (NK_EDIT_ACTIVE | NK_EDIT_COMMITED)) {
-		((ShadyCore::LabelResource*)resource)->setSize(atof(inputSize) * 44100.f);;
-		isModified = true;
-	}
+bool ShadyGui::ImageEditor::onKeyPress(GdkEventKey* event) {
+    switch(event->keyval) {
+    case GDK_KEY_Left: case GDK_KEY_KP_Left:
+        window->get_action_group("image")->activate_action("previous"); break;
+    case GDK_KEY_Right: case GDK_KEY_KP_Right:
+        window->get_action_group("image")->activate_action("next"); break;
+    case GDK_KEY_Up: case GDK_KEY_KP_Up:
+        window->get_action_group("image")->activate_action("previouspalette"); break;
+    case GDK_KEY_Down: case GDK_KEY_KP_Down:
+        window->get_action_group("image")->activate_action("nextpalette"); break;
+    default: return false;
+    } return true;
 }
 
-/*
-ShadyGui::TextEditor::~TextEditor() { if (initialized) nk_textedit_free(&input); }
+static const char paletteEditorMenuUI[] =
+"<interface>"
+    "<menu id='menu'>"
+        "<submenu>"
+            "<attribute name='label'>_File</attribute>"
+            "<item>"
+                "<attribute name='label'>_Save</attribute>"
+                "<attribute name='action'>editor.save</attribute>"
+            "</item>"
+            "<item>"
+                "<attribute name='label'>E_xport</attribute>"
+                "<attribute name='action'>editor.export</attribute>"
+            "</item>"
+        "</submenu>"
+        "<submenu>"
+            "<attribute name='label'>_View</attribute>"
+            "<item>"
+                "<attribute name='label'>_Previous Image</attribute>"
+                "<attribute name='action'>image.previous</attribute>"
+            "</item>"
+            "<item>"
+                "<attribute name='label'>_Next Image</attribute>"
+                "<attribute name='action'>image.next</attribute>"
+            "</item>"
+        "</submenu>"
+    "</menu>"
+"</interface>";
 
-void ShadyGui::TextEditor::initialize() {
-	if (initialized) nk_textedit_free(&input);
-	
-	nk_textedit_init_default(&input);
-	nk_str_append_text_utf8(&input.string, ((ShadyCore::TextResource*)resource)->getData(), ((ShadyCore::TextResource*)resource)->getLength());
-
-	initialized = true;
-}
-
-void ShadyGui::TextEditor::onGuiLayout(nk_context* context) {
-	nk_layout_row_dynamic(context, nk_window_get_height(context) - 76, 1);
-	if (nk_edit_buffer(context, NK_EDIT_EDITOR, &input, 0) & (NK_EDIT_ACTIVE | NK_EDIT_COMMITED)) {
-		int len = nk_str_len_char(&input.string);
-		((ShadyCore::TextResource*)resource)->initialize(len);
-		memcpy(((ShadyCore::TextResource*)resource)->getData(), nk_str_get_const(&input.string), len);
-	}
-}
-*/
-
-ShadyGui::PaletteEditor::~PaletteEditor() { if (renderNormal.getImage()) delete renderNormal.getImage(); }
-
-void ShadyGui::PaletteEditor::setImage(ShadyCore::Image* image) {
-	if (image) {
-		if (renderNormal.getImage()) delete renderNormal.getImage();
-		renderNormal.setImage(image);
-		renderPacked.setImage(image);
-	}
-}
-
-void ShadyGui::PaletteEditor::initialize() {
-	renderNormal.setPalette(dynamic_cast<ShadyCore::Palette*>(resource));
-	curColor = nk_rgba_u32(((ShadyCore::Palette*)resource)->getColor(curColorIndex));
+ShadyGui::PaletteEditor::PaletteEditor(ApplicationWindow* parent, EditorWindow* window, ShadyCore::Resource* resource, const char* path)
+    : EditorWindow::EditorComponent(parent, window, resource, path), canvasPalette(window, (ShadyCore::Palette*)resource) {
+	canvasNormal.setPalette((ShadyCore::Palette*)resource);
 
 	for (int i = 0; i < 256; ++i) {
 		packed.setColor(i, ShadyCore::Palette::unpackColor(ShadyCore::Palette::packColor(((ShadyCore::Palette*)resource)->getColor(i))));
-	} renderPacked.setPalette(&packed);
+	} canvasPacked.setPalette(&packed);
 
-	setImage(loadImage(application->getPackage(), path, curImage));
+	image = loadImage(parent->getPackage(), path, curImage);
+    canvasNormal.setImage(image);
+    canvasPacked.setImage(image);
+
+    canvasPalette.signal_preview.connect(sigc::mem_fun(*this, &PaletteEditor::onPalettePreview));
+    canvasPalette.signal_preview_cancel.connect(sigc::mem_fun(*this, &PaletteEditor::onPalettePreview));
+    canvasPalette.signal_confirm.connect(sigc::mem_fun(*this, &PaletteEditor::onPaletteConfirm));
+
+    window->set_default_size(800, 600);
+    window->add_events(Gdk::KEY_PRESS_MASK);
+    window->signal_key_press_event().connect(sigc::mem_fun(*this, &PaletteEditor::onKeyPress), false);
+    auto actionGroup = Gio::SimpleActionGroup::create();
+    actionGroup->add_action("previous", sigc::bind(sigc::mem_fun(*this, &PaletteEditor::onCmdImage), false));
+    actionGroup->add_action("next", sigc::bind(sigc::mem_fun(*this, &PaletteEditor::onCmdImage), true));
+    window->insert_action_group("image", actionGroup);
 }
 
-void ShadyGui::PaletteEditor::onGuiLayout(nk_context* context) {
-	if (nk_input_is_key_pressed(&context->input, NK_KEY_LEFT)) {
-		setImage(loadImage(application->getPackage(), path, --curImage));
-	} else if (nk_input_is_key_pressed(&context->input, NK_KEY_RIGHT)) {
-		setImage(loadImage(application->getPackage(), path, ++curImage));
-	}
-	
-	nk_layout_row_template_begin(context, nk_window_get_height(context) - 76);
-	nk_layout_row_template_push_dynamic(context);
-	nk_layout_row_template_push_dynamic(context);
-	nk_layout_row_template_push_static(context, 177);
-	nk_layout_row_template_end(context);
+ShadyGui::PaletteEditor::~PaletteEditor() { if (image) delete image; }
+const char* ShadyGui::PaletteEditor::getMenuUI() { return paletteEditorMenuUI; }
 
-	if (nk_window_has_focus(context)
-		&& context->input.mouse.buttons[NK_BUTTON_LEFT].down
-		&& nk_input_has_mouse_click_down_in_rect(&context->input, NK_BUTTON_LEFT, nk_window_get_content_region(context), true)
-		&& nk_widget_has_mouse_click_down(context, NK_BUTTON_LEFT, true)) {
+Gtk::Widget* ShadyGui::PaletteEditor::getContent() {
+    Gtk::Box* container = Gtk::manage(new Gtk::Box());
+    container->set_orientation(Gtk::ORIENTATION_HORIZONTAL);
+    container->pack_start(canvasNormal, Gtk::PACK_EXPAND_WIDGET);
+    container->pack_start(canvasPacked, Gtk::PACK_EXPAND_WIDGET);
+    container->pack_start(canvasPalette, Gtk::PACK_SHRINK);
+    return container;
+}
 
-		renderNormal.setPosition(renderNormal.getPositionX() + context->input.mouse.delta.x, renderNormal.getPositionY() + context->input.mouse.delta.y);
-	}
-	renderNormal.draw(context);
+void ShadyGui::PaletteEditor::onCmdImage(bool isNext) {
+    if (image) delete image;
+    image = loadImage(parent->getPackage(), path.c_str(), isNext ? ++curImage : --curImage);
 
-	if (nk_window_has_focus(context)
-		&& context->input.mouse.buttons[NK_BUTTON_LEFT].down
-		&& nk_input_has_mouse_click_down_in_rect(&context->input, NK_BUTTON_LEFT, nk_window_get_content_region(context), true)
-		&& nk_widget_has_mouse_click_down(context, NK_BUTTON_LEFT, true)) {
+    canvasNormal.setImage(image);
+    canvasPacked.setImage(image);
+}
 
-		renderPacked.setPosition(renderPacked.getPositionX() + context->input.mouse.delta.x, renderPacked.getPositionY() + context->input.mouse.delta.y);
-	}
-	renderPacked.draw(context);
+bool ShadyGui::PaletteEditor::onKeyPress(GdkEventKey* event) {
+    switch(event->keyval) {
+    case GDK_KEY_Left: case GDK_KEY_KP_Left:
+        window->get_action_group("image")->activate_action("previous"); break;
+    case GDK_KEY_Right: case GDK_KEY_KP_Right:
+        window->get_action_group("image")->activate_action("next"); break;
+    default: return false;
+    } return true;
+}
 
-	nk_group_begin(context, "Options Group", 0);
-	nk_layout_row_dynamic(context, 150, 1);
+void ShadyGui::PaletteEditor::onPalettePreview(int index, int32_t color) {
+    ShadyCore::Palette* palette = (ShadyCore::Palette*) resource;
+    palette->setColor(index, color);
+    canvasNormal.setPalette(palette);
+    packed.setColor(index, ShadyCore::Palette::unpackColor(ShadyCore::Palette::packColor(color)));
+    canvasPacked.setPalette(&packed);
+}
 
-	{ nk_command_buffer *canvas = nk_window_get_canvas(context);
-		struct nk_rect bounds;
-		
-		if (nk_widget(&bounds, context)) {
-			int stepW = bounds.w / 16, stepH = bounds.h / 16;
-			for (int i = 0; i < 16; ++i) for (int j = 0; j < 16; ++j) {
-				nk_fill_rect(canvas, nk_rect((stepW * i) + bounds.x, (stepH * j) + bounds.y, stepW, stepH), 0, nk_rgba_u32(((ShadyCore::Palette*)resource)->getColor(j * 16 + i)));
-			}
-
-			int i = curColorIndex % 16, j = curColorIndex / 16;
-			nk_stroke_rect(canvas, nk_rect((stepW * i) + bounds.x, (stepH * j) + bounds.y, stepW, stepH), 0, 2, nk_rgb(255, 0, 255));
-		}
-
-		if (nk_window_has_focus(context)
-			&& nk_input_has_mouse_click_down_in_rect(&context->input, NK_BUTTON_LEFT, nk_window_get_content_region(context), true)
-			&& nk_input_is_mouse_click_down_in_rect(&context->input, NK_BUTTON_LEFT, bounds, true)) {
-			int stepW = bounds.w / 16, stepH = bounds.h / 16;
-			curColorIndex =
-				(int)((context->input.mouse.pos.y - bounds.y) / stepH) * 16 +
-				(int)((context->input.mouse.pos.x - bounds.x) / stepW);
-		}
-	}
-
-	if (nk_color_pick(context, &curColor, NK_RGB)) {
-		uint32_t color = nk_color_u32(curColor);
-		((ShadyCore::Palette*)resource)->setColor(curColorIndex, color);
-		packed.setColor(curColorIndex, ShadyCore::Palette::unpackColor(ShadyCore::Palette::packColor(color)));
-
-		renderNormal.setPalette((ShadyCore::Palette*)resource);
-		renderPacked.setPalette(&packed);
-		isModified = true;
-	}
-	nk_group_end(context);
+void ShadyGui::PaletteEditor::onPaletteConfirm(int index, int32_t color) {
+    onPalettePreview(index, color);
+    isModified = true;
 }

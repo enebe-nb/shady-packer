@@ -1,116 +1,263 @@
 #include "application.hpp"
-#include "window.hpp"
-#include "../Core/package.hpp"
+#include "dialog.hpp"
+#include "editor.hpp"
 
-#include <demo/sdl_opengl2/nuklear_sdl_gl2.h>
-#include <boost/locale.hpp>
-#include <boost/thread.hpp>
-#include <tinyfiledialogs.h>
-#include <boost/filesystem.hpp>
+#include <gtkmm/scrolledwindow.h>
+#include <gtkmm/filechooserdialog.h>
+#include <gtkmm/messagedialog.h>
+#include <gtkmm/builder.h>
+#include <glibmm/convert.h>
 
-const char* APPLICATION_TITTLE = "ShadyPacker";
+ShadyGui::Application* ShadyGui::Application::self = 0;
 
-ShadyGui::Application::Application() : mainWindow(this) {
-    SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO);
-    SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
-    SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 2);
-    window = SDL_CreateWindow(APPLICATION_TITTLE,
-        SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 800, 600,
-        SDL_WINDOW_OPENGL|SDL_WINDOW_HIDDEN|SDL_WINDOW_RESIZABLE);
-
-    glContext = SDL_GL_CreateContext(window);
-    glClearColor(0.f, 0.f, 0.f, 1.f);
-
-    nkContext = nk_sdl_init(window);
-    nk_sdl_font_stash_begin(&nkAtlas);
-    nk_sdl_font_stash_end();
-
-    nkContext->style.checkbox.cursor_hover.data.color = nk_color{0xd0, 0xd0, 0xd0, 0xff};
-    nkContext->style.checkbox.cursor_normal.data.color = nk_color{0xd0, 0xd0, 0xd0, 0xff};
+namespace {
+    class EntryModel : public Gtk::TreeModel::ColumnRecord {
+        public:
+            Gtk::TreeModelColumn<Glib::ustring> storage;
+            Gtk::TreeModelColumn<Glib::ustring> name;
+            inline EntryModel() { add(storage); add(name); }
+    };
+    static EntryModel entryModel;
 }
 
-ShadyGui::Application::~Application() {
-    nk_sdl_shutdown();
-    SDL_GL_DeleteContext(glContext);
-    SDL_DestroyWindow(window);
-    SDL_Quit();
+ShadyGui::ApplicationWindow::ApplicationWindow() : Gtk::ApplicationWindow() {
+    set_title("Shady Viewer");
+    set_default_size(300, 500);
+
+	auto action = Gio::SimpleAction::create("append", Glib::Variant<Glib::ustring>::variant_type());
+	action->signal_activate().connect(sigc::mem_fun(*this, &ApplicationWindow::onCmdAppend));
+	add_action(action);
+	action = Gio::SimpleAction::create("save", Glib::Variant<Glib::ustring>::variant_type());
+	action->signal_activate().connect(sigc::mem_fun(*this, &ApplicationWindow::onCmdSave));
+	add_action(action);
+    add_action("clear", sigc::mem_fun(*this, &ApplicationWindow::onCmdClear));
+    add_action("quit", sigc::mem_fun(*this, &ApplicationWindow::close));
+    signal_package.connect(sigc::mem_fun(*this, &ApplicationWindow::onPackage));
+    searchView.signal_search_changed().connect(sigc::mem_fun(*this, &ApplicationWindow::onSearch));
+
+    Gtk::Box* container = Gtk::manage(new Gtk::Box());
+    container->set_orientation(Gtk::ORIENTATION_VERTICAL);
+    add(*container);
+
+    container->pack_start(searchView, Gtk::PACK_SHRINK);
+    Gtk::ScrolledWindow* scroll = Gtk::manage(new Gtk::ScrolledWindow());
+    scroll->add(entryView); scroll->set_policy(Gtk::POLICY_AUTOMATIC, Gtk::POLICY_AUTOMATIC);
+    container->pack_start(*scroll, Gtk::PACK_EXPAND_WIDGET);
+
+    entryData = Gtk::ListStore::create(entryModel);
+    entryView.set_model(entryData);
+    entryView.append_column("Storage", entryModel.storage);
+    entryView.append_column("Name", entryModel.name);
+    entryView.signal_button_press_event().connect(sigc::mem_fun(*this, &ApplicationWindow::onEntryClick));
+    signal_package.emit(false);
+
+    show_all_children();
 }
 
-static void closeCallback(int* exitValue, bool confirm) {
-	if (confirm) *exitValue = 0;
+bool ShadyGui::ApplicationWindow::on_delete_event(GdkEventAny* event) {
+    if (isModified) {
+        Gtk::MessageDialog dialog(*this, "Close confirmation", false, Gtk::MESSAGE_QUESTION, Gtk::BUTTONS_YES_NO);
+        dialog.set_secondary_text("You have unsaved changes, do you want to quit and discard changes?");
+        if (dialog.run() != Gtk::RESPONSE_YES) return true;
+    }
+    return Gtk::ApplicationWindow::on_delete_event(event);
 }
 
-int ShadyGui::Application::mainLoop() {
-    if (!window) return 1;
-    SDL_ShowWindow(window);
+void ShadyGui::ApplicationWindow::onCmdAppend(const Glib::VariantBase& param) {
+    bool isFolder = param.equal(Glib::Variant<Glib::ustring>::create("folder"));
+    Gtk::FileChooserDialog dialog("Select the package to load",
+        isFolder ? Gtk::FILE_CHOOSER_ACTION_SELECT_FOLDER : Gtk::FILE_CHOOSER_ACTION_OPEN);
 
-    int exitValue = -1;
-    while(exitValue < 0) {
-        nk_input_begin(nkContext);
-		for (SDL_Event event; SDL_PollEvent(&event);) {
-			if (event.type == SDL_QUIT && !dialog) {
-				if (isPackageModified()) {
-					open(new ConfirmDialog(this, &exitValue, (ConfirmDialog::Callback)&closeCallback
-						, "Unsaved Package modifications", "The package was modified, do you want discard any modification?"));
-				} else exitValue = 0;
-			//} else if (dialog) { // Do Nothing
-			} else if (event.type == SDL_DROPBEGIN) {
-				//printf("DROPBEGIN\n");
-			} else if (event.type == SDL_DROPTEXT) {
-				//printf("DROPTEXT %s\n", event.drop.file);
-			} else if (event.type == SDL_DROPFILE) {
-				//printf("DROPFILE %s\n", event.drop.file);
-				//dropFiles.append(event.drop.file);
-			} else if (event.type == SDL_DROPCOMPLETE) {
-				//printf("DROPCOMPLETE\n");
-				//dropFiles.setDone();
-			} else nk_sdl_handle_event(&event);
-        }
-        nk_input_end(nkContext);
+    dialog.set_transient_for(*this);
+    dialog.add_button("_Cancel", Gtk::RESPONSE_CANCEL);
+    dialog.add_button("Append", Gtk::RESPONSE_OK);
+    dialog.set_select_multiple(true);
 
-        int width, height;
-        SDL_GL_GetDrawableSize(window, &width, &height);
-		mainWindow.draw(nkContext, width, height);
-
-		auto iter = editor.begin(); while (iter != editor.end()) {
-			if (iter->second->isClosed()) {
-				delete iter->second;
-				iter = editor.erase(iter);
-			} else {
-				iter->second->draw(nkContext, width, height);
-				++iter;
-			}
-		}
-
-		if (dialog) 
-			if (dialog->isClosed()) {
-				delete dialog;
-				dialog = 0;
-			} else dialog->draw(nkContext, width, height);
-
-        glViewport(0, 0, width, height);
-        glClear(GL_COLOR_BUFFER_BIT);
-        nk_sdl_render(NK_ANTI_ALIASING_ON);
-        SDL_GL_SwapWindow(window);
+    if (!isFolder) {
+        auto filter = Gtk::FileFilter::create();
+        filter->set_name("Package Files");
+        filter->add_pattern("*.dat");
+        filter->add_pattern("*.zip");
+        dialog.add_filter(filter);
     }
 
-    SDL_HideWindow(window);
-    return 0;
+    int result = dialog.run();
+    dialog.hide();
+    if (result == Gtk::RESPONSE_OK) {
+        auto filenames = dialog.get_filenames();
+        for (auto f : filenames) {
+            package.appendPackage(f.c_str());
+        }
+        signal_package.emit(false);
+    }
 }
 
-void ShadyGui::Application::open(DialogWindow* dialog) {
-	if (this->dialog) delete dialog;
-	else this->dialog = dialog;
+void ShadyGui::ApplicationWindow::onCmdSave(const Glib::VariantBase& param) {
+    auto paramValue = param.cast_dynamic<Glib::Variant<Glib::ustring> >(param).get();
+    bool isFolder = paramValue == "dir";
+    Gtk::FileChooserDialog dialog("Select the package to load",
+        isFolder ? Gtk::FILE_CHOOSER_ACTION_CREATE_FOLDER : Gtk::FILE_CHOOSER_ACTION_SAVE);
+
+    dialog.set_transient_for(*this);
+    dialog.add_button("_Cancel", Gtk::RESPONSE_CANCEL);
+    dialog.add_button("Save", Gtk::RESPONSE_OK);
+    dialog.set_do_overwrite_confirmation(true);
+
+    if (!isFolder) {
+        auto filter = Gtk::FileFilter::create();
+        filter->set_name("Package Files");
+        filter->add_pattern("*.dat");
+        filter->add_pattern("*.zip");
+        dialog.add_filter(filter);
+    }
+
+    int result = dialog.run();
+    dialog.hide();
+    if (result == Gtk::RESPONSE_OK) {
+        auto filename = dialog.get_filename();
+        ShadyGui::SavePackageTask dialog(package, filename,
+            paramValue == "data" ? ShadyCore::Package::DATA_MODE :
+            paramValue == "zip" ? ShadyCore::Package::ZIP_MODE :
+            ShadyCore::Package::DIR_MODE);
+
+        dialog.run();
+        signal_package.emit(isModified = false);
+    }
 }
 
-void ShadyGui::Application::open(EditorWindow* editor) {
-	if (this->editor.find(editor->getName()) == this->editor.end()) {
-		this->editor[editor->getName()] = editor;
-	} else delete editor;
+void ShadyGui::ApplicationWindow::onCmdClear() {
+    if (isModified) {
+        Gtk::MessageDialog dialog(*this, "Clear confirmation", false, Gtk::MESSAGE_QUESTION, Gtk::BUTTONS_YES_NO);
+        dialog.set_secondary_text("You have unsaved changes, do you want to discard any changes?");
+        if (dialog.run() != Gtk::RESPONSE_YES) return;
+    }
+    package.clear();
+    signal_package.emit(isModified = false);
 }
 
+bool ShadyGui::ApplicationWindow::onEntryClick(GdkEventButton* event) {
+    if (event->type != GDK_2BUTTON_PRESS || event->button != 1) return false;
+
+    auto selection = entryView.get_selection();
+    Glib::ustring name = selection->get_selected()->get_value(entryModel.name);
+    EditorWindow* window = new EditorWindow(this, *package.findFile(name.c_str()));
+    Application::get()->add_window(*window);
+    window->show_all();
+}
+
+void ShadyGui::ApplicationWindow::onPackage(bool modified) {
+    isModified = isModified || modified;
+
+    entryData->clear();
+    { std::lock_guard<ShadyCore::Package> lock(package);
+    for (auto& entry : package) {
+        if (Glib::ustring(entry.getName()).find(searchView.get_text()) == -1) continue;
+        auto row = *entryData->append();
+        row[entryModel.storage] =
+            entry.getType() == ShadyCore::BasePackageEntry::TYPE_FILE ? "Filesystem"
+            : entry.getType() == ShadyCore::BasePackageEntry::TYPE_DATA ? "Data package"
+            : entry.getType() == ShadyCore::BasePackageEntry::TYPE_ZIP ? "Zip package"
+            : entry.getType() == ShadyCore::BasePackageEntry::TYPE_STREAM ? "Memory"
+            : "";
+        row[entryModel.name] = Glib::filename_display_name(entry.getName());
+    } }
+}
+
+void ShadyGui::ApplicationWindow::onSearch() { signal_package.emit(false); }
+
+static const char appMenuUI[] =
+"<interface>"
+    "<menu id='menu'>"
+        "<submenu>"
+            "<attribute name='label'>_File</attribute>"
+            "<item>"
+                "<attribute name='label'>_Append Package</attribute>"
+                "<attribute name='action'>win.append</attribute>"
+                "<attribute name='target'>file</attribute>"
+            "</item>"
+            "<item>"
+                "<attribute name='label'>Append Folder</attribute>"
+                "<attribute name='action'>win.append</attribute>"
+                "<attribute name='target'>folder</attribute>"
+            "</item>"
+            "<submenu>"
+                "<attribute name='label'>_Save</attribute>"
+                "<item>"
+                    "<attribute name='label'>as _Data package</attribute>"
+                    "<attribute name='action'>win.save</attribute>"
+                    "<attribute name='target'>data</attribute>"
+                "</item>"
+                "<item>"
+                    "<attribute name='label'>as _Zip package</attribute>"
+                    "<attribute name='action'>win.save</attribute>"
+                    "<attribute name='target'>zip</attribute>"
+                "</item>"
+                "<item>"
+                    "<attribute name='label'>into _Folder</attribute>"
+                    "<attribute name='action'>win.save</attribute>"
+                    "<attribute name='target'>dir</attribute>"
+                "</item>"
+            "</submenu>"
+            "<item>"
+                "<attribute name='label'>_Clear Package</attribute>"
+                "<attribute name='action'>win.clear</attribute>"
+            "</item>"
+            "<item>"
+                "<attribute name='label'>_Quit</attribute>"
+                "<attribute name='action'>win.quit</attribute>"
+            "</item>"
+            "<item>"
+                "<attribute name='label'>_Quit All</attribute>"
+                "<attribute name='action'>app.quit</attribute>"
+            "</item>"
+        "</submenu>"
+    "</menu>"
+"</interface>";
+
+void ShadyGui::Application::on_startup() {
+    Gtk::Application::on_startup();
+
+    auto builder = Gtk::Builder::create_from_string(appMenuUI);
+    set_menubar(Glib::RefPtr<Gio::Menu>::cast_dynamic(builder->get_object("menu")));
+
+    add_action("quit", sigc::mem_fun(*this, &Application::onCmdQuit));
+}
+
+void ShadyGui::Application::on_activate() {
+    Gtk::Application::on_activate();
+
+    ApplicationWindow* window = new ApplicationWindow();
+    add_window(*window);
+    window->show_all();
+}
+
+void ShadyGui::Application::on_window_added(Gtk::Window* window) {
+    Gtk::Application::on_window_added(window);
+    if (EditorWindow* editor = dynamic_cast<EditorWindow*>(window)) {
+        ++editor->getParent()->windowCount;
+    } else if (ApplicationWindow* parent = dynamic_cast<ApplicationWindow*>(window)) {
+        ++parent->windowCount;
+    }
+}
+
+void ShadyGui::Application::on_window_removed(Gtk::Window* window) {
+    Gtk::Application::on_window_removed(window);
+    if (EditorWindow* editor = dynamic_cast<EditorWindow*>(window)) {
+        ApplicationWindow* parent = editor->getParent();
+        delete editor;
+        if (!--parent->windowCount) delete parent;
+    } else if (ApplicationWindow* parent = dynamic_cast<ApplicationWindow*>(window)) {
+        if (!--parent->windowCount) delete parent;
+    }
+}
+
+void ShadyGui::Application::onCmdQuit() {
+    for (auto window : get_windows()){
+        window->close();
+    }
+}
+
+/*
 #ifdef _WIN32
 #include <Dbghelp.h>
 #pragma comment ( lib, "dbghelp.lib" )
@@ -134,11 +281,12 @@ LONG CALLBACK ExceptionHandler(EXCEPTION_POINTERS* e) {
 	return EXCEPTION_CONTINUE_SEARCH;
 }
 #endif
+*/
 
 int main(int argc, char* argv[]) {
-#ifdef _WIN32
-	SetUnhandledExceptionFilter(ExceptionHandler);
-#endif
-	ShadyGui::Application app;
-	return app.mainLoop();
+//#ifdef _WIN32
+	//SetUnhandledExceptionFilter(ExceptionHandler);
+//#endif
+    ShadyGui::Application application;
+    application.run(argc, argv);
 }

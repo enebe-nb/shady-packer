@@ -1,100 +1,105 @@
 #pragma once
 
-#include "window.hpp"
+#include "application.hpp"
 #include "renderer.hpp"
 
-#include <SDL_audio.h>
+#include <gtkmm/window.h>
+#include <gtkmm/entry.h>
+#include <gtkmm/menubar.h>
+#include <gtkmm/glarea.h>
 
 namespace ShadyGui {
-	class EditorWindow : public Window {
+	class EditorWindow : public Gtk::Window {
 	public: class EditorComponent;
 	protected:
 		const ShadyCore::FileType& type;
-		EditorComponent* component;
-		char name[15];
-		struct nk_rect position;
+        ApplicationWindow* parent;
+		EditorComponent* component = 0;
 	public:
-		EditorWindow(Application* application, ShadyCore::BasePackageEntry& entry);
+		EditorWindow(ApplicationWindow* parent, ShadyCore::BasePackageEntry& entry);
 		virtual ~EditorWindow();
-		inline const char* getName() const override { return name; }
-		void draw(nk_context*, int, int) override;
+        inline ApplicationWindow* getParent() { return parent; }
 
-		inline static void closeCallback(EditorWindow* self, bool confirm) { if (confirm) self->closed = true; } // TODO testing
+        void onCmdSave();
+        void onCmdExport();
 	};
 
 	class EditorWindow::EditorComponent {
 	protected:
-		Application* application;
-		ShadyCore::Resource* resource;
-		const char* path;
+        ApplicationWindow* parent;
+        EditorWindow* window;
+		ShadyCore::Resource* resource = 0;
+		Glib::ustring path;
 		bool isModified = false;
+
+        virtual const char* getMenuUI() = 0;
+        virtual Gtk::Widget* getContent() = 0;
 	public:
 		friend class EditorWindow;
 
+        inline EditorComponent(ApplicationWindow* parent, EditorWindow* window, ShadyCore::Resource* resource, const char* path)
+            : parent(parent), window(window), resource(resource), path(path) {}
 		virtual ~EditorComponent();
-		virtual void initialize() = 0;
-		virtual void getPreferredSize(int&, int&) const = 0;
-		virtual void onGuiLayout(nk_context*) = 0;
-	};
-
-	class ImageEditor : public EditorWindow::EditorComponent {
-	protected:
-		ImageRenderer renderer;
-		int curPalette = 0;
-
-		void setPalette(ShadyCore::Palette*);
-	public:
-		virtual ~ImageEditor();
-		void initialize() override;
-		void getPreferredSize(int&, int&) const override;
-		void onGuiLayout(nk_context*) override;
 	};
 
 	class AudioEditor : public EditorWindow::EditorComponent {
 	protected:
 		AudioRenderer renderer;
+
+		const char* getMenuUI() override;
+		Gtk::Widget* getContent() override;
 	public:
-		void initialize() override;
-		inline void getPreferredSize(int& width, int& height) const override { width = 240; height = 96; }
-		void onGuiLayout(nk_context*) override;
+        AudioEditor(ApplicationWindow*, EditorWindow*, ShadyCore::Resource*, const char*);
+        void onStop();
+        void onPlay();
+        void onLoad();
 	};
 
 	class LabelEditor : public EditorWindow::EditorComponent {
 	protected:
-		char inputName[256];
-		char inputOffset[256];
-		char inputSize[256];
+        Gtk::Entry inputName;
+        Gtk::Entry inputOffset;
+        Gtk::Entry inputSize;
+
+		const char* getMenuUI() override;
+		Gtk::Widget* getContent() override;
 	public:
-		void initialize() override;
-		inline void getPreferredSize(int& width, int& height) const override { width = 240; height = 144; }
-		void onGuiLayout(nk_context*) override;
+        LabelEditor(ApplicationWindow*, EditorWindow*, ShadyCore::Resource*, const char*);
+        void onChanged(Gtk::Entry*);
 	};
 
-	/*
-	class TextEditor : public EditorWindow::EditorComponent {
+	class ImageEditor : public EditorWindow::EditorComponent {
 	protected:
-		bool initialized = false;
-		struct nk_text_edit input;
+        SpriteWidget canvas;
+        ShadyCore::Palette* palette = 0;
+		int curPalette = 0;
+
+		const char* getMenuUI() override;
+		Gtk::Widget* getContent() override;
 	public:
-		virtual ~TextEditor();
-		void initialize() override;
-		inline void getPreferredSize(int& width, int& height) const override { width = 300; height = 400; }
-		void onGuiLayout(nk_context*) override;
+        ImageEditor(ApplicationWindow*, EditorWindow*, ShadyCore::Resource*, const char*);
+        virtual ~ImageEditor();
+        void onCmdImage(bool);
+        void onCmdPalette(bool);
+        bool onKeyPress(GdkEventKey*);
 	};
-	*/
 
 	class PaletteEditor : public EditorWindow::EditorComponent {
 	protected:
 		ShadyCore::Palette packed;
-		ImageRenderer renderNormal, renderPacked;
+        SpriteWidget canvasNormal, canvasPacked;
+        PaletteWidget canvasPalette;
+        ShadyCore::Image* image = 0;
 		int curImage = 0, curColorIndex = 1;
-		struct nk_color curColor;
 
-		void setImage(ShadyCore::Image*);
+		const char* getMenuUI() override;
+		Gtk::Widget* getContent() override;
 	public:
+        PaletteEditor(ApplicationWindow*, EditorWindow*, ShadyCore::Resource*, const char*);
 		virtual ~PaletteEditor();
-		void initialize() override;
-		inline void getPreferredSize(int& width, int& height) const override { width = 600; height = 400; }
-		void onGuiLayout(nk_context*) override;
+        void onCmdImage(bool);
+        bool onKeyPress(GdkEventKey*);
+        void onPalettePreview(int, int32_t);
+        void onPaletteConfirm(int, int32_t);
 	};
 }
