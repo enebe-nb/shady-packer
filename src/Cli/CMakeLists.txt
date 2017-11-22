@@ -15,4 +15,5 @@ set(SRC_CLI
 source_group("Source Files" FILES ${SRC_CLI})
 
 add_executable(shady-cli ${SRC_CLI})
-target_link_libraries(shady-cli shady-core)
+target_link_libraries(shady-cli shady-core -static)
+install(TARGETS shady-cli RUNTIME DESTINATION bin)

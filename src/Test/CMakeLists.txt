@@ -15,8 +15,11 @@ CXXTEST_ADD_TEST(shady-test test.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/zipentry.hpp
 )
 
-target_link_libraries(shady-test shady-core)
+target_link_libraries(shady-test shady-core -static)
 add_custom_command(TARGET shady-test POST_BUILD
 	COMMAND ${CMAKE_COMMAND}
-	ARGS -E copy_directory ${CMAKE_SOURCE_DIR}/src/Test/data test-data
+	ARGS -E copy_directory ${CMAKE_CURRENT_SOURCE_DIR}/data test-data
 )
+
+install(TARGETS shady-test RUNTIME DESTINATION bin)
+install(DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/test-data DESTINATION bin)
