@@ -53,6 +53,7 @@ if (WIN32)
 	
 	get_filename_component(SYSTEM_DIR ${SYSTEM_BINARY_DIR} DIRECTORY)
 	install(DIRECTORY ${SYSTEM_DIR}/share/icons/Adwaita DESTINATION share/icons)
+	install(DIRECTORY ${SYSTEM_DIR}/share/glib-2.0 DESTINATION share)
 else()
 	install(FILES $<TARGET_FILE:rtaudio> DESTINATION lib)
 endif()
