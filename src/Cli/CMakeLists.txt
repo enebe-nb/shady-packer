@@ -2,6 +2,7 @@ link_directories(${BOOST_LIBRARY_DIR})
 include_directories(
     ${CXXOPTS_INCLUDE_DIR}
     ${LIBPNG_INCLUDE_DIR}
+    ${RAPIDXML_INCLUDE_DIR}
     ${BOOST_INCLUDE_DIR}
 )
 
@@ -10,6 +11,8 @@ set(SRC_CLI
 	command.cpp
 	convert.cpp
 	merge.cpp
+	merge-palette.cpp
+	merge-pattern.cpp
 	pack.cpp
 )
 source_group("Source Files" FILES ${SRC_CLI})

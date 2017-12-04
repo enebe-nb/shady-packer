@@ -113,31 +113,31 @@ namespace {
 	};
 }
 
-const static char* cmodifiers[8] = {
-	"liftmodifier",  "smashmodifier",   "bordermodifier", "chainmodifier",
-	"spellmodifier", "countermodifier", "modifier07",     "modifier08",
+const char* const ShadyCore::MoveTraits::comboModifierNames[] = {
+    "liftmodifier",  "smashmodifier",   "bordermodifier", "chainmodifier",
+    "spellmodifier", "countermodifier", "modifier07",     "modifier08",
 };
 
-const static char* fflags[32] = {
-	"standing",             "crouching",          "airborne",           "down",
-	"guardcancel",          "cancellable",        "takecounterhit",     "superarmor",
-	"normalarmor",          "fflag10GUARD_POINT", "grazing",            "fflag12GUARDING",
-	"grabinvul",            "melleinvul",         "bulletinvul",        "airattackinvul",
-	"highattackinvul",      "lowattackinvul",     "objectattackinvul",  "fflag20REFLECT_BULLET",
-	"fflag21FLIP_VELOCITY", "movimentcancel",     "fflag23AFTER_IMAGE", "fflag24LOOP_ANIMATION",
-	"fflag25ATTACK_OBJECT", "fflag26",            "fflag27",            "fflag28",
-	"fflag29",              "fflag30",            "fflag31",            "fflag32"
+const char* const ShadyCore::MoveTraits::frameFlagNames[] = {
+    "standing",             "crouching",          "airborne",           "down",
+    "guardcancel",          "cancellable",        "takecounterhit",     "superarmor",
+    "normalarmor",          "fflag10GUARD_POINT", "grazing",            "fflag12GUARDING",
+    "grabinvul",            "melleinvul",         "bulletinvul",        "airattackinvul",
+    "highattackinvul",      "lowattackinvul",     "objectattackinvul",  "fflag20REFLECT_BULLET",
+    "fflag21FLIP_VELOCITY", "movimentcancel",     "fflag23AFTER_IMAGE", "fflag24LOOP_ANIMATION",
+    "fflag25ATTACK_OBJECT", "fflag26",            "fflag27",            "fflag28",
+    "fflag29",              "fflag30",            "fflag31",            "fflag32"
 };
 
-const static char* aflags[32] = {
-	"aflag01STAGGER",         "highrightblock",       "lowrightblock",      "airblockable",
-	"unblockable",            "ignorearmor",          "hitonwrongblock",    "aflag08GRAB",
-	"aflag09",                "inducecounterhit",     "aflag11COUNTER_HIT", "aflag12SKILL_ATTACK",
-	"aflag13SPELL_ATTACK",    "airattacktype",        "highattacktype",     "lowattacktype",
-	"objectattacktype",       "aflag18UNREFLECTABLE", "aflag19",            "guardcrush",
-	"friendlyfire",           "aflag22stagger",       "isbullet",           "ungrazeble",
-	"aflag25DRAINS_ON_GRAZE", "aflag26",              "aflag27",            "aflag28",
-	"aflag29",                "aflag30",              "aflag31",            "aflag32"
+const char* const ShadyCore::MoveTraits::attackFlagNames[] = {
+    "aflag01STAGGER",         "highrightblock",       "lowrightblock",      "airblockable",
+    "unblockable",            "ignorearmor",          "hitonwrongblock",    "aflag08GRAB",
+    "aflag09",                "aflag10",              "inducecounterhit",   "skillattacktype",
+    "spellattacktype",        "airattacktype",        "highattacktype",     "lowattacktype",
+    "objectattacktype",       "aflag18UNREFLECTABLE", "aflag19",            "guardcrush",
+    "friendlyfire",           "aflag22stagger",       "isbullet",           "ungrazeble",
+    "aflag25DRAINS_ON_GRAZE", "aflag26",              "aflag27",            "aflag28",
+    "aflag29",                "aflag30",              "aflag31",            "aflag32"
 };
 
 static inline void eraseExcept(ShadyCore::Pattern* root, uint32_t id, const ShadyCore::Sequence* except) {
@@ -205,15 +205,15 @@ void ShadyCore::ResourceDReader::accept(MoveTraits& resource) {
 	resource.setAttackFlags(0);
 	for (rapidxml::xml_node<>* iter = readerData->current->first_node(); iter; iter = iter->next_sibling()) {
 		for (int i = 0; i < 32; ++i) {
-			if (i < 8 && strcmp(iter->name(), cmodifiers[i]) == 0) {
+			if (i < 8 && strcmp(iter->name(), MoveTraits::comboModifierNames[i]) == 0) {
 				resource.setComboModifier(resource.getComboModifier() | 1 << i);
 				break;
 			}
-			if (strcmp(iter->name(), fflags[i]) == 0) {
+			if (strcmp(iter->name(), MoveTraits::frameFlagNames[i]) == 0) {
 				resource.setFrameFlags(resource.getFrameFlags() | 1 << i);
 				break;
 			}
-			if (strcmp(iter->name(), aflags[i]) == 0) {
+			if (strcmp(iter->name(), MoveTraits::attackFlagNames[i]) == 0) {
 				resource.setAttackFlags(resource.getAttackFlags() | 1 << i);
 				break;
 			}
@@ -546,13 +546,13 @@ void ShadyCore::ResourceDWriter::accept(MoveTraits& resource) {
 
 	for (int i = 0; i < 32; ++i) {
 		if (i < 8 && (resource.getComboModifier() >> i & 1)) {
-			writerData->printer.openNode(cmodifiers[i]);
+			writerData->printer.openNode(MoveTraits::comboModifierNames[i]);
 			writerData->printer.closeNode();
 		} if (resource.getFrameFlags() >> i & 1) {
-			writerData->printer.openNode(fflags[i]);
+			writerData->printer.openNode(MoveTraits::frameFlagNames[i]);
 			writerData->printer.closeNode();
 		} if (resource.getAttackFlags() >> i & 1) {
-			writerData->printer.openNode(aflags[i]);
+			writerData->printer.openNode(MoveTraits::attackFlagNames[i]);
 			writerData->printer.closeNode();
 		}
 	}

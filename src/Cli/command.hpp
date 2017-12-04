@@ -28,6 +28,7 @@ namespace ShadyCli {
 	class MergeCommand : public Command {
 	private:
         void processPalette(ShadyCore::Palette*, boost::filesystem::path);
+        void processPattern(ShadyCore::Pattern*, boost::filesystem::path);
 	public:
 		inline MergeCommand() : Command("merge", "Merge many kind of files") {}
         void buildOptions(cxxopts::Options&) override;

@@ -321,6 +321,10 @@ namespace ShadyCore {
         inline void setComboModifier(const uint8_t value) { comboModifier = value; }
         inline void setFrameFlags(const uint32_t value) { frameFlags = value; }
         inline void setAttackFlags(const uint32_t value) { attackFlags = value; }
+
+        static const char* const comboModifierNames[8];
+        static const char* const frameFlagNames[32];
+        static const char* const attackFlagNames[32];
 	};
 
 	class BBoxList : public Resource {
@@ -339,6 +343,7 @@ namespace ShadyCore {
 		inline const BBox& getBox(int i) const { return boxes[i]; }
 		inline BBox& getBox(int i) { return boxes[i]; }
 		inline BBox& createBox() { boxes.emplace_back(); return boxes.back(); }
+        inline void eraseBox(uint32_t index) { boxes.erase(boxes.begin() + index); }
 	};
 
 	class BBoxList::BBox {
@@ -565,6 +570,10 @@ namespace ShadyCore {
 		inline const Frame& getFrame(int i) const { return *frames[i]; }
 		inline Frame& getFrame(int i) { return *frames[i]; }
 		inline Frame& createFrame() { frames.push_back(new Frame(base.getRoot())); return *frames.back(); }
+        inline void eraseFrame(uint32_t index) { delete frames[index]; frames.erase(frames.begin() + index); }
+        inline void eraseFrame(uint32_t indexBegin, uint32_t indexEnd) {
+            for (uint32_t i = indexBegin; i < indexEnd; ++i) delete frames[i];
+            frames.erase(frames.begin() + indexBegin, frames.begin() + indexEnd); }
     };
 
     class Sequence::Move : public Sequence::Animation {
