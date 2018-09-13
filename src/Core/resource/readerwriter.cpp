@@ -126,7 +126,7 @@ const ShadyCore::FileType& ShadyCore::FileType::get(BasePackageEntry& entry) {
         while (input.get(buffer[0]) && input.gcount()) {
             if (buffer[0] == '<') {
                 int i = 0;
-                for (input.get(buffer[0]); buffer[i] && strchr(" />", buffer[i]); input.get(buffer[++i]));
+                for (input.get(buffer[0]); buffer[i] && !strchr(" />", buffer[i]); input.get(buffer[++i]));
                 buffer[i] = '\0';
 				if (strcmp(buffer, "movepattern") == 0) { entry.close(); return typeDPattern; }
 				if (strcmp(buffer, "animpattern") == 0) { entry.close(); return typeDAnimation; }
