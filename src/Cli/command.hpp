@@ -41,4 +41,16 @@ namespace ShadyCli {
         void buildOptions(cxxopts::Options&) override;
 		void run(const cxxopts::Options&) override;
 	};
+
+	class ScaleCommand : public Command {
+	private:
+		std::string prefix;
+		void (*scalingAlgorithm)(ShadyCore::Image*, uint8_t* source);
+		void process(boost::filesystem::path, boost::filesystem::path);
+		void process(ShadyCore::Pattern* pattern);
+	public:
+		inline ScaleCommand() : Command("scale", "Scale sprites and increase textures sizes in pattern files.") {}
+        void buildOptions(cxxopts::Options&) override;
+		void run(const cxxopts::Options&) override;
+	};
 }

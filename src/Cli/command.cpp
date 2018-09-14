@@ -1,9 +1,4 @@
-//#include "../Core/package.hpp"
-//#include "../Core/resource/readerwriter.hpp"
 #include "command.hpp"
-//#include <boost/filesystem.hpp>
-//#include <iostream>
-//#include <png.h>
 
 static inline ShadyCli::Command* getCommand(const char* arg) {
     if (strcmp(arg, "convert") == 0) {
@@ -12,6 +7,8 @@ static inline ShadyCli::Command* getCommand(const char* arg) {
 		return new ShadyCli::PackCommand;
 	} else if (strcmp(arg, "merge") == 0) {
 		return new ShadyCli::MergeCommand;
+	} else if (strcmp(arg, "scale") == 0) {
+		return new ShadyCli::ScaleCommand;
 	} return 0;
 }
 

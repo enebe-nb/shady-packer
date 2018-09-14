@@ -14,6 +14,7 @@ set(SRC_CLI
 	merge-palette.cpp
 	merge-pattern.cpp
 	pack.cpp
+	scale.cpp
 )
 source_group("Source Files" FILES ${SRC_CLI})
 

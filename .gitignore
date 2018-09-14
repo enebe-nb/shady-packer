@@ -1,3 +1,4 @@
 build*
 deploy*
 src/test.cpp
+.vscode
