@@ -17,7 +17,6 @@ const ShadyCore::FileType ShadyCore::FileType::typeDImage(TYPE_IMAGE, false, ".p
 const ShadyCore::FileType ShadyCore::FileType::typeDPalette(TYPE_PALETTE, false, ".act", ".pal");
 const ShadyCore::FileType ShadyCore::FileType::typeDSfx(TYPE_SFX, false, ".wav", ".cv3");
 const ShadyCore::FileType ShadyCore::FileType::typeDGui(TYPE_GUI, false, ".xml", ".dat");
-const ShadyCore::FileType ShadyCore::FileType::typeDGuiDEPRECATED(TYPE_GUI, false, ".gui", ".dat"); // TODO DEPRECATED
 const ShadyCore::FileType ShadyCore::FileType::typeDAnimation(TYPE_ANIMATION, false, ".xml", ".pat");
 const ShadyCore::FileType ShadyCore::FileType::typeDPattern(TYPE_PATTERN, false, ".xml", ".pat");
 const ShadyCore::FileType ShadyCore::FileType::typeEText(TYPE_TEXT, true, ".cv0", ".txt");
@@ -39,7 +38,6 @@ const ShadyCore::FileType& ShadyCore::FileType::getSimple(const char* name) {
         &typeEImage, // ".cv2"
         &typeESfx, // ".cv3"
         &typeEGui, // ".dat"
-        &typeDGuiDEPRECATED, // ".gui" TODO DEPRECATED
         &typeDLabel, // ".lbl"
         &typeEPalette, // ".pal"
         &typeEPattern, // ".pat"
@@ -48,7 +46,7 @@ const ShadyCore::FileType& ShadyCore::FileType::getSimple(const char* name) {
         &typeDText, // ".txt"
         &typeDSfx, // ".wav"
         &typeDPattern, // ".xml"
-    }; const uint32_t extMapCount = 16;
+    }; const uint32_t extMapCount = 15;
 
     const char* ext = strrchr(name, '.');
     if (!ext) return typePackage;

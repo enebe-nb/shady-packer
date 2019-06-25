@@ -329,7 +329,22 @@ namespace ShadyCore {
 
 	class BBoxList : public Resource {
 	public:
-		class BBox;
+		class BBox {
+		protected:
+			int32_t left, up, right, down;
+			uint8_t unknown = 0;
+		public:
+			inline const int32_t& getLeft() const { return left; }
+			inline const int32_t& getUp() const { return up; }
+			inline const int32_t& getRight() const { return right; }
+			inline const int32_t& getDown() const { return down; }
+			inline const uint8_t& getUnknown() const { return unknown; }
+			inline void setLeft(const int32_t value) { left = value; }
+			inline void setUp(const int32_t value) { up = value; }
+			inline void setRight(const int32_t value) { right = value; }
+			inline void setDown(const int32_t value) { down = value; }
+			inline void setUnknown(const uint8_t value) { unknown = value; }
+		};
 	protected:
 		std::vector<BBox> boxes;
 		bool attack;
@@ -344,23 +359,6 @@ namespace ShadyCore {
 		inline BBox& getBox(int i) { return boxes[i]; }
 		inline BBox& createBox() { boxes.emplace_back(); return boxes.back(); }
         inline void eraseBox(uint32_t index) { boxes.erase(boxes.begin() + index); }
-	};
-
-	class BBoxList::BBox {
-	protected:
-		int32_t left, up, right, down;
-		uint8_t unknown = 0;
-	public:
-		inline const int32_t& getLeft() const { return left; }
-		inline const int32_t& getUp() const { return up; }
-		inline const int32_t& getRight() const { return right; }
-		inline const int32_t& getDown() const { return down; }
-		inline const uint8_t& getUnknown() const { return unknown; }
-		inline void setLeft(const int32_t value) { left = value; }
-		inline void setUp(const int32_t value) { up = value; }
-		inline void setRight(const int32_t value) { right = value; }
-		inline void setDown(const int32_t value) { down = value; }
-		inline void setUnknown(const uint8_t value) { unknown = value; }
 	};
 
 	class MoveEffect : public Resource {
