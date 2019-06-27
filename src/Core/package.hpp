@@ -106,6 +106,7 @@ namespace ShadyCore {
 			FILTER_ENCRYPT_ALL,
 			FILTER_SLASH_TO_UNDERLINE,
 			FILTER_UNDERLINE_TO_SLASH,
+			FILTER_TO_LOWERCASE,
 		};
 
 		static void apply(Package&, Filter, Callback*, void*);

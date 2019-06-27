@@ -77,6 +77,17 @@ static bool FilterSlashToUnderline(ShadyCore::PackageFilter& filter, ShadyCore::
 	return false;
 }
 
+static bool FilterToLowerCase(ShadyCore::PackageFilter& filter, ShadyCore::BasePackageEntry& entry) {
+	const char* oldName = entry.getName();
+	char newName[256];
+	for (int i = 0; newName[i] = oldName[i]; ++i) {
+		newName[i] = tolower(oldName[i]);
+	}
+
+	if (strcmp(newName, oldName) != 0) return filter.renameEntry(newName);
+	return false;
+}
+
 static bool FilterUnderlineToSlash(ShadyCore::PackageFilter& filter, ShadyCore::BasePackageEntry& entry) {
 	const char* dirTable[][2] = {
 		{ "data_weather_effect_", "data/weather/effect/" },
@@ -392,6 +403,7 @@ void ShadyCore::PackageFilter::apply(Package& package, Filter filterType, Callba
 		filterType == FILTER_ENCRYPT_ALL ? FilterEncryptAll :
 		filterType == FILTER_SLASH_TO_UNDERLINE ? FilterSlashToUnderline :
 		filterType == FILTER_UNDERLINE_TO_SLASH ? FilterUnderlineToSlash :
+		filterType == FILTER_TO_LOWERCASE ? FilterToLowerCase :
 		0;
 	PackageFilter filter(package);
 	filter.iter = package.begin();
