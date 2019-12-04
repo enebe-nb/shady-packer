@@ -1,301 +1,109 @@
 #include <shlwapi.h>
-#include "../Core/package.hpp"
 #include <SokuLib.h>
 #include <fstream>
-#include <sstream>
 #include <vector>
-#include <boost/filesystem.hpp>
-
-#define TEXT_SECTION_OFFSET	0x00401000
-#define TEXT_SECTION_SIZE	0x00456000
+#include <map>
+#include <algorithm>
 
 namespace {
 	std::ofstream outlog;
 	char basePath[1024];
-	ShadyCore::Package package;
-	std::vector<std::string> packageList;
+	std::map<std::string, std::vector<ItemID> > packageList;
 	std::vector<std::string> optionList;
-	//EventID FileLoaderID;
 	ItemID LoadMenuID;
-
-	//HANDLE hMutex;
-	typedef void (WINAPI* orig_dealloc_t)(int addr);
-	orig_dealloc_t orig_dealloc = (orig_dealloc_t)0x81f6fa;
-	typedef int (WINAPI* read_constructor_t)(const char *filename, void *a, void *b);
-	read_constructor_t orig_read_constructor = (read_constructor_t)0x41c080;
-
-	struct file_entry_t {
-		ShadyCore::BasePackageEntry* ptr;
-		std::istream* stream;
-		int size;
-		int bytes_read;
-	};
 }
 
-__inline DWORD TamperCall(DWORD addr, DWORD target) {
-	DWORD old = *reinterpret_cast<PDWORD>(addr + 1) + (addr + 5);
-	*reinterpret_cast<PDWORD>(addr + 1) = target - (addr + 5);
-	return old;
+std::wstring s2ws(const std::string& str) {
+    int size_needed = MultiByteToWideChar(CP_UTF8, 0, &str[0], (int)str.size(), NULL, 0);
+    std::wstring wstrTo( size_needed, 0 );
+    MultiByteToWideChar(CP_UTF8, 0, &str[0], (int)str.size(), &wstrTo[0], size_needed);
+    return wstrTo;
 }
 
-// -------- SokuEngine Start --------
-static int WINAPI reader_stream_destruct(int a) {
-	int ecx_value;
-	__asm mov ecx_value, ecx
+void LoadSettings() {
+	std::string configPath(basePath);
+	configPath += "/shady-loader.cfg";
 
-	if (ecx_value) {
-		file_entry_t *file = (file_entry_t *)(ecx_value+4);
-		delete file->stream;
-
-		if (a & 1) {
-			orig_dealloc(ecx_value);
-		}
-	}
-	return ecx_value;
-}
-
-static int WINAPI reader_entry_destruct(int a) {
-	int ecx_value;
-	__asm mov ecx_value, ecx
-
-	if (ecx_value) {
-		file_entry_t *file = (file_entry_t *)(ecx_value+4);
-		file->ptr->close();
-
-		if (a & 1) {
-			orig_dealloc(ecx_value);
-		}
-	}
-	return ecx_value;
-}
-
-static int WINAPI reader_read(char *dest, int size) {
-	int ecx_value;
-	__asm mov ecx_value, ecx
-
-	if (ecx_value == 0) return 0;
-
-	file_entry_t *file = (file_entry_t *)(ecx_value + 4);
-	file->bytes_read = 0;
-	if ((int)file->stream->tellg() + size > file->size) return 0;
-	file->stream->read(dest, size);
-	file->bytes_read = size;
-
-	return 1;
-}
-
-static void WINAPI reader_seek(int offset, int whence) {
-	int ecx_value;
-	__asm mov ecx_value, ecx
-
-	if (ecx_value == 0) return;
-
-	file_entry_t *file = (file_entry_t *)(ecx_value + 4);
-	switch(whence) {
-	case 0:
-		if (offset > file->size) file->stream->seekg(0, std::ios::end);
-		else file->stream->seekg(offset, std::ios::beg);
-		break;
-	case 1:
-		if ((int)file->stream->tellg() + offset > file->size) {
-			file->stream->seekg(0, std::ios::end);
-		} else if ((int)file->stream->tellg() + offset < 0) {
-			file->stream->seekg(0, std::ios::beg);
-		} else file->stream->seekg(offset, std::ios::cur);
-		break;
-	case 2:
-		if (offset > file->size) file->stream->seekg(0, std::ios::beg);
-		else file->stream->seekg(-offset, std::ios::end);
-		break;
-	}
-}
-
-static int WINAPI reader_getSize() {
-	int ecx_value;
-	__asm mov ecx_value, ecx
-
-	if (ecx_value == 0) return 0;
-
-	file_entry_t *file = (file_entry_t *)(ecx_value + 4);
-	return file->size;
-}
-
-static int WINAPI reader_getRead() {
-	int ecx_value;
-	__asm mov ecx_value, ecx
-
-	if (ecx_value == 0) return 0;
-
-	file_entry_t *file = (file_entry_t *)(ecx_value + 4);
-	return file->bytes_read;
-}
-
-struct reader_t {
-	// ecx == this for all
-	int (WINAPI* destruct)(int a);
-	int (WINAPI* read)(char *dest, int size);
-	int (WINAPI* getRead)();
-	void (WINAPI* seek)(int offset, int whence);
-	int (WINAPI* getSize)();
-};
-
-static reader_t reader_stream = {
-	reader_stream_destruct,
-	reader_read,
-	reader_getRead,
-	reader_seek,
-	reader_getSize
-};
-
-static reader_t reader_entry = {
-	reader_entry_destruct,
-	reader_read,
-	reader_getRead,
-	reader_seek,
-	reader_getSize
-};
-
-static int WINAPI read_constructor(const char *filename, void *a, void *b) {
-	int esi_value;
-	__asm mov esi_value, esi
-	
-	size_t len = strlen(filename);
-	char* filenameB = new char[len + 1];
-	char* extension = 0;
-	for (int i = 0; i < len; ++i) {
-		if (filename[i] == '/') filenameB[i] = '_';
-		else filenameB[i] = tolower(filename[i]);
-		if (filenameB[i] == '.') extension = &filenameB[i];
-	} filenameB[len] = 0;
-
-	//WaitForSingleObject(hMutex, INFINITE);
-	ShadyCore::Package::iterator file = package.findFile(filenameB);
-
-	if (file == package.end() && extension) {
-		ShadyCore::FileType type = ShadyCore::FileType::getSimple(filenameB);
-		if (type.type != ShadyCore::FileType::TYPE_UNKNOWN) {
-			strcpy(extension, type.inverseExt);
-			file = package.findFile(filenameB);
+	std::ifstream config(configPath);
+	if (!config.fail()) {
+		std::string line;
+		while(std::getline(config, line)) if (line.size() && line[0] != '#') {
+			std::string path = basePath;
+			path += "/"; path += line; 
+			packageList[line].push_back(Soku::AddFile(s2ws(path)));
+			optionList.push_back(line);
 		}
 	}
 
-	int result;
-	if (file != package.end()) {
-		file_entry_t *filedata = (file_entry_t *)(esi_value+4);
-		ShadyCore::FileType type = ShadyCore::FileType::get(*file);
+	WIN32_FIND_DATA findData;
+	HANDLE hFind;
+	if ((hFind = FindFirstFile((std::string(basePath) + "/*").c_str(), &findData)) != INVALID_HANDLE_VALUE) {
+		do {
+			std::string filename(findData.cFileName);
+			if (findData.cFileName[0] == '.'
+				|| !(findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
+				&& (filename.size() < 4 || filename.compare(filename.size() - 4, 4, ".zip") != 0)) continue;
 
-		if (type.isEncrypted || type.type == ShadyCore::FileType::TYPE_UNKNOWN) {
-			filedata->ptr = &*file;
-			filedata->stream = &file->open();
-			filedata->stream->seekg(0, std::ios::end);
-			filedata->size = filedata->stream->tellg();
-			filedata->stream->seekg(0, std::ios::beg);
-			filedata->bytes_read = 0;
-			*(int*)esi_value = (int)&reader_entry;
-			
-			result = (int)filedata->ptr;
-		} else {
-			std::istream& input = file->open();
-			std::stringstream* buffer = new std::stringstream();
-			ShadyCore::convertResource(type, input, *buffer);
-			file->close();
-
-			filedata->ptr = &*file;
-			filedata->stream = buffer;
-			filedata->size = buffer->tellp();
-			filedata->bytes_read = 0;
-			*(int*)esi_value = (int)&reader_stream;
-			
-			result = (int)filedata->stream;
-		}
-	} else {
-		__asm mov esi, esi_value
-		result = orig_read_constructor(filename, a, b);
+			if (std::find(optionList.begin(), optionList.end(), filename) == optionList.end()) {
+				optionList.push_back(filename);
+			}
+		} while(FindNextFile(hFind, &findData));
+		FindClose(hFind);
 	}
 
-	delete[] filenameB;
-	//ReleaseMutex(hMutex);
-	return result;
+	std::sort(optionList.begin(), optionList.end());
+	optionList.erase(std::unique(optionList.begin(), optionList.end()), optionList.end());
 }
 
-namespace {
-	char inputBuf[1024];
-}
+void SaveSettings() {
+	std::string configPath(basePath);
+	configPath += "/shady-loader.cfg";
 
-void LoadPackage(const char* filename) {
-	boost::filesystem::path fname(filename);
-	if (fname.is_relative()) fname = basePath / fname;
-	if (boost::filesystem::exists(fname)) package.appendPackage(fname.string().c_str());
+	std::ofstream config(configPath);
+	for(auto& pair: packageList) {
+		config << pair.first << std::endl;
+	}
 }
 
 void LoadMenuCallback() {
-	if (ImGui::Button("Refresh", ImVec2(80, 20))) {
-		optionList = packageList;
-		for (boost::filesystem::directory_iterator iter(basePath); iter != boost::filesystem::directory_iterator(); ++iter) {
-			if (boost::filesystem::is_directory(iter->path()) ||
-				boost::filesystem::is_regular_file(iter->path()) && (iter->path().extension() == ".dat" || iter->path().extension() == ".zip")) {
-				
-				std::string filename = iter->path().filename().string();
-				if (std::find(optionList.begin(), optionList.end(), filename) == optionList.end()) {
-					optionList.push_back(filename);
-				}
-			}
-		}
-	}
-	ImGui::SameLine(0, 10);
 	ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(2, 4));
-	ImGui::Text("Load from Path:");
-	ImGui::SameLine(0, 10);
-	if (ImGui::InputText("##hidden", inputBuf, 1024, ImGuiInputTextFlags_EnterReturnsTrue , 0, 0) && boost::filesystem::exists(inputBuf)) {
-		LoadPackage(inputBuf);
-		packageList.push_back(inputBuf);
-		optionList.push_back(inputBuf);
+	if (optionList.size() == 0) {
+		ImGui::Text("No packages found! Put them in the shady-loader folder.");
 	}
 
 	for (auto& pack : optionList) {
 		ImGui::Dummy(ImVec2(6, 20));
 		ImGui::SameLine();
 
-		auto iter = std::find(packageList.begin(), packageList.end(), pack);
-		bool isActive = iter != packageList.end();
+		bool isActive = packageList.count(pack) != 0;
+		bool wasActive = isActive;
 		if (ImGui::Checkbox(pack.c_str(), &isActive)) {
 			if (isActive) {
-				LoadPackage(pack.c_str());
-				packageList.push_back(pack);
-				ShadyCore::PackageFilter::apply(package, ShadyCore::PackageFilter::FILTER_FROM_ZIP_TEXT_EXTENSION, 0, 0);
-				ShadyCore::PackageFilter::apply(package, ShadyCore::PackageFilter::FILTER_SLASH_TO_UNDERLINE, 0, 0);
-				ShadyCore::PackageFilter::apply(package, ShadyCore::PackageFilter::FILTER_TO_LOWERCASE, 0, 0);
+				std::string path = basePath;
+				path += "/"; path += pack;
+				unsigned int  attr = GetFileAttributes(path.c_str());
+				if (attr != INVALID_FILE_ATTRIBUTES)
+					if (attr & FILE_ATTRIBUTE_DIRECTORY) {
+						WIN32_FIND_DATA findData;
+						HANDLE hFind;
+						if ((hFind = FindFirstFile((path + "/*").c_str(), &findData)) != INVALID_HANDLE_VALUE) {
+							do {
+								packageList[pack].push_back(Soku::AddFile(s2ws(path + "/" + findData.cFileName)));
+							} while(FindNextFile(hFind, &findData));
+							FindClose(hFind);
+						}
+					} else {
+						packageList[pack].push_back(Soku::AddFile(s2ws(path)));
+					}
 			} else {
-				if (iter != packageList.end()) packageList.erase(iter);
-				package.clear();
-				for (auto& reload : packageList) {
-					LoadPackage(reload.c_str());
-				}
-				ShadyCore::PackageFilter::apply(package, ShadyCore::PackageFilter::FILTER_FROM_ZIP_TEXT_EXTENSION, 0, 0);
-				ShadyCore::PackageFilter::apply(package, ShadyCore::PackageFilter::FILTER_SLASH_TO_UNDERLINE, 0, 0);
-				ShadyCore::PackageFilter::apply(package, ShadyCore::PackageFilter::FILTER_TO_LOWERCASE, 0, 0);
+				for(auto& id : packageList[pack]) Soku::RemoveFile(id);
+				packageList.erase(pack);
 			}
+
+			SaveSettings();
 		}
 	}
 	ImGui::PopStyleVar();
-}
-
-void LoadSettings() {
-	boost::filesystem::path profilePath(basePath);
-	profilePath /= "shady-loader.cfg";
-
-	std::ifstream config(profilePath.native());
-	std::string line;
-	while(std::getline(config, line)) if (line.size() && line[0] != '#') {
-		LoadPackage(line.c_str());
-		packageList.push_back(line);
-		optionList.push_back(line);
-	}
-
-	optionList.erase(unique(optionList.begin(), optionList.end()), optionList.end());
-	ShadyCore::PackageFilter::apply(package, ShadyCore::PackageFilter::FILTER_FROM_ZIP_TEXT_EXTENSION, 0, 0);
-	ShadyCore::PackageFilter::apply(package, ShadyCore::PackageFilter::FILTER_SLASH_TO_UNDERLINE, 0, 0);
-	ShadyCore::PackageFilter::apply(package, ShadyCore::PackageFilter::FILTER_TO_LOWERCASE, 0, 0);
 }
 
 extern const BYTE TARGET_HASH[16];
@@ -311,21 +119,13 @@ extern "C" __declspec(dllexport) bool Initialize(HMODULE hMyModule, HMODULE hPar
 	::PathRemoveFileSpecA(basePath);
 	LoadSettings();
 
-	//FileLoaderID = Soku::SubscribeEvent(SokuEvent::FileLoader, (void(*)(void*))FileLoaderCallback);
 	LoadMenuID = Soku::AddItem(SokuComponent::EngineMenu, "Package Load", (void(*)(void)) LoadMenuCallback);
-
-	//hMutex = CreateMutex(0, FALSE, 0);
-	DWORD dwOldProtect;
-	::VirtualProtect(reinterpret_cast<LPVOID>(TEXT_SECTION_OFFSET), TEXT_SECTION_SIZE, PAGE_EXECUTE_WRITECOPY, &dwOldProtect);
-	orig_read_constructor = (read_constructor_t) TamperCall(0x0040D227, reinterpret_cast<DWORD>(read_constructor));
-	::VirtualProtect(reinterpret_cast<LPVOID>(TEXT_SECTION_OFFSET), TEXT_SECTION_SIZE, dwOldProtect, &dwOldProtect);
 
 	return TRUE;
 }
 
 extern "C" __declspec(dllexport) void AtExit() {
 	outlog.close();
-	//Soku::UnsubscribeEvent(FileLoaderID);
 	Soku::RemoveItem(LoadMenuID);
 }
 
