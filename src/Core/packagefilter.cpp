@@ -431,7 +431,7 @@ bool ShadyCore::PackageFilter::convertEntry(const FileType& type) {
 
 	boost::filesystem::path path(iter->getName());
 	path.replace_extension(type.inverseExt);
-	package.appendFile(path.generic_string().c_str(), tempFile.string().c_str(), true);
+	package.appendFile(path.generic_string().c_str(), tempFile.string().c_str(), iter->getId());
 
 	iter = package.detachFile(iter);
 	return true;
@@ -443,6 +443,6 @@ bool ShadyCore::PackageFilter::convertData(const FileType& type) {
 	ShadyCore::convertResource(type, iter->open(), output);
 	output.close(); iter->close();
 
-	package.appendFile(iter->getName(), tempFile.string().c_str(), true);
+	package.appendFile(iter->getName(), tempFile.string().c_str(), iter->getId());
 	return false;
 }

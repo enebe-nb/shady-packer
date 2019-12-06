@@ -23,11 +23,12 @@ int ShadyCore::Package::appendDirPackage(const char* basePath) {
 	return nextId++;
 }
 
-int ShadyCore::Package::appendFile(const char* name, const char* filename, bool deleteOnDestroy) {
+int ShadyCore::Package::appendFile(const char* name, const char* filename, int id) {
 	if (boost::filesystem::exists(filename) && boost::filesystem::is_regular_file(filename)) {
-		addOrReplace(new FilePackageEntry(nextId, allocateString(name), allocateString(filename), deleteOnDestroy));
+		addOrReplace(new FilePackageEntry(id >= 0 ? id : nextId, allocateString(name), allocateString(filename), id >= 0));
 	} else throw; // TODO better error handling
-	return nextId++;
+	if (id < 0) id = nextId++;
+	return id;
 }
 
 int ShadyCore::Package::appendFile(const char* name, std::istream& input) {

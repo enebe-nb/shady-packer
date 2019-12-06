@@ -78,7 +78,7 @@ namespace ShadyCore {
 		inline iterator findFile(const char* name) { return iterator(entries.find(name)); }
 
 		int appendPackage(const char*);
-		int appendFile(const char*, const char *, bool = false);
+		int appendFile(const char*, const char *, int = -1);
 		int appendFile(const char*, std::istream&);
 
 		iterator detachFile(iterator iter);

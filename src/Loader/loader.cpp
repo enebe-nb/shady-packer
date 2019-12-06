@@ -1,134 +1,289 @@
+#include "main.hpp"
+
 #include <shlwapi.h>
 #include <SokuLib.h>
+#include <string>
 #include <fstream>
-#include <vector>
-#include <map>
-#include <algorithm>
+#include <sstream>
+
+#include "../Core/package.hpp"
 
 namespace {
-	std::ofstream outlog;
-	char basePath[1024];
-	std::map<std::string, std::vector<ItemID> > packageList;
-	std::vector<std::string> optionList;
-	ItemID LoadMenuID;
+    typedef FileID (*AddFile_t)(const std::wstring& path);
+    AddFile_t tramp_AddFile;
+    typedef bool (*RemoveFileByPath_t)(const std::wstring& path);
+    RemoveFileByPath_t tramp_RemoveFileByPath;
+    typedef bool (*RemoveFile_t)(FileID);
+    RemoveFile_t tramp_RemoveFile;
+    typedef bool (*RemoveAllFiles_t)();
+    RemoveAllFiles_t tramp_RemoveAllFiles;
+    ShadyCore::Package package;
+    EventID fileLoaderEvent;
+
+    typedef void (WINAPI* orig_dealloc_t)(int);
+	orig_dealloc_t orig_dealloc = (orig_dealloc_t)0x81f6fa;
+    struct reader_data {
+        ShadyCore::BasePackageEntry* entry;
+        std::istream* stream;
+        int size;
+        int bytes_read;
+    };
 }
 
-std::wstring s2ws(const std::string& str) {
-    int size_needed = MultiByteToWideChar(CP_UTF8, 0, &str[0], (int)str.size(), NULL, 0);
-    std::wstring wstrTo( size_needed, 0 );
-    MultiByteToWideChar(CP_UTF8, 0, &str[0], (int)str.size(), &wstrTo[0], size_needed);
-    return wstrTo;
+std::string ws2s(const std::wstring& wstr) {
+    int size_needed = WideCharToMultiByte(CP_UTF8, 0, &wstr[0], (int)wstr.size(), NULL, 0, NULL, NULL);
+    std::string strTo(size_needed, 0);
+    WideCharToMultiByte(CP_UTF8, 0, &wstr[0], (int)wstr.size(),&strTo[0], size_needed, NULL, NULL);
+    return strTo;
 }
 
-void LoadSettings() {
-	std::string configPath(basePath);
-	configPath += "/shady-loader.cfg";
+DWORD DoIntercept(DWORD addr, DWORD target, int offset) {
+    char* lpAddr = (char*)addr;
+    char* lpTramp = new char[offset + 5];
+    DWORD tramp = (DWORD) lpTramp;
+    DWORD dwOldProtect;
 
-	std::ifstream config(configPath);
-	if (!config.fail()) {
-		std::string line;
-		while(std::getline(config, line)) if (line.size() && line[0] != '#') {
-			std::string path = basePath;
-			path += "/"; path += line; 
-			packageList[line].push_back(Soku::AddFile(s2ws(path)));
-			optionList.push_back(line);
-		}
+    for (int i = 0; i < offset; ++i) *lpTramp++ = *lpAddr++;
+    *lpTramp++ = 0xE9;
+    *(int*)lpTramp = (int)addr - (int)tramp - 5;
+    VirtualProtect(reinterpret_cast<LPVOID>(tramp), offset+5, PAGE_EXECUTE_READWRITE, &dwOldProtect);
+
+    VirtualProtect(reinterpret_cast<LPVOID>(addr), offset, PAGE_EXECUTE_READWRITE, &dwOldProtect);
+    *(char*)addr = 0xE9;
+    *(int*)(addr + 1) = (int)target - (int)addr - 5;
+    VirtualProtect(reinterpret_cast<LPVOID>(addr), offset, dwOldProtect, &dwOldProtect);
+
+    FlushInstructionCache(GetCurrentProcess(), 0, 0);
+    return tramp;
+}
+
+void UndoIntercept(DWORD addr, DWORD tramp, int offset) {
+    char* lpAddr = (char*)addr;
+    char* lpTramp = (char*)tramp;
+    DWORD dwOldProtect;
+
+    ::VirtualProtect(reinterpret_cast<LPVOID>(addr), offset, PAGE_EXECUTE_READWRITE, &dwOldProtect);
+    for (int i = 0; i < offset; ++i) *lpAddr++ = *lpTramp++;
+    ::VirtualProtect(reinterpret_cast<LPVOID>(addr), offset, dwOldProtect, &dwOldProtect);
+
+    delete[] (char*)tramp;
+    FlushInstructionCache(GetCurrentProcess(), 0, 0);
+}
+
+static void applyGameFilters(int id = -1) {
+    ShadyCore::PackageFilter::apply(package, 
+        (ShadyCore::PackageFilter::Filter)(
+            ShadyCore::PackageFilter::FILTER_FROM_ZIP_TEXT_EXTENSION |
+            ShadyCore::PackageFilter::FILTER_SLASH_TO_UNDERLINE |
+            ShadyCore::PackageFilter::FILTER_TO_LOWERCASE
+        ), id);
+}
+
+FileID repl_AddFile(const std::wstring& path) {
+    std::string pathu8 = ws2s(path);
+    DWORD attr = GetFileAttributes(pathu8.c_str());
+    if (attr == INVALID_FILE_ATTRIBUTES) return -1;
+    if (attr & FILE_ATTRIBUTE_DIRECTORY) {
+        outlog << "Dir " << pathu8 << std::endl;
+        int id = package.appendPackage(pathu8.c_str());
+        applyGameFilters(id);
+        return id;
+    }
+
+    std::ifstream file(pathu8);
+    if (file.fail()) return -1;
+    int id;
+    auto type = ShadyCore::FileType::get(pathu8.c_str(), file);
+    file.close();
+    if (type == ShadyCore::FileType::TYPE_PACKAGE) {
+        outlog << "Pack " << pathu8 << std::endl;
+        id = package.appendPackage(pathu8.c_str());
+    } else {
+        outlog << "File " << pathu8 << std::endl;
+        const char* filename = pathu8.c_str();
+        id = package.appendFile(PathFindFileName(filename), filename);
+    }
+
+    applyGameFilters(id);
+    return id;
+}
+
+bool repl_RemoveFileByPath(const std::wstring& path) {
+    std::string pathu8 = ws2s(path);
+    package.detachFile(pathu8.c_str());
+    return true;
+}
+
+bool repl_RemoveFile(FileID id) {
+    if (id < 0) return false;
+    package.detach(id);
+    return true;
+}
+
+bool repl_RemoveAllFiles() {
+    package.clear();
+    return true;
+}
+
+static int WINAPI reader_destruct(int a) {
+	int ecx_value;
+	__asm mov ecx_value, ecx
+	if (!ecx_value) return 0;
+
+    reader_data *data = (reader_data *)(ecx_value+4);
+    if (data->size == 0) data->entry->close();
+    else delete data->stream;
+    if (a & 1) orig_dealloc(ecx_value);
+	return ecx_value;
+}
+
+static int WINAPI reader_read(char *dest, int size) {
+	int ecx_value;
+	__asm mov ecx_value, ecx
+	if (!ecx_value) return 0;
+
+	reader_data *data = (reader_data *)(ecx_value + 4);
+    if ((void*)data->entry == (void*)data->stream && data->size == 0) data->stream = &data->entry->open();
+	data->stream->read(dest, size);
+    data->bytes_read = data->stream->gcount();
+	return data->bytes_read > 0;
+}
+
+static void WINAPI reader_seek(int offset, int whence) {
+	int ecx_value;
+	__asm mov ecx_value, ecx
+	if (ecx_value == 0) return;
+
+	reader_data *data = (reader_data *)(ecx_value + 4);
+    if ((void*)data->entry == (void*)data->stream && data->size == 0) data->stream = &data->entry->open();
+	switch(whence) {
+	case 0:
+		if (offset > data->size) data->stream->seekg(0, std::ios::end);
+		else data->stream->seekg(offset, std::ios::beg);
+		break;
+	case 1:
+		if ((int)data->stream->tellg() + offset > data->size) {
+			data->stream->seekg(0, std::ios::end);
+		} else if ((int)data->stream->tellg() + offset < 0) {
+			data->stream->seekg(0, std::ios::beg);
+		} else data->stream->seekg(offset, std::ios::cur);
+		break;
+	case 2:
+		if (offset > data->size) data->stream->seekg(0, std::ios::beg);
+		else data->stream->seekg(-offset, std::ios::end);
+		break;
+	}
+}
+
+static int WINAPI reader_getSize() {
+	int ecx_value;
+	__asm mov ecx_value, ecx
+	if (ecx_value == 0) return 0;
+
+	reader_data *data = (reader_data *)(ecx_value + 4);
+	return data->size;
+}
+
+static int WINAPI reader_getRead() {
+	int ecx_value;
+	__asm mov ecx_value, ecx
+	if (ecx_value == 0) return 0;
+
+	reader_data *data = (reader_data *)(ecx_value + 4);
+	return data->bytes_read;
+}
+
+functable reader_table = {
+    reader_destruct,
+	reader_read,
+	reader_getRead,
+	reader_seek,
+	reader_getSize
+};
+
+void FileLoaderCallback(SokuData::FileLoaderData& data) {
+    auto iter = package.findFile(data.fileName);
+    if (iter == package.end()) {
+        auto type = ShadyCore::FileType::getSimple(data.fileName);
+        if (type.type != ShadyCore::FileType::TYPE_UNKNOWN) {
+            size_t size = strlen(data.fileName);
+            char* filename = new char[size + 1];
+            strcpy(filename, data.fileName);
+            strcpy(filename + size - 4, type.inverseExt);
+            iter = package.findFile(filename);
+            delete[] filename;
+        }
+    }
+
+    if (iter != package.end()) {
+        outlog << data.fileName << std::endl;
+        outlog.flush();
+        auto type = ShadyCore::FileType::get(*iter);
+        if (type.isEncrypted) {
+            data.inputFormat = DataFormat::RAW;
+            data.data = &*iter;
+            data.size = 0;
+            data.reader = &reader_table;
+        } else if (type == ShadyCore::FileType::TYPE_IMAGE) {
+            data.inputFormat = DataFormat::PNG;
+            std::istream& input = iter->open();
+            input.seekg(0, std::ios::end);
+            data.size = input.tellg();
+            data.data = new char[data.size];
+            input.seekg(0, std::ios::beg);
+            input.read((char*)data.data, data.size);
+            iter->close();
+        } else {
+            std::istream& input = iter->open();
+            std::stringstream* buffer = new std::stringstream();
+            ShadyCore::convertResource(type, input, *buffer);
+            data.size = buffer->tellp();
+            outlog << "tellp " << data.size << std::endl;
+            iter->close();
+
+            data.inputFormat = DataFormat::RAW;
+            data.data = buffer;
+            data.reader = &reader_table;
+        }
+    }
+}
+
+void LoadFileLoader() {
+    HMODULE handle = GetModuleHandle("SokuEngine.dll");
+	if (handle != INVALID_HANDLE_VALUE) {
+        // AddFile(filename)
+        DWORD addr = (DWORD) GetProcAddress(handle, "?AddFile@Soku@@YAHABV?$basic_string@_WU?$char_traits@_W@std@@V?$allocator@_W@2@@std@@@Z");
+        tramp_AddFile = (AddFile_t) DoIntercept(addr, (DWORD)&repl_AddFile, 5);
+        // RemoveFile(id)
+        addr = (DWORD) GetProcAddress(handle, "?RemoveFile@Soku@@YA_NABV?$basic_string@_WU?$char_traits@_W@std@@V?$allocator@_W@2@@std@@@Z");
+        tramp_RemoveFileByPath = (RemoveFileByPath_t) DoIntercept(addr, (DWORD)&repl_RemoveFileByPath, 5);
+        // RemoveFile(id)
+        addr = (DWORD) GetProcAddress(handle, "?RemoveFile@Soku@@YA_NH@Z");
+        tramp_RemoveFile = (RemoveFile_t) DoIntercept(addr, (DWORD)&repl_RemoveFile, 6);
+        // RemoveAllFiles(id)
+        addr = (DWORD) GetProcAddress(handle, "?RemoveAllFiles@Soku@@YA_NXZ");
+        tramp_RemoveAllFiles = (RemoveAllFiles_t) DoIntercept(addr, (DWORD)&repl_RemoveAllFiles, 6);
 	}
 
-	WIN32_FIND_DATA findData;
-	HANDLE hFind;
-	if ((hFind = FindFirstFile((std::string(basePath) + "/*").c_str(), &findData)) != INVALID_HANDLE_VALUE) {
-		do {
-			std::string filename(findData.cFileName);
-			if (findData.cFileName[0] == '.'
-				|| !(findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
-				&& (filename.size() < 4 || filename.compare(filename.size() - 4, 4, ".zip") != 0)) continue;
-
-			if (std::find(optionList.begin(), optionList.end(), filename) == optionList.end()) {
-				optionList.push_back(filename);
-			}
-		} while(FindNextFile(hFind, &findData));
-		FindClose(hFind);
-	}
-
-	std::sort(optionList.begin(), optionList.end());
-	optionList.erase(std::unique(optionList.begin(), optionList.end()), optionList.end());
+    fileLoaderEvent = Soku::SubscribeEvent(SokuEvent::FileLoader, {FileLoaderCallback});
 }
 
-void SaveSettings() {
-	std::string configPath(basePath);
-	configPath += "/shady-loader.cfg";
+void UnloadFileLoader() {
+    Soku::UnsubscribeEvent(fileLoaderEvent);
 
-	std::ofstream config(configPath);
-	for(auto& pair: packageList) {
-		config << pair.first << std::endl;
-	}
-}
-
-void LoadMenuCallback() {
-	ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(2, 4));
-	if (optionList.size() == 0) {
-		ImGui::Text("No packages found! Put them in the shady-loader folder.");
-	}
-
-	for (auto& pack : optionList) {
-		ImGui::Dummy(ImVec2(6, 20));
-		ImGui::SameLine();
-
-		bool isActive = packageList.count(pack) != 0;
-		bool wasActive = isActive;
-		if (ImGui::Checkbox(pack.c_str(), &isActive)) {
-			if (isActive) {
-				std::string path = basePath;
-				path += "/"; path += pack;
-				unsigned int  attr = GetFileAttributes(path.c_str());
-				if (attr != INVALID_FILE_ATTRIBUTES)
-					if (attr & FILE_ATTRIBUTE_DIRECTORY) {
-						WIN32_FIND_DATA findData;
-						HANDLE hFind;
-						if ((hFind = FindFirstFile((path + "/*").c_str(), &findData)) != INVALID_HANDLE_VALUE) {
-							do {
-								packageList[pack].push_back(Soku::AddFile(s2ws(path + "/" + findData.cFileName)));
-							} while(FindNextFile(hFind, &findData));
-							FindClose(hFind);
-						}
-					} else {
-						packageList[pack].push_back(Soku::AddFile(s2ws(path)));
-					}
-			} else {
-				for(auto& id : packageList[pack]) Soku::RemoveFile(id);
-				packageList.erase(pack);
-			}
-
-			SaveSettings();
-		}
-	}
-	ImGui::PopStyleVar();
-}
-
-extern const BYTE TARGET_HASH[16];
-const BYTE TARGET_HASH[16] = { 0xdf, 0x35, 0xd1, 0xfb, 0xc7, 0xb5, 0x83, 0x31, 0x7a, 0xda, 0xbe, 0x8c, 0xd9, 0xf5, 0x3b, 0x2e };
-
-extern "C" __declspec(dllexport) bool CheckVersion(const BYTE hash[16]) {
-	return ::memcmp(TARGET_HASH, hash, sizeof TARGET_HASH) == 0;
-}
-
-extern "C" __declspec(dllexport) bool Initialize(HMODULE hMyModule, HMODULE hParentModule) {
-	outlog.open("output.log");
-	::GetModuleFileNameA(hMyModule, basePath, sizeof basePath);
-	::PathRemoveFileSpecA(basePath);
-	LoadSettings();
-
-	LoadMenuID = Soku::AddItem(SokuComponent::EngineMenu, "Package Load", (void(*)(void)) LoadMenuCallback);
-
-	return TRUE;
-}
-
-extern "C" __declspec(dllexport) void AtExit() {
-	outlog.close();
-	Soku::RemoveItem(LoadMenuID);
-}
-
-BOOL WINAPI DllMain(HMODULE hModule, DWORD fdwReason, LPVOID lpReserved) {
-	return TRUE;
+    HMODULE handle = GetModuleHandle("SokuEngine.dll");
+	if (handle != INVALID_HANDLE_VALUE) {
+        // AddFile(filename)
+        DWORD addr = (DWORD) GetProcAddress(handle, "?AddFile@Soku@@YAHABV?$basic_string@_WU?$char_traits@_W@std@@V?$allocator@_W@2@@std@@@Z");
+        UndoIntercept(addr, (DWORD)tramp_AddFile, 5);
+        // RemoveFile(id)
+        addr = (DWORD) GetProcAddress(handle, "?RemoveFile@Soku@@YA_NABV?$basic_string@_WU?$char_traits@_W@std@@V?$allocator@_W@2@@std@@@Z");
+        UndoIntercept(addr, (DWORD)tramp_RemoveFileByPath, 5);
+        // RemoveFile(id)
+        addr = (DWORD) GetProcAddress(handle, "?RemoveFile@Soku@@YA_NH@Z");
+        UndoIntercept(addr, (DWORD)tramp_RemoveFile, 6);
+        // RemoveAllFiles(id)
+        addr = (DWORD) GetProcAddress(handle, "?RemoveAllFiles@Soku@@YA_NXZ");
+        UndoIntercept(addr, (DWORD)tramp_RemoveAllFiles, 6);
+    }
 }
