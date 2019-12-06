@@ -25,22 +25,23 @@ static void outputCallback(void*, const char * name, unsigned int index, unsigne
     fflush(stdout);
 }
 
-static inline void filterDefault(ShadyCore::Package& package, ShadyCore::Package::Mode mode) {
-	ShadyCore::PackageFilter::apply(package, ShadyCore::PackageFilter::FILTER_FROM_ZIP_TEXT_EXTENSION, outputCallback,0);
+static inline ShadyCore::PackageFilter::Filter filterDefault(ShadyCore::Package& package, ShadyCore::Package::Mode mode) {
+    ShadyCore::PackageFilter::Filter filters = ShadyCore::PackageFilter::FILTER_FROM_ZIP_TEXT_EXTENSION;
 	switch (mode) {
 	case ShadyCore::Package::DATA_MODE:
-		ShadyCore::PackageFilter::apply(package, ShadyCore::PackageFilter::FILTER_ENCRYPT_ALL, outputCallback, 0);
-		ShadyCore::PackageFilter::apply(package, ShadyCore::PackageFilter::FILTER_UNDERLINE_TO_SLASH, outputCallback, 0);
+		filters |= ShadyCore::PackageFilter::FILTER_ENCRYPT_ALL;
+		filters |= ShadyCore::PackageFilter::FILTER_UNDERLINE_TO_SLASH;
 		break;
 	case ShadyCore::Package::DIR_MODE:
-		ShadyCore::PackageFilter::apply(package, ShadyCore::PackageFilter::FILTER_DECRYPT_ALL, outputCallback, 0);
+		filters |= ShadyCore::PackageFilter::FILTER_DECRYPT_ALL;
 		break;
 	case ShadyCore::Package::ZIP_MODE:
-		ShadyCore::PackageFilter::apply(package, ShadyCore::PackageFilter::FILTER_TO_ZIP_CONVERTER, outputCallback, 0);
-		ShadyCore::PackageFilter::apply(package, ShadyCore::PackageFilter::FILTER_TO_ZIP_TEXT_EXTENSION, outputCallback, 0);
-		ShadyCore::PackageFilter::apply(package, ShadyCore::PackageFilter::FILTER_SLASH_TO_UNDERLINE, outputCallback, 0);
+		filters |= ShadyCore::PackageFilter::FILTER_TO_ZIP_CONVERTER;
+		filters |= ShadyCore::PackageFilter::FILTER_TO_ZIP_TEXT_EXTENSION;
+		filters |= ShadyCore::PackageFilter::FILTER_SLASH_TO_UNDERLINE;
 		break;
 	}
+    return filters;
 }
 
 void ShadyCli::PackCommand::buildOptions(cxxopts::Options& options) {
@@ -92,10 +93,10 @@ void ShadyCli::PackCommand::run(const cxxopts::Options& options) {
             printf("\r\x1B[KSkipping unknown filter \"%s\".\n", filters[i].c_str());
         } else if (filter == -2) {
             printf("\r\x1B[KApplying default filters.\n");
-			filterDefault(package, mode);
+            ShadyCore::PackageFilter::apply(package, filterDefault(package, mode), -1, outputCallback);
         } else {
             printf("\r\x1B[KApplying filter \"%s\".\n", filters[i].c_str());
-            ShadyCore::PackageFilter::apply(package, filter, outputCallback, 0);
+            ShadyCore::PackageFilter::apply(package, filter, -1, outputCallback);
         }
     }
 

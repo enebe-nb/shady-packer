@@ -9,7 +9,7 @@ namespace ShadyCore {
 		std::ifstream fileStream;
 		bool deleteOnDestroy;
 	public:
-		FilePackageEntry(const char* name, const char* filename, bool deleteOnDestroy = false);
+		FilePackageEntry(int id, const char* name, const char* filename, bool deleteOnDestroy = false);
 		virtual ~FilePackageEntry();
 
 		inline EntryType getType() const override final { return TYPE_FILE; }

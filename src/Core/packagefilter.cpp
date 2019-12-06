@@ -394,24 +394,27 @@ static bool FilterUnderlineToSlash(ShadyCore::PackageFilter& filter, ShadyCore::
 	return false;
 }
 
-void ShadyCore::PackageFilter::apply(Package& package, Filter filterType, Callback* callback, void* userData) {
-	auto filterFunc =
-		filterType == FILTER_FROM_ZIP_TEXT_EXTENSION ? FilterFromZipTextFileExtension :
-		filterType == FILTER_TO_ZIP_TEXT_EXTENSION ? FilterToZipTextFileExtension :
-		filterType == FILTER_TO_ZIP_CONVERTER ? FilterToZipConvert :
-		filterType == FILTER_DECRYPT_ALL ? FilterDecryptAll :
-		filterType == FILTER_ENCRYPT_ALL ? FilterEncryptAll :
-		filterType == FILTER_SLASH_TO_UNDERLINE ? FilterSlashToUnderline :
-		filterType == FILTER_UNDERLINE_TO_SLASH ? FilterUnderlineToSlash :
-		filterType == FILTER_TO_LOWERCASE ? FilterToLowerCase :
-		0;
+void ShadyCore::PackageFilter::apply(Package& package, Filter filterType, int id, Callback* callback, void* userData) {
+	std::vector<bool (*)(ShadyCore::PackageFilter&, ShadyCore::BasePackageEntry&)> filters;
+	if (filterType & FILTER_FROM_ZIP_TEXT_EXTENSION)	filters.push_back(FilterFromZipTextFileExtension);
+	if (filterType & FILTER_DECRYPT_ALL)				filters.push_back(FilterDecryptAll);
+	if (filterType & FILTER_ENCRYPT_ALL)				filters.push_back(FilterEncryptAll);
+	if (filterType & FILTER_TO_ZIP_CONVERTER)			filters.push_back(FilterToZipConvert);
+	if (filterType & FILTER_TO_ZIP_TEXT_EXTENSION)		filters.push_back(FilterToZipTextFileExtension);
+	if (filterType & FILTER_SLASH_TO_UNDERLINE)			filters.push_back(FilterSlashToUnderline);
+	if (filterType & FILTER_UNDERLINE_TO_SLASH)			filters.push_back(FilterUnderlineToSlash);
+	if (filterType & FILTER_TO_LOWERCASE)				filters.push_back(FilterToLowerCase);
+
 	PackageFilter filter(package);
-	filter.iter = package.begin();
-	unsigned int i = 1;
-	while (filter.iter != package.end()) {
-		if (callback) callback(userData, filter.iter->getName(), i, package.size());
-		if (!filterFunc(filter, *filter.iter)) ++filter.iter;
-		else ++i;
+	for (auto filterFunc : filters) {
+		filter.iter = package.begin();
+		unsigned int i = 1;
+		while (filter.iter != package.end()) {
+			if (id >= 0 && filter.iter->getId() != id) {++filter.iter; continue;}
+			if (callback) callback(userData, filter.iter->getName(), i, package.size());
+			if (!filterFunc(filter, *filter.iter)) ++filter.iter;
+			else ++i;
+		}
 	}
 }
 

@@ -35,7 +35,7 @@ void PackageSuite::testReplaceEntry() {
 	package.findFile("data/my-text.txt")->close();
 
 	package.appendPackage("test-data/data-package.dat");
-	ShadyCore::PackageFilter::apply(package, ShadyCore::PackageFilter::FILTER_SLASH_TO_UNDERLINE, 0, 0);
+	ShadyCore::PackageFilter::apply(package, ShadyCore::PackageFilter::FILTER_SLASH_TO_UNDERLINE);
 	package.appendPackage("test-data/zip-package.dat");
 
 	TS_ASSERT_EQUALS(package.findFile("data_my-text.cv0")->open().read(buffer, 13).gcount(), 12);
@@ -88,13 +88,13 @@ void FilterSuite::testUnderline() {
 		package.appendFile(name[0], "test-data/empty");
 	}
 
-	ShadyCore::PackageFilter::apply(package, ShadyCore::PackageFilter::FILTER_SLASH_TO_UNDERLINE, 0, 0);
+	ShadyCore::PackageFilter::apply(package, ShadyCore::PackageFilter::FILTER_SLASH_TO_UNDERLINE);
 
 	int i = 0; for (auto& entry : package) {
 		TS_ASSERT_EQUALS(strcmp(entry.getName(), names[i++][1]), 0);
 	} TS_ASSERT_EQUALS(i, 3);
 
-	ShadyCore::PackageFilter::apply(package, ShadyCore::PackageFilter::FILTER_UNDERLINE_TO_SLASH, 0, 0);
+	ShadyCore::PackageFilter::apply(package, ShadyCore::PackageFilter::FILTER_UNDERLINE_TO_SLASH);
 
 	i = 0; for (auto& entry : package) {
 		TS_ASSERT_EQUALS(strcmp(entry.getName(), names[i++][0]), 0);
@@ -111,14 +111,14 @@ void FilterSuite::testZipText() {
 	package.findFile("data_my-text.cv0")->close();
 	TS_ASSERT_EQUALS(strncmp(buffer, "Hello World!", 12), 0);
 
-	ShadyCore::PackageFilter::apply(package, ShadyCore::PackageFilter::FILTER_FROM_ZIP_TEXT_EXTENSION, 0, 0);
+	ShadyCore::PackageFilter::apply(package, ShadyCore::PackageFilter::FILTER_FROM_ZIP_TEXT_EXTENSION);
 
 	buffer[0] = '\0';
 	TS_ASSERT_EQUALS(package.findFile("data_my-text.txt")->open().read(buffer, 15).gcount(), 12);
 	package.findFile("data_my-text.txt")->close();
 	TS_ASSERT_EQUALS(strncmp(buffer, "Hello World!", 12), 0);
 
-	ShadyCore::PackageFilter::apply(package, ShadyCore::PackageFilter::FILTER_TO_ZIP_TEXT_EXTENSION, 0, 0);
+	ShadyCore::PackageFilter::apply(package, ShadyCore::PackageFilter::FILTER_TO_ZIP_TEXT_EXTENSION);
 
 	buffer[0] = '\0';
 	TS_ASSERT_EQUALS(package.findFile("data_my-text.cv0")->open().read(buffer, 15).gcount(), 12);
@@ -129,7 +129,7 @@ void FilterSuite::testZipText() {
 void FilterSuite::testDecrypt() {
 	ShadyCore::Package package;
 	package.appendPackage("test-data/encrypted");
-	ShadyCore::PackageFilter::apply(package, ShadyCore::PackageFilter::FILTER_DECRYPT_ALL, 0, 0);
+	ShadyCore::PackageFilter::apply(package, ShadyCore::PackageFilter::FILTER_DECRYPT_ALL);
 
 	for (boost::filesystem::recursive_directory_iterator iter("test-data/decrypted"), e; iter != e; ++iter) {
 		boost::filesystem::path fileName = boost::filesystem::relative(iter->path(), "test-data/decrypted").generic();
@@ -149,7 +149,7 @@ void FilterSuite::testDecrypt() {
 void FilterSuite::testEncrypt() {
 	ShadyCore::Package package;
 	package.appendPackage("test-data/decrypted");
-	ShadyCore::PackageFilter::apply(package, ShadyCore::PackageFilter::FILTER_ENCRYPT_ALL, 0, 0);
+	ShadyCore::PackageFilter::apply(package, ShadyCore::PackageFilter::FILTER_ENCRYPT_ALL);
 
 	for (boost::filesystem::recursive_directory_iterator iter("test-data/encrypted"), e; iter != e; ++iter) {
 		boost::filesystem::path fileName = boost::filesystem::relative(iter->path(), "test-data/encrypted").generic();

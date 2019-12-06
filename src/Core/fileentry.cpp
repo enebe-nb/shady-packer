@@ -3,8 +3,8 @@
 #include "resource/readerwriter.hpp"
 #include <boost/filesystem.hpp>
 
-ShadyCore::FilePackageEntry::FilePackageEntry(const char* name, const char* filename, bool deleteOnDestroy)
-	: BasePackageEntry(name, boost::filesystem::file_size(filename)), filename(filename), deleteOnDestroy(deleteOnDestroy) {}
+ShadyCore::FilePackageEntry::FilePackageEntry(int id, const char* name, const char* filename, bool deleteOnDestroy)
+	: BasePackageEntry(id, name, boost::filesystem::file_size(filename)), filename(filename), deleteOnDestroy(deleteOnDestroy) {}
 
 ShadyCore::FilePackageEntry::~FilePackageEntry() {
 	if (deleteOnDestroy) boost::filesystem::remove(filename);
@@ -12,23 +12,25 @@ ShadyCore::FilePackageEntry::~FilePackageEntry() {
 
 //-------------------------------------------------------------
 
-void ShadyCore::Package::appendDirPackage(const char* basePath) {
+int ShadyCore::Package::appendDirPackage(const char* basePath) {
 	for (boost::filesystem::recursive_directory_iterator iter(basePath), end; iter != end; ++iter) {
 		if (boost::filesystem::is_regular_file(iter->path())) {
 			const char* filename = allocateString(iter->path().string().c_str());
 			const char* name = allocateString(boost::filesystem::relative(filename, basePath).generic_string().c_str());
-			addOrReplace(new FilePackageEntry(name, filename));
+			addOrReplace(new FilePackageEntry(nextId, name, filename));
 		}
 	}
+	return nextId++;
 }
 
-void ShadyCore::Package::appendFile(const char* name, const char* filename, bool deleteOnDestroy) {
+int ShadyCore::Package::appendFile(const char* name, const char* filename, bool deleteOnDestroy) {
 	if (boost::filesystem::exists(filename) && boost::filesystem::is_regular_file(filename)) {
-		addOrReplace(new FilePackageEntry(allocateString(name), allocateString(filename), deleteOnDestroy));
+		addOrReplace(new FilePackageEntry(nextId, allocateString(name), allocateString(filename), deleteOnDestroy));
 	} else throw; // TODO better error handling
+	return nextId++;
 }
 
-void ShadyCore::Package::appendFile(const char* name, std::istream& input) {
+int ShadyCore::Package::appendFile(const char* name, std::istream& input) {
 	boost::filesystem::path tempFile = boost::filesystem::temp_directory_path() / boost::filesystem::unique_path();
 	std::ofstream output(tempFile.string().c_str(), std::ios::binary);
 
@@ -37,7 +39,8 @@ void ShadyCore::Package::appendFile(const char* name, std::istream& input) {
 		output.write(buffer, read);
 	} output.close();
 
-	addOrReplace(new FilePackageEntry(allocateString(name), allocateString(tempFile.string().c_str()), true));
+	addOrReplace(new FilePackageEntry(nextId, allocateString(name), allocateString(tempFile.string().c_str()), true));
+	return nextId++;
 }
 
 void ShadyCore::Package::saveDirectory(const char* directory, Callback* callback, void* userData) {

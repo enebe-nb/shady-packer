@@ -23,10 +23,9 @@ bool ShadyCore::Package::addOrReplace(BasePackageEntry* entry) {
     }
 }
 
-void ShadyCore::Package::appendPackage(const char* filename) {
+int ShadyCore::Package::appendPackage(const char* filename) {
     if (boost::filesystem::is_directory(filename)) {
-        appendDirPackage(filename);
-        return;
+        return appendDirPackage(filename);
     }
 
     if (!boost::filesystem::is_regular_file(filename)) throw; // TODO better error handling
@@ -37,13 +36,15 @@ void ShadyCore::Package::appendPackage(const char* filename) {
 	input.read(magicWord, 6);
 	input.seekg(0);
 
+	int id;
 	if (strncmp(magicWord, "PK\x03\x04", 4) == 0 || strncmp(magicWord, "PK\x05\x06", 4) == 0 ) {
-		appendZipPackage(input, filename);
+		id = appendZipPackage(input, filename);
 	} else {
-		appendDataPackage(input, filename);
+		id = appendDataPackage(input, filename);
 	}
 
     input.close();
+	return id;
 }
 
 ShadyCore::Package::iterator ShadyCore::Package::detachFile(iterator iter) {

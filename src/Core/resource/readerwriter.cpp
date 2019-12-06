@@ -50,6 +50,7 @@ const ShadyCore::FileType& ShadyCore::FileType::getSimple(const char* name) {
 
     const char* ext = strrchr(name, '.');
     if (!ext) return typePackage;
+    if (strcmp(ext, ".zip") == 0) return typePackage;
 
     uint32_t extV = getExtValue(ext);
     uint32_t lb = 0;

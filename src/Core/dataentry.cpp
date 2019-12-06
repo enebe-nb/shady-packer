@@ -186,7 +186,7 @@ void ShadyCore::DataPackageEntry::close() {
 
 //-------------------------------------------------------------
 
-void ShadyCore::Package::appendDataPackage(std::istream& input, const char* filename) {
+int ShadyCore::Package::appendDataPackage(std::istream& input, const char* filename) {
 	filename = allocateString(filename);
 
 	unsigned short fileCount; input.read((char*)&fileCount, 2);
@@ -205,8 +205,9 @@ void ShadyCore::Package::appendDataPackage(std::istream& input, const char* file
 		name = allocateString(nameSize);
 		filteredInput.read(name, nameSize);
 
-		addOrReplace(new DataPackageEntry(filename, name, offset, size));
+		addOrReplace(new DataPackageEntry(nextId, filename, name, offset, size));
 	}
+	return nextId++;
 }
 
 void ShadyCore::Package::saveData(std::ostream& output, Callback* callback, void* userData) {

@@ -37,21 +37,22 @@ void ShadyGui::LongTaskDialog::on_show() {
 
 void ShadyGui::SavePackageTask::runTask() {
     auto callback = (void(*)(void*, const char*, unsigned int, unsigned int)) &SavePackageTask::callback;
-	ShadyCore::PackageFilter::apply(package, ShadyCore::PackageFilter::FILTER_FROM_ZIP_TEXT_EXTENSION, callback, this);
+    auto filters |= ShadyCore::PackageFilter::FILTER_FROM_ZIP_TEXT_EXTENSION;
 	switch (mode) {
 	case ShadyCore::Package::DATA_MODE:
-		ShadyCore::PackageFilter::apply(package, ShadyCore::PackageFilter::FILTER_ENCRYPT_ALL, callback, this);
-		ShadyCore::PackageFilter::apply(package, ShadyCore::PackageFilter::FILTER_UNDERLINE_TO_SLASH, callback, this);
+		filters |= ShadyCore::PackageFilter::FILTER_ENCRYPT_ALL;
+		filters |= ShadyCore::PackageFilter::FILTER_UNDERLINE_TO_SLASH;
 		break;
 	case ShadyCore::Package::DIR_MODE:
-		ShadyCore::PackageFilter::apply(package, ShadyCore::PackageFilter::FILTER_DECRYPT_ALL, callback, this);
+		filters |= ShadyCore::PackageFilter::FILTER_DECRYPT_ALL;
 		break;
 	case ShadyCore::Package::ZIP_MODE:
-		ShadyCore::PackageFilter::apply(package, ShadyCore::PackageFilter::FILTER_TO_ZIP_CONVERTER, callback, this);
-		ShadyCore::PackageFilter::apply(package, ShadyCore::PackageFilter::FILTER_TO_ZIP_TEXT_EXTENSION, callback, this);
-		ShadyCore::PackageFilter::apply(package, ShadyCore::PackageFilter::FILTER_SLASH_TO_UNDERLINE, callback, this);
+		filters |= ShadyCore::PackageFilter::FILTER_TO_ZIP_CONVERTER;
+		filters |= ShadyCore::PackageFilter::FILTER_TO_ZIP_TEXT_EXTENSION;
+		filters |= ShadyCore::PackageFilter::FILTER_SLASH_TO_UNDERLINE;
 		break;
 	}
+	ShadyCore::PackageFilter::apply(package, filters, -1, callback, this);
 	package.save(target.c_str(), mode, callback, this);
 }
 

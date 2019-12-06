@@ -13,7 +13,7 @@ namespace ShadyCore {
     private:
         std::istream& stream;
     public:
-        inline StreamPackageEntry(std::istream& stream, const char* name, unsigned int size) : BasePackageEntry(name, size), stream(stream) {};
+        inline StreamPackageEntry(int id, std::istream& stream, const char* name, unsigned int size) : BasePackageEntry(id, name, size), stream(stream) {};
 
         inline EntryType getType() const final { return TYPE_STREAM; }
 		inline std::istream& open() final { return stream; }
@@ -25,7 +25,7 @@ namespace ShadyCore {
 	private:
 		BasePackageEntry* entry;
 	public:
-		inline RenamedPackageEntry(BasePackageEntry* entry, const char* name) : BasePackageEntry(name, entry->getSize()), entry(entry) {}
+		inline RenamedPackageEntry(BasePackageEntry* entry, const char* name) : BasePackageEntry(entry->getId(), name, entry->getSize()), entry(entry) {}
 		inline ~RenamedPackageEntry() { delete entry; }
 
 		inline EntryType getType() const final { return entry->getType(); }
@@ -40,12 +40,13 @@ namespace ShadyCore {
         struct entryCompare { inline bool operator() (const char* left, const char* right) const { return strcmp(left, right) < 0; } };
 		typedef std::map<const char*, BasePackageEntry*, entryCompare> MapType;
         MapType entries;
+		int nextId = 0;
 
         bool addOrReplace(BasePackageEntry*);
 
-        void appendDataPackage(std::istream&, const char*);
-        void appendDirPackage(const char*);
-        void appendZipPackage(std::istream&, const char*);
+        int appendDataPackage(std::istream&, const char*);
+        int appendDirPackage(const char*);
+        int appendZipPackage(std::istream&, const char*);
 		void saveData(std::ostream&, Callback*, void*);
 		void saveDirectory(const char*, Callback*, void*);
         void saveZip(std::ostream&, Callback*, void*);
@@ -76,12 +77,13 @@ namespace ShadyCore {
         inline iterator end() { return iterator(entries.end()); }
 		inline iterator findFile(const char* name) { return iterator(entries.find(name)); }
 
-		void appendPackage(const char*);
-		void appendFile(const char*, const char *, bool = false);
-		void appendFile(const char*, std::istream&);
+		int appendPackage(const char*);
+		int appendFile(const char*, const char *, bool = false);
+		int appendFile(const char*, std::istream&);
 
 		iterator detachFile(iterator iter);
 		inline void detachFile(const char* name) { auto iter = entries.find(name); if (iter != entries.end()) detachFile(iter); }
+		inline void detach(int id) { auto& iter = entries.begin(); while(iter != entries.end()) if (iter->second->getId() == id) iter = entries.erase(iter); else ++iter;}
 		iterator renameFile(iterator iter, const char* name);
 		inline void renameFile(const char* oldName, const char* newName) { auto iter = entries.find(oldName); if (iter != entries.end()) renameFile(iter, newName); }
 
@@ -98,20 +100,24 @@ namespace ShadyCore {
 		Package::iterator iter;
 		inline PackageFilter(Package& package) : package(package) {}
 	public:
-		enum Filter {
-			FILTER_FROM_ZIP_TEXT_EXTENSION,
-			FILTER_TO_ZIP_TEXT_EXTENSION,
-			FILTER_TO_ZIP_CONVERTER,
-			FILTER_DECRYPT_ALL,
-			FILTER_ENCRYPT_ALL,
-			FILTER_SLASH_TO_UNDERLINE,
-			FILTER_UNDERLINE_TO_SLASH,
-			FILTER_TO_LOWERCASE,
+		enum Filter : int {
+			// Sequence Order
+			FILTER_FROM_ZIP_TEXT_EXTENSION	= 1 << 0,
+			FILTER_DECRYPT_ALL				= 1 << 1,
+			FILTER_ENCRYPT_ALL				= 1 << 2,
+			FILTER_TO_ZIP_CONVERTER			= 1 << 3,
+			FILTER_TO_ZIP_TEXT_EXTENSION	= 1 << 4,
+			FILTER_SLASH_TO_UNDERLINE		= 1 << 5,
+			FILTER_UNDERLINE_TO_SLASH		= 1 << 6,
+			FILTER_TO_LOWERCASE				= 1 << 7,
 		};
 
-		static void apply(Package&, Filter, Callback*, void*);
+		static void apply(Package&, Filter, int = -1, Callback* = 0, void* = 0);
 		bool renameEntry(const char*);
 		bool convertEntry(const FileType&);
 		bool convertData(const FileType&);
 	};
 }
+
+inline ShadyCore::PackageFilter::Filter& operator|=(ShadyCore::PackageFilter::Filter& l, const ShadyCore::PackageFilter::Filter& r)
+	{return l = (ShadyCore::PackageFilter::Filter)(l | r);}

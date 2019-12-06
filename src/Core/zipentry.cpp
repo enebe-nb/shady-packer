@@ -201,10 +201,10 @@ static void zipProgress(double percent) {
 
 //-------------------------------------------------------------
 
-void ShadyCore::Package::appendZipPackage(std::istream& input, const char* filename) {
+int ShadyCore::Package::appendZipPackage(std::istream& input, const char* filename) {
 	filename = allocateString(filename);
 
-	BasePackageEntry* entry = new StreamPackageEntry(input, filename, boost::filesystem::file_size(filename));
+	BasePackageEntry* entry = new StreamPackageEntry(nextId, input, filename, boost::filesystem::file_size(filename));
 	zip_source_t* inputSource = zip_source_function_create(zipInputFunc, createZipEntry(entry), 0);
 	zip_t* file = zip_open_from_source(inputSource, ZIP_RDONLY, 0);
 
@@ -213,11 +213,12 @@ void ShadyCore::Package::appendZipPackage(std::istream& input, const char* filen
 		zip_stat_t fileStat;
 		zip_stat_index(file, i, 0, &fileStat);
 
-		addOrReplace(new ZipPackageEntry(filename, allocateString(fileStat.name), fileStat.size));
+		addOrReplace(new ZipPackageEntry(nextId, filename, allocateString(fileStat.name), fileStat.size));
 	}
 
 	zip_close(file);
 	delete entry;
+	return nextId++;
 }
 
 void ShadyCore::Package::saveZip(std::ostream& output, Callback* callback, void* userData) {

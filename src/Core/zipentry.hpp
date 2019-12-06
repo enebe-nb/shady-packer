@@ -39,8 +39,8 @@ namespace ShadyCore {
 		ZipStream zipBuffer;
 		std::istream zipStream;
 	public:
-		inline ZipPackageEntry(const char* packageFilename, const char* name, unsigned int size)
-			: BasePackageEntry(name, size), packageFilename(packageFilename), zipStream(&zipBuffer) {}
+		inline ZipPackageEntry(int id, const char* packageFilename, const char* name, unsigned int size)
+			: BasePackageEntry(id, name, size), packageFilename(packageFilename), zipStream(&zipBuffer) {}
 
 		inline EntryType getType() const override final { return TYPE_ZIP; }
 		inline bool isOpen() const override final { return zipBuffer.isOpen(); }

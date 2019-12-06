@@ -76,8 +76,8 @@ namespace ShadyCore {
 		std::istream fileStream;
 		DataFileFilter fileFilter;
 	public:
-		inline DataPackageEntry(const char* packageFilename, const char* name, unsigned int offset, unsigned int size)
-			: BasePackageEntry(name, size), packageFilename(packageFilename), fileStream(&fileFilter), fileFilter(offset, size), packageOffset(offset) {}
+		inline DataPackageEntry(int id, const char* packageFilename, const char* name, unsigned int offset, unsigned int size)
+			: BasePackageEntry(id, name, size), packageFilename(packageFilename), fileStream(&fileFilter), fileFilter(offset, size), packageOffset(offset) {}
 
 		inline EntryType getType() const override final { return TYPE_DATA; }
 		inline bool isOpen() const override final { return fileFilter.getBaseBuffer(); }
