@@ -21,18 +21,6 @@ void ShadyCore::LabelResource::initialize(const char* n) {
     strcpy((char*)name, n);
 }
 
-static void readSfxEncrypted(ShadyCore::Sfx& resource, std::istream& input) {
-}
-
-static void writeSfxEncrypted(ShadyCore::Sfx& resource, std::ostream& output) {
-}
-
-static void readSfxDecrypted(ShadyCore::Sfx& resource, std::istream& input) {
-}
-
-static void writeSfxDecrypted(ShadyCore::Sfx& resource, std::ostream& output) {
-}
-
 void ShadyCore::ResourceDReader::accept(Sfx& resource) {
 	ShadyUtil::RiffDocument riff(input);
 

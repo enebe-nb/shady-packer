@@ -3,7 +3,7 @@
 #include "baseentry.hpp"
 #include "resource/readerwriter.hpp"
 
-#include <map>
+#include <unordered_map>
 #include <mutex>
 #include <functional>
 #include <cstring>
@@ -37,8 +37,13 @@ namespace ShadyCore {
 	class Package : public ShadyUtil::StrAllocator, public std::mutex {
     private:
         typedef void (Callback)(void*, const char*, unsigned int, unsigned int);
-        struct entryCompare { inline bool operator() (const char* left, const char* right) const { return strcmp(left, right) < 0; } };
-		typedef std::map<const char*, BasePackageEntry*, entryCompare> MapType;
+        struct entryHash { inline bool operator() (const char* name) const { 
+			unsigned long hash = 5381; char c;
+			while (c = *name++) hash = ((hash << 5) + hash) + c;
+			return hash;
+		} };
+        struct entryEqual { inline bool operator() (const char* left, const char* right) const { return strcmp(left, right) == 0; } };
+		typedef std::unordered_map<const char*, BasePackageEntry*, entryHash, entryEqual> MapType;
         MapType entries;
 		int nextId = 0;
 
