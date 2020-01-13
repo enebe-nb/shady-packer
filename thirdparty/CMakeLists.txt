@@ -28,8 +28,8 @@ set(SOKULIB_LIBRARIES ${CMAKE_SOURCE_DIR}/thirdparty/SokuLib/SokuLib.lib PARENT_
 # rapidxml Library
 set(RAPIDXML_ROOT ${CMAKE_SOURCE_DIR}/thirdparty/rapidxml)
 if(NOT EXISTS ${RAPIDXML_ROOT})
-	message(STATUS "Downloading rapidxml from ${RAPIDXML_URI}")
     set(RAPIDXML_URI https://downloads.sourceforge.net/project/rapidxml/rapidxml/rapidxml%201.13/rapidxml-1.13.zip)
+    message(STATUS "Downloading rapidxml from ${RAPIDXML_URI}")
     file(DOWNLOAD ${RAPIDXML_URI} ${RAPIDXML_ROOT}-1.13.zip)
     execute_process(COMMAND ${CMAKE_COMMAND} -E tar xfz ${RAPIDXML_ROOT}-1.13.zip WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}/thirdparty" )
     file(RENAME ${RAPIDXML_ROOT}-1.13 ${RAPIDXML_ROOT})
@@ -44,6 +44,11 @@ set(ZLIB_LIBRARY zlibstatic)
 set(ZLIB_INCLUDE_DIR ${CMAKE_SOURCE_DIR}/thirdparty/zlib ${CMAKE_BINARY_DIR}/thirdparty/zlib)
 file(READ ${CMAKE_SOURCE_DIR}/thirdparty/zlib/zlib.h _zlib_h_contents)
 string(REGEX REPLACE ".*#define[ \t]+ZLIB_VERSION[ \t]+\"([-0-9A-Za-z.]+)\".*" "\\1" ZLIB_VERSION_STRING ${_zlib_h_contents})
+add_library(ZLIB::ZLIB INTERFACE IMPORTED)
+foreach(name LINK_LIBRARIES INCLUDE_DIRECTORIES COMPILE_DEFINITIONS COMPILE_OPTIONS)
+    get_property(value TARGET zlibstatic PROPERTY ${name})
+    set_property(TARGET ZLIB::ZLIB PROPERTY INTERFACE_${name} ${value})
+endforeach()
 
 # libpng Library
 set(DISABLE_SYMLINK FALSE CACHE BOOL "Disable use of symlink")
@@ -62,6 +67,25 @@ target_compile_definitions(zipstatic INTERFACE ZIP_STATIC)
 add_dependencies(zipstatic zlibstatic)
 
 set(ZLIB_INCLUDE_DIR ${ZLIB_INCLUDE_DIR} PARENT_SCOPE)
+
+# libcurl Library
+set(LIBCURL_ROOT ${CMAKE_SOURCE_DIR}/thirdparty/curl)
+if(NOT EXISTS ${LIBCURL_ROOT})
+    set(LIBCURL_URI https://curl.haxx.se/download/curl-7.67.0.zip)
+	message(STATUS "Downloading libcurl from ${LIBCURL_URI}")
+    file(DOWNLOAD ${LIBCURL_URI} ${LIBCURL_ROOT}-7.67.0.zip)
+    execute_process(COMMAND ${CMAKE_COMMAND} -E tar xfz ${LIBCURL_ROOT}-7.67.0.zip WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}/thirdparty" )
+    file(RENAME ${LIBCURL_ROOT}-7.67.0 ${LIBCURL_ROOT})
+    file(REMOVE ${LIBCURL_ROOT}-7.67.0.zip)
+endif()
+set(BUILD_SHARED_LIBS OFF)
+set(CMAKE_USE_WINSSL ON)
+add_subdirectory(${LIBCURL_ROOT} EXCLUDE_FROM_ALL)
+set(CURL_INCLUDE_DIR ${LIBCURL_ROOT}/include PARENT_SCOPE)
+
+# nlohmann JSON Library
+add_git_module(json https://github.com/nlohmann/json v3.7.3)
+set(JSON_INCLUDE_DIR ${CMAKE_SOURCE_DIR}/thirdparty/json/include PARENT_SCOPE)
 
 if(ENABLE_CLI)
     # cxxopts Library

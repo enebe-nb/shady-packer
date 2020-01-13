@@ -7,6 +7,7 @@
 #include <sstream>
 
 #include "../Core/package.hpp"
+#include "../Core/util/riffdocument.hpp"
 
 namespace {
     typedef FileID (*AddFile_t)(const std::wstring& path);
@@ -30,14 +31,7 @@ namespace {
     };
 }
 
-std::string ws2s(const std::wstring& wstr) {
-    int size_needed = WideCharToMultiByte(CP_UTF8, 0, &wstr[0], (int)wstr.size(), NULL, 0, NULL, NULL);
-    std::string strTo(size_needed, 0);
-    WideCharToMultiByte(CP_UTF8, 0, &wstr[0], (int)wstr.size(),&strTo[0], size_needed, NULL, NULL);
-    return strTo;
-}
-
-DWORD DoIntercept(DWORD addr, DWORD target, int offset) {
+static DWORD DoIntercept(DWORD addr, DWORD target, int offset) {
     char* lpAddr = (char*)addr;
     char* lpTramp = new char[offset + 5];
     DWORD tramp = (DWORD) lpTramp;
@@ -57,7 +51,7 @@ DWORD DoIntercept(DWORD addr, DWORD target, int offset) {
     return tramp;
 }
 
-void UndoIntercept(DWORD addr, DWORD tramp, int offset) {
+static void UndoIntercept(DWORD addr, DWORD tramp, int offset) {
     char* lpAddr = (char*)addr;
     char* lpTramp = (char*)tramp;
     DWORD dwOldProtect;
@@ -79,7 +73,7 @@ static void applyGameFilters(int id = -1) {
         ), id);
 }
 
-FileID repl_AddFile(const std::wstring& path) {
+static FileID repl_AddFile(const std::wstring& path) {
     std::string pathu8 = ws2s(path);
     DWORD attr = GetFileAttributes(pathu8.c_str());
     if (attr == INVALID_FILE_ATTRIBUTES) return -1;
@@ -108,19 +102,19 @@ FileID repl_AddFile(const std::wstring& path) {
     return id;
 }
 
-bool repl_RemoveFileByPath(const std::wstring& path) {
+static bool repl_RemoveFileByPath(const std::wstring& path) {
     std::string pathu8 = ws2s(path);
     package.detachFile(pathu8.c_str());
     return true;
 }
 
-bool repl_RemoveFile(FileID id) {
+static bool repl_RemoveFile(FileID id) {
     if (id < 0) return false;
     package.detach(id);
     return true;
 }
 
-bool repl_RemoveAllFiles() {
+static bool repl_RemoveAllFiles() {
     package.clear();
     return true;
 }
@@ -193,13 +187,15 @@ static int WINAPI reader_getRead() {
 	return data->bytes_read;
 }
 
-functable reader_table = {
-    reader_destruct,
-	reader_read,
-	reader_getRead,
-	reader_seek,
-	reader_getSize
-};
+namespace {
+    functable reader_table = {
+        reader_destruct,
+        reader_read,
+        reader_getRead,
+        reader_seek,
+        reader_getSize
+    };
+}
 
 void FileLoaderCallback(SokuData::FileLoaderData& data) {
     auto iter = package.findFile(data.fileName);
@@ -248,7 +244,7 @@ void FileLoaderCallback(SokuData::FileLoaderData& data) {
     }
 }
 
-void LoadFileLoader() {
+void LoadIntercept() {
     HMODULE handle = GetModuleHandle("SokuEngine.dll");
 	if (handle != INVALID_HANDLE_VALUE) {
         // AddFile(filename)
@@ -268,7 +264,8 @@ void LoadFileLoader() {
     fileLoaderEvent = Soku::SubscribeEvent(SokuEvent::FileLoader, {FileLoaderCallback});
 }
 
-void UnloadFileLoader() {
+void UnloadIntercept() {
+    package.clear();
     Soku::UnsubscribeEvent(fileLoaderEvent);
 
     HMODULE handle = GetModuleHandle("SokuEngine.dll");
@@ -286,4 +283,102 @@ void UnloadFileLoader() {
         addr = (DWORD) GetProcAddress(handle, "?RemoveAllFiles@Soku@@YA_NXZ");
         UndoIntercept(addr, (DWORD)tramp_RemoveAllFiles, 6);
     }
+}
+
+namespace {
+    struct membuf : std::streambuf {
+        membuf(char* begin, char* end) {
+            this->setg(begin, begin, end);
+            this->setp(begin, begin, end);
+        }
+
+        pos_type seekoff(off_type off,
+                 std::ios_base::seekdir dir,
+                 std::ios_base::openmode which = std::ios_base::in | std::ios_base::out) override {
+            if (dir == std::ios_base::cur) {
+                if (which & std::ios_base::in) gbump(off);
+                if (which & std::ios_base::out) pbump(off);
+            } else if (dir == std::ios_base::end) {
+                if (which & std::ios_base::in) setg(eback(), egptr() + off, egptr());
+                if (which & std::ios_base::out) setp(pbase(), epptr() + off, epptr());
+            } else if (dir == std::ios_base::beg) {
+                if (which & std::ios_base::in) setg(eback(), eback() + off, egptr());
+                if (which & std::ios_base::out) setg(pbase(), pbase() + off, epptr());
+            } return which & std::ios_base::in ? gptr() - eback() : pptr() - pbase();
+        }
+
+        pos_type seekpos(pos_type sp, std::ios_base::openmode which) override {
+            return seekoff(sp - pos_type(off_type(0)), std::ios_base::beg, which);
+        }
+    };
+}
+
+static char* convertSoundLabel(char*& data, int& size) {
+    membuf inputBuf(data, data + size);
+    std::istream input(&inputBuf);
+    ShadyCore::LabelResource label;
+    ShadyCore::readResource(&label, input, false);
+    delete[] data;
+
+    size = 0x65 + strlen(label.getName());
+    data = new char[size];
+    membuf outputBuf(data, data + size);
+    std::ostream output(&outputBuf);
+    ShadyCore::writeResource(&label, output, true);
+    return data;
+}
+
+static uint16_t packColor(uint32_t color, bool transparent) {
+	uint16_t pcolor = !transparent;
+	pcolor = (pcolor << 5) + ((color >> 3) & 0x1F);
+	pcolor = (pcolor << 5) + ((color >> 11) & 0x1F);
+	pcolor = (pcolor << 5) + ((color >> 19) & 0x1F);
+	return pcolor;
+}
+
+static char* convertPalette(char*& data, int& size) {
+	for (int i = 0; i < 256; ++i) {
+		*(uint16_t*)&data[i * 2 + 1] = packColor(*(uint32_t*)&data[i * 3], i == 0);
+	}
+
+    data[0] = 0x10;
+    return data;
+}
+
+static char* convertSound(char*& data, int& size) {
+    membuf inputBuf(data, data + size);
+    std::istream input(&inputBuf);
+    ShadyUtil::RiffDocument riff(input);
+
+    size = 0x16 + riff.size("WAVEdata");
+    char* output = new char[size];
+	riff.read("WAVEfmt ", (uint8_t*)output);
+    output[16] = 0; output[17] = 0;
+    *(uint32_t*)(output + 18) = size - 0x16;
+	riff.read("WAVEdata", (uint8_t*)output + 22);
+
+    delete[] data;
+    return output;
+}
+
+static char* convertComplex(char*& data, int& size, ShadyCore::Resource* resource) {
+    membuf buffer(data, data + size);
+    std::istream input(&buffer);
+    ShadyCore::readResource(resource, input, false);
+    std::ostream output(&buffer);
+    ShadyCore::writeResource(resource, output, true);
+    size = output.tellp(); // always smaller
+    delete resource;
+
+    return data;
+}
+
+void LoadConverter() {
+    Soku::AddCustomConverter(".lbl", ".sfl", {convertSoundLabel});
+    Soku::AddCustomConverter(".act", ".pal", {convertPalette});
+    Soku::AddCustomConverter(".wav", ".cv3", {convertSound});
+    Soku::AddCustomConverter(".xml", ".dat", [](char*& data, int& size) {
+        return convertComplex(data, size, new ShadyCore::GuiRoot());});
+    Soku::AddCustomConverter(".xml", ".pat", [](char*& data, int& size) {
+        return convertComplex(data, size, new ShadyCore::Pattern(false));});
 }

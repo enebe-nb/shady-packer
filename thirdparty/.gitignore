@@ -1,7 +1,9 @@
 alsa-lib/
 boost/
+curl/
 cxxopts/
 cxxtest/
+json/
 libpng/
 libzip/
 rapidxml/
