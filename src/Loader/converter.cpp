@@ -78,7 +78,6 @@ static FileID repl_AddFile(const std::wstring& path) {
     DWORD attr = GetFileAttributes(pathu8.c_str());
     if (attr == INVALID_FILE_ATTRIBUTES) return -1;
     if (attr & FILE_ATTRIBUTE_DIRECTORY) {
-        outlog << "Dir " << pathu8 << std::endl;
         int id = package.appendPackage(pathu8.c_str());
         applyGameFilters(id);
         return id;
@@ -90,10 +89,8 @@ static FileID repl_AddFile(const std::wstring& path) {
     auto type = ShadyCore::FileType::get(pathu8.c_str(), file);
     file.close();
     if (type == ShadyCore::FileType::TYPE_PACKAGE) {
-        outlog << "Pack " << pathu8 << std::endl;
         id = package.appendPackage(pathu8.c_str());
     } else {
-        outlog << "File " << pathu8 << std::endl;
         const char* filename = pathu8.c_str();
         id = package.appendFile(PathFindFileName(filename), filename);
     }
@@ -212,8 +209,6 @@ void FileLoaderCallback(SokuData::FileLoaderData& data) {
     }
 
     if (iter != package.end()) {
-        outlog << data.fileName << std::endl;
-        outlog.flush();
         auto type = ShadyCore::FileType::get(*iter);
         if (type.isEncrypted) {
             data.inputFormat = DataFormat::RAW;
@@ -234,7 +229,6 @@ void FileLoaderCallback(SokuData::FileLoaderData& data) {
             std::stringstream* buffer = new std::stringstream();
             ShadyCore::convertResource(type, input, *buffer);
             data.size = buffer->tellp();
-            outlog << "tellp " << data.size << std::endl;
             iter->close();
 
             data.inputFormat = DataFormat::RAW;

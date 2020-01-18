@@ -61,7 +61,7 @@ static void enablePackage(const std::string& name, const std::string& ext, std::
 			while (!dirStack.empty()) {
 				WIN32_FIND_DATA findData;
 				HANDLE hFind;
-				std::string& current = dirStack.top();
+				std::string current = dirStack.top(); dirStack.pop();
 				if ((hFind = FindFirstFile((current + "\\*").c_str(), &findData)) != INVALID_HANDLE_VALUE) {
 					do {
 						if (findData.cFileName[0] == '.') continue;

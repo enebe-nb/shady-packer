@@ -2,7 +2,6 @@
 #include <fstream>
 #include <windows.h>
 
-extern std::ofstream outlog;
 extern std::string modulePath;
 extern struct IniConfig {
     bool useIntercept;

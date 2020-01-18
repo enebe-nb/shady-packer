@@ -168,68 +168,77 @@ static void EngineMenuCallback() {
 			ImGui::Text("%s", selectedPackage->description().c_str());
 			ImGui::PopTextWrapPos();
 
-			ImGui::Columns();
-			ImGui::Separator();
+			ImGui::NextColumn(); ImGui::NextColumn();
+			ImGui::Text("Tags:");
 
-			ImGui::Columns(2, 0, false);
-			ImGui::SetColumnWidth(-1, 6);
 			ImGui::NextColumn();
-
-			ImGui::Text("Tags: ");
 			ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 12);
 			ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(4, 2));
 			ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(4, 2));
 			ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.0f, 0.0f, 0.0f, 1.00f));
-			for (auto&& tag : selectedPackage->tags) {
-				ImGui::SameLine();
+			float maxWidth = ImGui::GetCursorScreenPos().x + ImGui::GetContentRegionAvailWidth();
+			bool first = true;
+			for (auto& tag : selectedPackage->tags) {
+				float tagWidth = ImGui::CalcTextSize(tag.c_str()).x + 12;
+				if (!first && ImGui::GetItemRectMax().x + tagWidth < maxWidth) ImGui::SameLine();
 				ImGui::SmallButton(tag.c_str());
+				first = false;
 			}
 			ImGui::PopStyleColor();
 			ImGui::PopStyleVar(3);
 
+			ImGui::NextColumn(); ImGui::NextColumn();
 			ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 4);
 			ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(8, 4));
-			if (selectedPackage->isLocal())
-				ImGui::TextColored(ImVec4(.2f, .2f, .6f, 1.f), "Local Package.");
-			if (selectedPackage->requireUpdate) {
-				ImGui::TextColored(ImVec4(.6f, .6f, 0, 1.f), "Found Updates.");
-				ImGui::SameLine(0, 6);
-				if (selectedPackage->downloadTask) {
-					ImGui::TextColored(ImVec4(.6f, .6f, 0, 1.f), "Downloading... ");
-				} else if (ImGui::Button("Download")) {
-					selectedPackage->downloadFile();
-				}
-			}
+			ImGui::Text("Local Package:"); ImGui::SameLine();
+			ImGui::NextColumn();
+			if (selectedPackage->isLocal()) ImGui::TextColored(ImVec4(.4f, .4f, 1.f, 1.f), "true");
+			else ImGui::TextColored(ImVec4(.7f, .7f, .7f, 1.f), "false");
 
 			if (selectedPackage->fileExists) {
-				if (selectedPackage->isEnabled()) {
-					ImGui::TextColored(ImVec4(.2f, .6f, .2f, 1.f), "Is Enabled.");
-				} else {
-					ImGui::TextColored(ImVec4(.5f, .5f, .5f, 1.f), "Is Disabled.");
+				if (selectedPackage->requireUpdate) {
+					ImGui::NextColumn(); ImGui::NextColumn();
+					ImGui::Text("Status:"); ImGui::NextColumn();
+					if (selectedPackage->downloadTask) {
+						ImGui::TextColored(ImVec4(.7f, .7f, .2f, 1.f), "Downloading...");
+					} else {
+						ImGui::TextColored(ImVec4(.7f, .7f, .2f, 1.f), "Found Updates");
+						if (ImGui::Button("Download")) selectedPackage->downloadFile();
+					}
 				}
-				
-				ImGui::SameLine(0, 6);
+
+				ImGui::NextColumn(); ImGui::NextColumn();
+				ImGui::Text("Enabled:"); ImGui::NextColumn();
+				if (selectedPackage->isEnabled())
+					ImGui::TextColored(ImVec4(.4f, 1.f, .4f, 1.f), "true");
+				else ImGui::TextColored(ImVec4(.7f, .7f, .7f, 1.f), "false");
+
 				if (ImGui::Button(selectedPackage->isEnabled() ? "Disable" : "Enable")) {
 					selectedPackage->setEnabled(!selectedPackage->isEnabled());
 					SaveSettings();
 				}
 			} else {
-				ImGui::TextColored(ImVec4(.6f, .2f, .2f, 1.f), "Not Found.");
-				ImGui::SameLine(0, 6);
+				ImGui::NextColumn(); ImGui::NextColumn();
+				ImGui::Text("Status: "); ImGui::NextColumn();
 				if (selectedPackage->downloadTask) {
-					ImGui::TextColored(ImVec4(.6f, .6f, 0, 1.f), "Downloading...");
-				} else if (ImGui::Button("Download")) {
-					selectedPackage->downloadFile();
+					ImGui::TextColored(ImVec4(.7f, .7f, .2f, 1.f), "Downloading...");
+				} else {
+					ImGui::TextColored(ImVec4(.8f, .3f, .3f, 1.f), "Not Downloaded");
+					if (ImGui::Button("Download")) selectedPackage->downloadFile();
 				}
 			}
 			ImGui::PopStyleVar(2);
 
 			ImGui::Columns();
-			ImGui::SetCursorPos(ImVec2(0, screenHeight - 270));
-			if (selectedPackage->previewTask
-				&& selectedPackage->previewTask->isDone()
-				&& selectedPackage->previewTask->texture) {
-				ImGui::Image(selectedPackage->previewTask->texture->id, ImVec2(360, 270));
+			if (selectedPackage->previewTask) {
+				if (!selectedPackage->previewTask->isDone()) {
+					ImGui::SetCursorPos(ImVec2(ImGui::GetContentRegionAvail().x / 2,
+						screenHeight - ImGui::GetTextLineHeightWithSpacing()));
+					ImGui::Text("%c", "|/-\\"[(int)(0.009f*GetTickCount()) & 3]);
+				} else if (selectedPackage->previewTask->texture) {
+					ImGui::SetCursorPos(ImVec2(0, screenHeight - 270));
+					ImGui::Image(selectedPackage->previewTask->texture->id, ImVec2(360, 270));
+				}
 			}
 		} ImGui::EndChild();
 	}
@@ -346,4 +355,8 @@ void LoadEngineMenu() {
 void UnloadEngineMenu() {
 	Soku::RemoveItem(EngineMenuID);
 	Soku::UnsubscribeEvent(RenderEvtID);
+
+	for (auto& package : packageList) {
+		package->setEnabled(false);
+	}
 }
