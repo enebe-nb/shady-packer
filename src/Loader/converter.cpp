@@ -116,15 +116,24 @@ static bool repl_RemoveAllFiles() {
     return true;
 }
 
+static void reader_open_stream(reader_data* data) {
+    data->stream = &data->entry->open();
+    data->stream->seekg(0, std::ios::end);
+    data->size = data->stream->tellg();
+    data->stream->seekg(0, std::ios::beg);
+}
+
 static int WINAPI reader_destruct(int a) {
 	int ecx_value;
 	__asm mov ecx_value, ecx
 	if (!ecx_value) return 0;
 
     reader_data *data = (reader_data *)(ecx_value+4);
-    if (data->size == 0) data->entry->close();
-    else delete data->stream;
+    if ((void*)data->entry == (void*)data->stream) {
+        delete data->stream;
+    } else data->entry->close();
     if (a & 1) orig_dealloc(ecx_value);
+	__asm mov ecx, ecx_value
 	return ecx_value;
 }
 
@@ -134,9 +143,10 @@ static int WINAPI reader_read(char *dest, int size) {
 	if (!ecx_value) return 0;
 
 	reader_data *data = (reader_data *)(ecx_value + 4);
-    if ((void*)data->entry == (void*)data->stream && data->size == 0) data->stream = &data->entry->open();
+	if (data->size == 0) reader_open_stream(data);
 	data->stream->read(dest, size);
     data->bytes_read = data->stream->gcount();
+	__asm mov ecx, ecx_value
 	return data->bytes_read > 0;
 }
 
@@ -146,24 +156,25 @@ static void WINAPI reader_seek(int offset, int whence) {
 	if (ecx_value == 0) return;
 
 	reader_data *data = (reader_data *)(ecx_value + 4);
-    if ((void*)data->entry == (void*)data->stream && data->size == 0) data->stream = &data->entry->open();
+	if (data->size == 0) reader_open_stream(data);
 	switch(whence) {
-	case 0:
+	case SEEK_SET:
 		if (offset > data->size) data->stream->seekg(0, std::ios::end);
 		else data->stream->seekg(offset, std::ios::beg);
 		break;
-	case 1:
+	case SEEK_CUR:
 		if ((int)data->stream->tellg() + offset > data->size) {
 			data->stream->seekg(0, std::ios::end);
 		} else if ((int)data->stream->tellg() + offset < 0) {
 			data->stream->seekg(0, std::ios::beg);
 		} else data->stream->seekg(offset, std::ios::cur);
 		break;
-	case 2:
+	case SEEK_END:
 		if (offset > data->size) data->stream->seekg(0, std::ios::beg);
 		else data->stream->seekg(-offset, std::ios::end);
 		break;
 	}
+	__asm mov ecx, ecx_value
 }
 
 static int WINAPI reader_getSize() {
@@ -172,6 +183,8 @@ static int WINAPI reader_getSize() {
 	if (ecx_value == 0) return 0;
 
 	reader_data *data = (reader_data *)(ecx_value + 4);
+	if (data->size == 0) reader_open_stream(data);
+	__asm mov ecx, ecx_value
 	return data->size;
 }
 
@@ -181,6 +194,7 @@ static int WINAPI reader_getRead() {
 	if (ecx_value == 0) return 0;
 
 	reader_data *data = (reader_data *)(ecx_value + 4);
+	__asm mov ecx, ecx_value
 	return data->bytes_read;
 }
 
@@ -215,8 +229,8 @@ void FileLoaderCallback(SokuData::FileLoaderData& data) {
             data.data = &*iter;
             data.size = 0;
             data.reader = &reader_table;
-        } else if (type == ShadyCore::FileType::TYPE_IMAGE) {
-            data.inputFormat = DataFormat::PNG;
+        } else if (type == ShadyCore::FileType::TYPE_UNKNOWN) {
+            data.inputFormat = DataFormat::RAW;
             std::istream& input = iter->open();
             input.seekg(0, std::ios::end);
             data.size = input.tellg();

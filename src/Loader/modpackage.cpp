@@ -1,5 +1,6 @@
 #include "modpackage.hpp"
 #include "main.hpp"
+#include "../Lua/shady-lua.hpp"
 
 #include <shlwapi.h>
 #include <stack>
@@ -81,6 +82,11 @@ void ModPackage::setEnabled(bool value) {
 	enabled = value;
 	if (enabled) {
 		enablePackage(name, ext, sokuIds);
+		if (ShadyLua::isModuleLoaded()) {
+			std::string luaFile = nameLower + ".lua";
+			void* script = ShadyLua::LoadFromSoku(luaFile.c_str());
+			if (script) ShadyLua::RunScript(script);
+		}
 	} else {
 		for(auto& id : sokuIds) {
 			Soku::RemoveFile(id);

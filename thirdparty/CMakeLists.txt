@@ -68,24 +68,35 @@ add_dependencies(zipstatic zlibstatic)
 
 set(ZLIB_INCLUDE_DIR ${ZLIB_INCLUDE_DIR} PARENT_SCOPE)
 
-# libcurl Library
-set(LIBCURL_ROOT ${CMAKE_SOURCE_DIR}/thirdparty/curl)
-if(NOT EXISTS ${LIBCURL_ROOT})
-    set(LIBCURL_URI https://curl.haxx.se/download/curl-7.67.0.zip)
-	message(STATUS "Downloading libcurl from ${LIBCURL_URI}")
-    file(DOWNLOAD ${LIBCURL_URI} ${LIBCURL_ROOT}-7.67.0.zip)
-    execute_process(COMMAND ${CMAKE_COMMAND} -E tar xfz ${LIBCURL_ROOT}-7.67.0.zip WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}/thirdparty" )
-    file(RENAME ${LIBCURL_ROOT}-7.67.0 ${LIBCURL_ROOT})
-    file(REMOVE ${LIBCURL_ROOT}-7.67.0.zip)
-endif()
-set(BUILD_SHARED_LIBS OFF)
-set(CMAKE_USE_WINSSL ON)
-add_subdirectory(${LIBCURL_ROOT} EXCLUDE_FROM_ALL)
-set(CURL_INCLUDE_DIR ${LIBCURL_ROOT}/include PARENT_SCOPE)
+if(WIN32 AND CMAKE_SIZEOF_VOID_P EQUAL 4)
+    # libcurl Library
+    set(LIBCURL_ROOT ${CMAKE_SOURCE_DIR}/thirdparty/curl)
+    if(NOT EXISTS ${LIBCURL_ROOT})
+        set(LIBCURL_URI https://curl.haxx.se/download/curl-7.67.0.zip)
+        message(STATUS "Downloading libcurl from ${LIBCURL_URI}")
+        file(DOWNLOAD ${LIBCURL_URI} ${LIBCURL_ROOT}-7.67.0.zip)
+        execute_process(COMMAND ${CMAKE_COMMAND} -E tar xfz ${LIBCURL_ROOT}-7.67.0.zip WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}/thirdparty" )
+        file(RENAME ${LIBCURL_ROOT}-7.67.0 ${LIBCURL_ROOT})
+        file(REMOVE ${LIBCURL_ROOT}-7.67.0.zip)
+    endif()
+    set(BUILD_SHARED_LIBS OFF)
+    set(CMAKE_USE_WINSSL ON)
+    add_subdirectory(${LIBCURL_ROOT} EXCLUDE_FROM_ALL)
+    set(CURL_INCLUDE_DIR ${LIBCURL_ROOT}/include PARENT_SCOPE)
 
-# nlohmann JSON Library
-add_git_module(json https://github.com/nlohmann/json v3.7.3)
-set(JSON_INCLUDE_DIR ${CMAKE_SOURCE_DIR}/thirdparty/json/include PARENT_SCOPE)
+    # nlohmann JSON Library
+    add_git_module(json https://github.com/nlohmann/json v3.7.3)
+    set(JSON_INCLUDE_DIR ${CMAKE_SOURCE_DIR}/thirdparty/json/include PARENT_SCOPE)
+
+    # Lua Library
+    add_git_module(lua https://github.com/LuaDist/lua 5.3.2)
+    add_subdirectory(${CMAKE_SOURCE_DIR}/thirdparty/lua EXCLUDE_FROM_ALL)
+    add_git_module(LuaBridge https://github.com/vinniefalco/LuaBridge 2.4.1)
+    set(LUA_INCLUDE_DIR ${CMAKE_SOURCE_DIR}/thirdparty/lua/src
+        ${CMAKE_BINARY_DIR}/thirdparty/lua
+        ${CMAKE_SOURCE_DIR}/thirdparty/LuaBridge/Source
+        PARENT_SCOPE)
+endif()
 
 if(ENABLE_CLI)
     # cxxopts Library

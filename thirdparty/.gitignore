@@ -6,6 +6,8 @@ cxxtest/
 json/
 libpng/
 libzip/
+lua/
+LuaBridge/
 rapidxml/
 rtaudio/
 zlib/
