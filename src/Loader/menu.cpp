@@ -48,6 +48,8 @@ void LoadSettings() {
 		false, (modulePath + "\\shady-loader.ini").c_str());
 	iniConfig.autoUpdate = GetPrivateProfileInt("Options", "autoUpdate",
 		true, (modulePath + "\\shady-loader.ini").c_str());
+	iniConfig.useLoadLock = GetPrivateProfileInt("Options", "useLoadLock",
+		true, (modulePath + "\\shady-loader.ini").c_str());
 }
 
 void SaveSettings() {
@@ -55,6 +57,8 @@ void SaveSettings() {
 		iniConfig.useIntercept ? "1" : "0", (modulePath + "\\shady-loader.ini").c_str());
 	WritePrivateProfileString("Options", "autoUpdate",
 		iniConfig.autoUpdate ? "1" : "0", (modulePath + "\\shady-loader.ini").c_str());
+	WritePrivateProfileString("Options", "useLoadLock",
+		iniConfig.useLoadLock ? "1" : "0", (modulePath + "\\shady-loader.ini").c_str());
 
 	nlohmann::json root;
 	for (auto& package : packageList) {

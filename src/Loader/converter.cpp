@@ -19,7 +19,6 @@ namespace {
     typedef bool (*RemoveAllFiles_t)();
     RemoveAllFiles_t tramp_RemoveAllFiles;
     ShadyCore::Package package;
-    EventID fileLoaderEvent;
 
     typedef void (WINAPI* orig_dealloc_t)(int);
 	orig_dealloc_t orig_dealloc = (orig_dealloc_t)0x81f6fa;
@@ -209,6 +208,9 @@ namespace {
 }
 
 void FileLoaderCallback(SokuData::FileLoaderData& data) {
+	{std::lock_guard<std::mutex> lock(loadLock);}
+    if (!iniConfig.useIntercept) return;
+
     auto iter = package.findFile(data.fileName);
     if (iter == package.end()) {
         auto type = ShadyCore::FileType::getSimple(data.fileName);
@@ -268,13 +270,10 @@ void LoadIntercept() {
         addr = (DWORD) GetProcAddress(handle, "?RemoveAllFiles@Soku@@YA_NXZ");
         tramp_RemoveAllFiles = (RemoveAllFiles_t) DoIntercept(addr, (DWORD)&repl_RemoveAllFiles, 6);
 	}
-
-    fileLoaderEvent = Soku::SubscribeEvent(SokuEvent::FileLoader, {FileLoaderCallback});
 }
 
 void UnloadIntercept() {
     package.clear();
-    Soku::UnsubscribeEvent(fileLoaderEvent);
 
     HMODULE handle = GetModuleHandle("SokuEngine.dll");
 	if (handle != INVALID_HANDLE_VALUE) {

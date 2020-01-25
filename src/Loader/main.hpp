@@ -1,12 +1,16 @@
 #pragma once
 #include <fstream>
 #include <windows.h>
+#include <mutex>
+#include <Sokulib.h>
 
 extern std::string modulePath;
 extern struct IniConfig {
     bool useIntercept;
     bool autoUpdate;
+    bool useLoadLock;
 } iniConfig;
+extern std::mutex loadLock;
 
 void LoadSettings();
 void SaveSettings();
@@ -16,6 +20,7 @@ void LoadIntercept();
 void UnloadIntercept();
 void LoadConverter();
 void decodeHtml(std::string& data);
+void FileLoaderCallback(SokuData::FileLoaderData& data);
 
 inline std::string ws2s(const std::wstring& wstr) {
     int size_needed = WideCharToMultiByte(CP_UTF8, 0, &wstr[0], (int)wstr.size(), NULL, 0, NULL, NULL);
