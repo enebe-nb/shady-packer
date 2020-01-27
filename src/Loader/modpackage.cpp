@@ -1,9 +1,6 @@
 #include "modpackage.hpp"
 #include "main.hpp"
-#include "../Lua/shady-lua.hpp"
-
 #include <shlwapi.h>
-#include <stack>
 
 ModPackage::ModPackage(const std::string& name, const nlohmann::json::value_type& data)
     : name(name), data(data), ext(".zip") {
@@ -33,60 +30,11 @@ ModPackage::~ModPackage() {
 	if (downloadTask) delete downloadTask;
 }
 
-static void enablePackage(const std::string& name, const std::string& ext, std::vector<FileID>& sokuIds) {
-	std::string path(name + ext);
-	if (PathIsRelative(path.c_str())) path = modulePath + "\\" + path;
-
-	if (iniConfig.useIntercept) {
-		sokuIds.push_back(Soku::AddFile(s2ws(path)));
-	} else if (ext == ".zip") {
-		sokuIds.push_back(Soku::AddFile(s2ws(path)));
-	} else if (ext == ".dat") {
-		char magicWord[6];
-		std::ifstream input; input.open(path, std::ios::binary);
-		input.unsetf(std::ios::skipws);
-		input.read(magicWord, 6);
-		input.close();
-		if (strncmp(magicWord, "PK\x03\x04", 4) == 0 || strncmp(magicWord, "PK\x05\x06", 4) == 0 ) {
-			sokuIds.push_back(Soku::AddFile(s2ws(path)));
-		} else {
-			reinterpret_cast<void(*)(const char *)>(0x0040D1D0u)(path.c_str());
-		}
-	} else {
-		unsigned int attr = GetFileAttributes(path.c_str());
-		if (attr == INVALID_FILE_ATTRIBUTES) return;
-		if (attr & FILE_ATTRIBUTE_DIRECTORY) {
-			std::stack<std::string> dirStack;
-			dirStack.push(path);
-
-			while (!dirStack.empty()) {
-				WIN32_FIND_DATA findData;
-				HANDLE hFind;
-				std::string current = dirStack.top(); dirStack.pop();
-				if ((hFind = FindFirstFile((current + "\\*").c_str(), &findData)) != INVALID_HANDLE_VALUE) {
-					do {
-						if (findData.cFileName[0] == '.') continue;
-						if (findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
-							dirStack.push(current + "\\" + findData.cFileName);
-						else sokuIds.push_back(Soku::AddFile(s2ws(current + "\\" + findData.cFileName)));
-					} while(FindNextFile(hFind, &findData));
-					FindClose(hFind);
-				}
-			}
-		}
-	}
-}
-
 void ModPackage::setEnabled(bool value) {
 	if (enabled == value) return;
 	enabled = value;
 	if (enabled) {
-		enablePackage(name, ext, sokuIds);
-		//if (ShadyLua::isModuleLoaded()) {
-			//std::string luaFile = nameLower + ".lua";
-			//void* script = ShadyLua::LoadFromSoku(luaFile.c_str());
-			//if (script) ShadyLua::RunScript(script);
-		//}
+		EnablePackage(name, ext, sokuIds);
 	} else {
 		for(auto& id : sokuIds) {
 			Soku::RemoveFile(id);

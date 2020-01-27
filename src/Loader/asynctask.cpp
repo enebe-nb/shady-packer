@@ -17,7 +17,7 @@ static std::string findConfirmUrl(const std::string& filename) {
         if (start != std::string::npos) {
             size_t end = line.find('"', start);
             std::string url(line, start, end - start);
-            decodeHtml(url);
+            DecodeHtml(url);
             return url;
         }
     }

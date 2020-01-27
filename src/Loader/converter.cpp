@@ -5,9 +5,12 @@
 #include <string>
 #include <fstream>
 #include <sstream>
+#include <stack>
 
 #include "../Core/package.hpp"
 #include "../Core/util/riffdocument.hpp"
+#include "../Lua/shady-lua.hpp"
+
 
 namespace {
     typedef FileID (*AddFile_t)(const std::wstring& path);
@@ -208,7 +211,8 @@ namespace {
 }
 
 void FileLoaderCallback(SokuData::FileLoaderData& data) {
-	{std::lock_guard<std::mutex> lock(loadLock);}
+	if (strcmp(PathFindExtension(data.fileName), ".lua") != 0)
+        {std::lock_guard<std::mutex> lock(loadLock);}
     if (!iniConfig.useIntercept) return;
 
     auto iter = package.findFile(data.fileName);
@@ -388,4 +392,83 @@ void LoadConverter() {
         return convertComplex(data, size, new ShadyCore::GuiRoot());});
     Soku::AddCustomConverter(".xml", ".pat", [](char*& data, int& size) {
         return convertComplex(data, size, new ShadyCore::Pattern(false));});
+}
+
+namespace {
+    struct _lua_file {
+        ShadyCore::BasePackageEntry* entry;
+        std::istream* input;
+    };
+}
+
+void* _lua_open(void* userdata, const char* filename) {
+    ShadyCore::Package* package = reinterpret_cast<ShadyCore::Package*>(userdata);
+    auto iter = package->findFile(filename);
+    if (iter == package->end()) return 0;
+    return new _lua_file{&*iter, &iter->open()};
+}
+
+size_t _lua_read(void* userdata, void* file, char* buffer, size_t size) {
+    if (!file) return 0;
+    _lua_file* luaFile = reinterpret_cast<_lua_file*>(file);
+    luaFile->input->read(buffer, size);
+    size = luaFile->input->gcount();
+    if (size == 0) {
+        luaFile->entry->close();
+        delete luaFile;
+    } return size;
+}
+
+void EnablePackage(const std::string& name, const std::string& ext, std::vector<FileID>& sokuIds) {
+	std::string path(name + ext);
+	if (PathIsRelative(path.c_str())) path = modulePath + "\\" + path;
+
+	if (iniConfig.useIntercept) {
+		sokuIds.push_back(Soku::AddFile(s2ws(path)));
+        if (ShadyLua::isAvailable() && package.findFile("index.lua") != package.end())
+            ShadyLua::LoadFromGeneric(&package, _lua_open, _lua_read, "index.lua");
+	} else if (ext == ".zip") {
+		sokuIds.push_back(Soku::AddFile(s2ws(path)));
+        if (ShadyLua::isAvailable() && ShadyLua::ZipExists(path.c_str(), "index.lua"))
+            ShadyLua::LoadFromZip(path.c_str(), "index.lua");
+	} else if (ext == ".dat") {
+		char magicWord[6];
+		std::ifstream input; input.open(path, std::ios::binary);
+		input.unsetf(std::ios::skipws);
+		input.read(magicWord, 6);
+		input.close();
+		if (strncmp(magicWord, "PK\x03\x04", 4) == 0 || strncmp(magicWord, "PK\x05\x06", 4) == 0 ) {
+			sokuIds.push_back(Soku::AddFile(s2ws(path)));
+		} else {
+			reinterpret_cast<void(*)(const char *)>(0x0040D1D0u)(path.c_str());
+		}
+	} else {
+		unsigned int attr = GetFileAttributes(path.c_str());
+		if (attr == INVALID_FILE_ATTRIBUTES) return;
+		if (attr & FILE_ATTRIBUTE_DIRECTORY) {
+			std::stack<std::string> dirStack;
+			dirStack.push(path);
+            std::string luaRoot(modulePath + "\\" + name + ext + "\\index.lua");
+
+			while (!dirStack.empty()) {
+				WIN32_FIND_DATA findData;
+				HANDLE hFind;
+				std::string current = dirStack.top(); dirStack.pop();
+				if ((hFind = FindFirstFile((current + "\\*").c_str(), &findData)) != INVALID_HANDLE_VALUE) {
+					do {
+						if (findData.cFileName[0] == '.') continue;
+                        std::string filename(current + "\\" + findData.cFileName);
+						if (findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
+							dirStack.push(filename);
+						else {
+                            sokuIds.push_back(Soku::AddFile(s2ws(filename)));
+                            if (ShadyLua::isAvailable() && filename == luaRoot)
+                                ShadyLua::LoadFromFilesystem(filename.c_str());
+                        }
+					} while(FindNextFile(hFind, &findData));
+					FindClose(hFind);
+				}
+			}
+		}
+	}
 }

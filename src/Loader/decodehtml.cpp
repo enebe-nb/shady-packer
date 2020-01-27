@@ -269,7 +269,7 @@ static const char *getNamedEntity(const char *name) {
 	return entity ? entity[1] : NULL;
 }
 
-void decodeHtml(std::string& data) {
+void DecodeHtml(std::string& data) {
     int i = 0, j = 0; while (i < data.size()) {
         if(data[i] == '&') {
             std::string entity(data, i + 1, data.find(';', i) - i);

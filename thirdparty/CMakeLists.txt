@@ -89,11 +89,10 @@ if(WIN32 AND CMAKE_SIZEOF_VOID_P EQUAL 4)
     set(JSON_INCLUDE_DIR ${CMAKE_SOURCE_DIR}/thirdparty/json/include PARENT_SCOPE)
 
     # Lua Library
-    add_git_module(lua https://github.com/LuaDist/lua 5.3.2)
+    add_git_module(lua https://github.com/lua/lua v5.3.5)
     add_subdirectory(${CMAKE_SOURCE_DIR}/thirdparty/lua EXCLUDE_FROM_ALL)
     add_git_module(LuaBridge https://github.com/vinniefalco/LuaBridge 2.4.1)
-    set(LUA_INCLUDE_DIR ${CMAKE_SOURCE_DIR}/thirdparty/lua/src
-        ${CMAKE_BINARY_DIR}/thirdparty/lua
+    set(LUA_INCLUDE_DIR ${CMAKE_SOURCE_DIR}/thirdparty/lua
         ${CMAKE_SOURCE_DIR}/thirdparty/LuaBridge/Source
         PARENT_SCOPE)
 endif()

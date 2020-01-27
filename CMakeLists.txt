@@ -14,6 +14,7 @@ add_subdirectory(${CMAKE_SOURCE_DIR}/src/Core)
 # Shady *Loader* (only make sense to build in windows 32bits)
 if(WIN32 AND CMAKE_SIZEOF_VOID_P EQUAL 4)
 	add_subdirectory(${CMAKE_SOURCE_DIR}/src/Loader)
+	add_subdirectory(${CMAKE_SOURCE_DIR}/src/Lua)
 endif()
 
 # Shady *Cli*
