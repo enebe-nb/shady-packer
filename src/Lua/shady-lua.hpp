@@ -1,5 +1,4 @@
 #pragma once
-#include "types.hpp"
 #include <windows.h>
 #include <SokuLib.h>
 
@@ -21,6 +20,9 @@ public:
 };
 
 namespace ShadyLua {
+    typedef void* (*fnOpen_t)(void* userdata, const char* filename);
+    typedef size_t (*fnRead_t)(void* userdata, void* file, char* buffer, size_t size);
+
     class Manager : public __Singleton<Manager> {
     public:
         Soku::Module module;
@@ -33,15 +35,6 @@ namespace ShadyLua {
             return reinterpret_cast<ReturnType(*)(ArgTypes...)>(procAddr)(args...);
         }
 
-/*
-        template <const char* procName, typename ...ArgTypes>
-        inline void NamedCall(ArgTypes... args) {
-            if (!module.IsInjected()) module.Inject();
-            static void* procAddr = 0;
-            if (!procAddr) procAddr = GetProcAddress(GetModuleHandleW(module.Name().c_str()), procName);
-            reinterpret_cast<void(*)(ArgTypes...)>(procAddr)(args...);
-        }
-*/
     private:
         static inline Soku::Module& findModule(const std::wstring& name) {
             for (auto& m : Soku::GetModuleList()) {
@@ -60,7 +53,7 @@ namespace ShadyLua {
 
     void* _LoadFromGeneric = 0;
     /*** Load lua scripts from filesystem and return it */
-    inline void* LoadFromGeneric(void* userdata, ShadyLua::fnOpen_t open, ShadyLua::fnRead_t read, const char* filename) {
+    inline void* LoadFromGeneric(void* userdata, fnOpen_t open, fnRead_t read, const char* filename) {
         return Manager::get().ProcCall<void*>
             (_LoadFromGeneric, "LoadFromGeneric", userdata, open, read, filename);
     }
@@ -77,13 +70,6 @@ namespace ShadyLua {
     inline void* LoadFromZip(const char* zipFile, const char* filename) {
         return Manager::get().ProcCall<void*>
             (_LoadFromZip, "LoadFromZip", zipFile, filename);
-    }
-
-    void* _RunScript = 0;
-    /*** Load lua scripts from Soku Added Files and return it */
-    inline bool RunScript(void* script) {
-        return Manager::get().ProcCall<bool>
-            (_RunScript, "RunScript", script);
     }
 
     void* _FreeScript = 0;

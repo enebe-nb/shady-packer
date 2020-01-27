@@ -1,6 +1,7 @@
 #include "logger.hpp"
 
 #include <list>
+#include <SokuLib.h>
 
 namespace {
     EventID renderEvent;

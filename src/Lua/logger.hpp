@@ -1,6 +1,6 @@
 #pragma once
 
-#include <SokuLib.h>
+#include <string>
 
 namespace Logger {
     constexpr int LOG_DEBUG =   1 << 0;

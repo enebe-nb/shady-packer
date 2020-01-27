@@ -173,26 +173,3 @@ size_t ShadyLua::LuaScriptZip::fnRead(void* userdata, void* file, char* buffer, 
         return 0;
     } return size;
 }
-
-/*
-LuaScript* LuaScript::fromFilesystem(const char* path) {
-    const char* filename = PathFindFileName(path);
-    LuaScriptFS* script = new LuaScriptFS(std::string(path, filename));
-    if (script->load(filename) != LUA_OK) {
-        Logger::Error(script->lastError);
-        delete script;
-        return 0;
-    } return script;
-}
-
-LuaScript* LuaScript::fromSoku(const char* path) {
-    const char* filename = PathFindFileName(path);
-    LuaScriptSoku* script = new LuaScriptSoku();
-    Logger::Debug("???");
-    if (script->load(filename) != LUA_OK) {
-        Logger::Error(script->lastError);
-        delete script;
-        return 0;
-    } return 0;
-}
-*/

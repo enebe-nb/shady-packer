@@ -1,10 +1,12 @@
 #pragma once
 
-#include "types.hpp"
 #include <lua.hpp>
 #include <string>
 
 namespace ShadyLua {
+    typedef void* (*fnOpen_t)(void* userdata, const char* filename);
+    typedef size_t (*fnRead_t)(void* userdata, void* file, char* buffer, size_t size);
+
     class LuaScript {
     protected:
         lua_State* L;
@@ -20,9 +22,6 @@ namespace ShadyLua {
 
         int load(const char* filename, const char* mode = 0);
         int run();
-
-        //static LuaScript* fromFilesystem(const char* filename);
-        //static LuaScript* fromSoku(const char* filename);
     };
 
     class LuaScriptFS : public LuaScript {
