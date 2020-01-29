@@ -30,6 +30,7 @@ public:
 
     FetchImage* previewTask = 0;
     FetchFile* downloadTask = 0;
+    void* script = 0;
 
     ModPackage(const std::string& name, const nlohmann::json::value_type& data);
     ModPackage(const std::string& filename);
@@ -41,14 +42,4 @@ public:
     void downloadFile();
     void downloadPreview();
     void merge(const nlohmann::json::value_type& remote);
-    /*
-    bool DrawMenuItem(bool selected, float width = -1);
-    enum Command {CMD_ENABLE, CMD_DOWNLOAD, CMD_LINK};
-    Command DrawInfo();
-    */
 };
-
-//inline bool operator==(const ModPackage& l, const ModPackage& r)
-    //{ return l.name == r.name; }
-//inline bool operator<(const ModPackage& l, const ModPackage& r)
-    //{ return l.name < r.name; }

@@ -1,14 +1,15 @@
 #include "script.hpp"
 #include "logger.hpp"
+#include "lualibs.hpp"
 
 #include <shlwapi.h>
 #include <fstream>
+#include <sstream>
 #include <unordered_map>
 #include <zip.h>
 
+std::unordered_map<lua_State*, ShadyLua::LuaScript*> scriptMap;
 namespace {
-    std::unordered_map<lua_State*, ShadyLua::LuaScript*> scriptMap;
-
     struct Reader {
         ShadyLua::fnRead_t fnRead;
         void* userdata;
@@ -31,67 +32,25 @@ int ShadyLua::LuaScript::run() {
 	return true;
 }
 
-//lua_Debug info;
-//lua_getstack(state, 1, &info);
-//lua_getinfo(state, "Sl", &info);
-//char lineNumber[33]; itoa(info.currentline, lineNumber, 10);
-//Logger::Debug(info.source, ":", lineNumber);
-static int _lua_print(lua_State* L) {
-    std::string line;
-    int nargs = lua_gettop(L);
-    for (int i = 1; i <= nargs; ++i) {
-        if (i != 1) line += " ";
-        line += lua_tostring(L, i);
-    }
-
-    Logger::Debug(line);
-    return 0;
-}
-
-static int _lua_loadfile(lua_State* L) {
-    ShadyLua::LuaScript* script = scriptMap.at(L);
-    const char *filename = lua_tostring(L, 1);
-    const char *mode = luaL_optstring(L, 2, NULL);
-    int env = (!lua_isnone(L, 3) ? 3 : 0);
-
-    if (script->load(filename, mode)) {
-        lua_pushnil(L);
-        lua_insert(L, -2);
-        return 2;
-    } else if (env) {
-        lua_pushvalue(L, env);
-        if (!lua_setupvalue(L, -2, 1)) lua_pop(L, 1);
-    } return 1;
-}
-
-static int _lua_dofile(lua_State* L) {
-    ShadyLua::LuaScript* script = scriptMap.at(L);
-    const char *filename = lua_tostring(L, 1);
-    lua_settop(L, 1);
-    if (script->load(filename)) return lua_error(L);
-    lua_call(L, 0, LUA_MULTRET, 0);
-    return lua_gettop(L) - 1;
-}
-
 ShadyLua::LuaScript::LuaScript(void* userdata, fnOpen_t open, fnRead_t read)
-    : L(luaL_newstate()), userdata(userdata), open(open), read(read) {
+    : L(luaL_newstate()), userdata(userdata), fnOpen(open), fnRead(read) {
     scriptMap[L] = this;
-    luaL_openlibs(L);
-    lua_register(L, "print", _lua_print);
-    lua_register(L, "loadfile", _lua_loadfile);
-    lua_register(L, "dofile", _lua_dofile);
+    LualibAll(L);
 }
 
 ShadyLua::LuaScript::~LuaScript() {
+    if (lua_getglobal(L, "AtExit") == LUA_TFUNCTION) {
+        if (lua_pcall(L, 0, 0, 0)) Logger::Error(lua_tostring(L, -1));
+    }
     scriptMap.erase(L);
     lua_close(L);
 }
 
 int ShadyLua::LuaScript::load(const char* filename, const char* mode) {
     Reader reader;
-    reader.fnRead = read;
+    reader.fnRead = fnRead;
     reader.userdata = userdata;
-    reader.file = open(userdata, filename);
+    reader.file = fnOpen(userdata, filename);
     int result = lua_load(L, Reader::read, &reader, filename, mode);
     if (result != LUA_OK) Logger::Error(lua_tostring(L, 1));
     return result;

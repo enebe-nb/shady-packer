@@ -419,18 +419,19 @@ size_t _lua_read(void* userdata, void* file, char* buffer, size_t size) {
     } return size;
 }
 
-void EnablePackage(const std::string& name, const std::string& ext, std::vector<FileID>& sokuIds) {
+void* EnablePackage(const std::string& name, const std::string& ext, std::vector<FileID>& sokuIds) {
 	std::string path(name + ext);
 	if (PathIsRelative(path.c_str())) path = modulePath + "\\" + path;
+    void* script = 0;
 
 	if (iniConfig.useIntercept) {
 		sokuIds.push_back(Soku::AddFile(s2ws(path)));
-        if (ShadyLua::isAvailable() && package.findFile("index.lua") != package.end())
-            ShadyLua::LoadFromGeneric(&package, _lua_open, _lua_read, "index.lua");
+        if (ShadyLua::isAvailable() && package.findFile("init.lua") != package.end())
+            script = ShadyLua::LoadFromGeneric(&package, _lua_open, _lua_read, "init.lua");
 	} else if (ext == ".zip") {
 		sokuIds.push_back(Soku::AddFile(s2ws(path)));
-        if (ShadyLua::isAvailable() && ShadyLua::ZipExists(path.c_str(), "index.lua"))
-            ShadyLua::LoadFromZip(path.c_str(), "index.lua");
+        if (ShadyLua::isAvailable() && ShadyLua::ZipExists(path.c_str(), "init.lua"))
+            script = ShadyLua::LoadFromZip(path.c_str(), "init.lua");
 	} else if (ext == ".dat") {
 		char magicWord[6];
 		std::ifstream input; input.open(path, std::ios::binary);
@@ -444,11 +445,11 @@ void EnablePackage(const std::string& name, const std::string& ext, std::vector<
 		}
 	} else {
 		unsigned int attr = GetFileAttributes(path.c_str());
-		if (attr == INVALID_FILE_ATTRIBUTES) return;
+		if (attr == INVALID_FILE_ATTRIBUTES) return 0;
 		if (attr & FILE_ATTRIBUTE_DIRECTORY) {
 			std::stack<std::string> dirStack;
 			dirStack.push(path);
-            std::string luaRoot(modulePath + "\\" + name + ext + "\\index.lua");
+            std::string luaRoot(modulePath + "\\" + name + ext + "\\init.lua");
 
 			while (!dirStack.empty()) {
 				WIN32_FIND_DATA findData;
@@ -463,7 +464,7 @@ void EnablePackage(const std::string& name, const std::string& ext, std::vector<
 						else {
                             sokuIds.push_back(Soku::AddFile(s2ws(filename)));
                             if (ShadyLua::isAvailable() && filename == luaRoot)
-                                ShadyLua::LoadFromFilesystem(filename.c_str());
+                                script = ShadyLua::LoadFromFilesystem(filename.c_str());
                         }
 					} while(FindNextFile(hFind, &findData));
 					FindClose(hFind);
@@ -471,4 +472,13 @@ void EnablePackage(const std::string& name, const std::string& ext, std::vector<
 			}
 		}
 	}
+
+    return script;
+}
+
+void DisablePackage(std::vector<FileID>& sokuIds, void* script) {
+    if (ShadyLua::isAvailable()) ShadyLua::FreeScript(script);
+    for(auto& id : sokuIds) {
+        Soku::RemoveFile(id);
+    } sokuIds.clear();
 }

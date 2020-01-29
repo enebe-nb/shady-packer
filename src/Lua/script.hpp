@@ -11,8 +11,8 @@ namespace ShadyLua {
     protected:
         lua_State* L;
         void* userdata;
-        fnOpen_t open;
-        fnRead_t read;
+        fnOpen_t fnOpen;
+        fnRead_t fnRead;
 
     public:
         LuaScript(void* userdata, fnOpen_t open, fnRead_t read);
@@ -21,6 +21,10 @@ namespace ShadyLua {
         virtual ~LuaScript();
 
         int load(const char* filename, const char* mode = 0);
+        inline void* open(const char* filename)
+            {return fnOpen(userdata, filename);}
+        inline size_t read(void* file, char* buffer, size_t size)
+            {return fnRead(userdata, file, buffer, size);}
         int run();
     };
 

@@ -34,11 +34,9 @@ void ModPackage::setEnabled(bool value) {
 	if (enabled == value) return;
 	enabled = value;
 	if (enabled) {
-		EnablePackage(name, ext, sokuIds);
+		script = EnablePackage(name, ext, sokuIds);
 	} else {
-		for(auto& id : sokuIds) {
-			Soku::RemoveFile(id);
-		} sokuIds.clear();
+		DisablePackage(sokuIds, script);
 	}
 }
 

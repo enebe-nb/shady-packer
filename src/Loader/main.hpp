@@ -23,7 +23,8 @@ void LoadConverter();
 
 void DecodeHtml(std::string& data);
 void FileLoaderCallback(SokuData::FileLoaderData& data);
-void EnablePackage(const std::string& name, const std::string& ext, std::vector<FileID>& sokuIds);
+void* EnablePackage(const std::string& name, const std::string& ext, std::vector<FileID>& sokuIds);
+void DisablePackage(std::vector<FileID>& sokuIds, void* script);
 
 inline std::string ws2s(const std::wstring& wstr) {
     int size_needed = WideCharToMultiByte(CP_UTF8, 0, &wstr[0], (int)wstr.size(), NULL, 0, NULL, NULL);
