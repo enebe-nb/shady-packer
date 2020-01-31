@@ -1,5 +1,6 @@
 #include "../lualibs.hpp"
 #include "../logger.hpp"
+#include "../strconv.hpp"
 #include "../../Core/resource/readerwriter.hpp"
 #include <SokuLib.h>
 #include <LuaBridge/LuaBridge.h>
@@ -106,6 +107,16 @@ namespace {
     };
 }
 
+static bool soku_Module(const char* name) {
+    std::wstring wname(s2ws(name));
+    for (auto& m : Soku::GetModuleList()) {
+        if (m.Name() == wname) {
+            if (!m.IsInjected()) m.Inject();
+            return true;
+        }
+    } return false;
+}
+
 static int soku_SubscribeRender(lua_State* L) {
     if (lua_gettop(L) < 1 || !lua_isfunction(L, 1)) return luaL_error(L, "Must pass a callback");
     int callback = luaL_ref(L, LUA_REGISTRYINDEX);
@@ -179,7 +190,9 @@ static int soku_SubscribeStageSelect(lua_State* L) {
     subscribeMap[callback] = Soku::SubscribeEvent(SokuEvent::StageSelect, [L, callback](SokuData::StageData& data) {
         lua_rawgeti(L, LUA_REGISTRYINDEX, callback);
         lua_pushinteger(L, (int)data.stage);
-        lua_pcall(L, 1, 0, 0);
+        lua_pcall(L, 1, 1, 0);
+        if (lua_isnumber(L, -1)) data.stage = (Stage)lua_tointeger(L, -1);
+        lua_pop(L, 1);
     });
     lua_pushnumber(L, callback);
     return 1;
@@ -205,8 +218,8 @@ static int soku_SubscribeFileLoader(lua_State* L) {
             } break;
             case LUA_TUSERDATA: {
                 std::stringstream* buffer = new std::stringstream();
-                RefCountedPtr<ShadyCore::Resource> resource(LuaRef::fromStack(L, 1));
-                ShadyCore::writeResource(*resource, *buffer, true);
+                ShadyCore::Resource* resource = Stack<ShadyCore::Resource*>::get(L, 1);
+                ShadyCore::writeResource(resource, *buffer, true);
                 data.size = buffer->tellp();
                 data.inputFormat = DataFormat::RAW;
                 data.data = buffer;
@@ -364,15 +377,16 @@ void ShadyLua::LualibSoku(lua_State* L) {
                 .addVariable("CatwalkInGeyser", enumMap<(int)Stage::CatwalkInGeyser>(), false)
                 .addVariable("FusionReactorCore", enumMap<(int)Stage::FusionReactorCore>(), false)
             .endNamespace()
+            .addFunction("Module", soku_Module)
             .addCFunction("SubscribeEvent", soku_SubscribeEvent)
-            //.addCFunction("SubscribeRender", soku_SubscribeRender)
-            //.addCFunction("SubscribeWindowProc", soku_SubscribeWindowProc)
-            //.addCFunction("SubscribeKeyboard", soku_SubscribeKeyboard)
-            //.addCFunction("SubscribeBattleEvent", soku_SubscribeBattleEvent)
-            //.addCFunction("SubscribeGameEvent", soku_SubscribeGameEvent)
-            //.addCFunction("SubscribeStageSelect", soku_SubscribeStageSelect)
-            //.addCFunction("SubscribeFileLoader", soku_SubscribeFileLoader)
-            //.addCFunction("SubscribeInput", soku_SubscribeInput)
+            .addCFunction("SubscribeRender", soku_SubscribeRender)
+            .addCFunction("SubscribeWindowProc", soku_SubscribeWindowProc)
+            .addCFunction("SubscribeKeyboard", soku_SubscribeKeyboard)
+            .addCFunction("SubscribeBattleEvent", soku_SubscribeBattleEvent)
+            .addCFunction("SubscribeGameEvent", soku_SubscribeGameEvent)
+            .addCFunction("SubscribeStageSelect", soku_SubscribeStageSelect)
+            .addCFunction("SubscribeFileLoader", soku_SubscribeFileLoader)
+            .addCFunction("SubscribeInput", soku_SubscribeInput)
             .addFunction("UnsubscribeEvent", soku_UnsubscribeEvent)
         .endNamespace()
     ;

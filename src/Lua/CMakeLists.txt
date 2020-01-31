@@ -10,11 +10,13 @@ add_library(shady-lua MODULE
     logger.cpp
     script.cpp
     lualibs/base.cpp
+    lualibs/imgui.cpp
     lualibs/memory.cpp
     lualibs/resource.cpp
     lualibs/soku.cpp
+    lualibs/curl.cpp
 )
-target_link_libraries(shady-lua zipstatic zlibstatic shlwapi -static ${SOKULIB_LIBRARIES} liblua shady-core)
+target_link_libraries(shady-lua zipstatic zlibstatic shlwapi libcurl Lua-cURL -static ${SOKULIB_LIBRARIES} liblua shady-core)
 set_target_properties(shady-lua PROPERTIES PREFIX "")
 
 install(TARGETS shady-loader LIBRARY DESTINATION shady-loader)

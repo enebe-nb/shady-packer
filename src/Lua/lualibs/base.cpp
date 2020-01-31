@@ -13,11 +13,12 @@ extern std::string modulePath;
 //char lineNumber[33]; itoa(info.currentline, lineNumber, 10);
 //Logger::Debug(info.source, ":", lineNumber);
 static int _print(lua_State* L) {
-    std::string line;
+    std::string line; size_t size;
     int nargs = lua_gettop(L);
     for (int i = 1; i <= nargs; ++i) {
         if (i != 1) line += " ";
-        line += lua_tostring(L, i);
+        const char* str = luaL_tolstring(L, i, &size);
+        line.append(str, size);
     }
 
     Logger::Debug(line);

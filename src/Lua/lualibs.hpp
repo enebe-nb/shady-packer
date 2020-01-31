@@ -6,11 +6,15 @@ namespace ShadyLua {
     void LualibMemory(lua_State* L);
     void LualibResource(lua_State* L);
     void LualibSoku(lua_State* L);
+    void LualibImGui(lua_State* L);
+    void LualibCurl(lua_State* L);
 
     inline void LualibAll(lua_State* L) {
         LualibBase(L);
         LualibMemory(L);
         LualibResource(L);
         LualibSoku(L);
+        LualibImGui(L);
+        LualibCurl(L);
     }
 }
