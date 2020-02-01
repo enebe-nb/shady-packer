@@ -45,7 +45,6 @@ static int _readfile(lua_State* L) {
     ShadyLua::LuaScript* script = scriptMap.at(L);
     const char *filename = lua_tostring(L, 1);
     void* file = script->open(filename);
-    lua_settop(L, 0);
 
     luaL_Buffer buffer; luaL_buffinit(L, &buffer);
     size_t size;

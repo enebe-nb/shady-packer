@@ -70,7 +70,7 @@ void* ShadyLua::LuaScriptFS::fnOpen(void* userdata, const char* filename) {
         return 0;
     }
 
-    std::ifstream* input = new std::ifstream(script->root + filepath);
+    std::ifstream* input = new std::ifstream(script->root + filepath, std::ios::in | std::ios::binary);
     if (input->fail()) {
         Logger::Error("Can't open file: ", filename);
         delete input;
