@@ -11,7 +11,6 @@
 #include "../Core/util/riffdocument.hpp"
 #include "../Lua/shady-lua.hpp"
 
-
 namespace {
     typedef FileID (*AddFile_t)(const std::wstring& path);
     AddFile_t tramp_AddFile;
@@ -120,9 +119,7 @@ static bool repl_RemoveAllFiles() {
 
 static void reader_open_stream(reader_data* data) {
     data->stream = &data->entry->open();
-    data->stream->seekg(0, std::ios::end);
-    data->size = data->stream->tellg();
-    data->stream->seekg(0, std::ios::beg);
+    data->size = data->entry->getSize();
 }
 
 static int WINAPI reader_destruct(int a) {
@@ -235,13 +232,13 @@ void FileLoaderCallback(SokuData::FileLoaderData& data) {
             data.data = &*iter;
             data.size = 0;
             data.reader = &reader_table;
-        } else if (type == ShadyCore::FileType::TYPE_UNKNOWN) {
-            data.inputFormat = DataFormat::RAW;
+        } else if (type == ShadyCore::FileType::TYPE_UNKNOWN
+                || type == ShadyCore::FileType::TYPE_IMAGE) {
+            data.inputFormat = (type == ShadyCore::FileType::TYPE_UNKNOWN)
+                ? DataFormat::RAW : DataFormat::PNG;
             std::istream& input = iter->open();
-            input.seekg(0, std::ios::end);
-            data.size = input.tellg();
+            data.size = iter->getSize();
             data.data = new char[data.size];
-            input.seekg(0, std::ios::beg);
             input.read((char*)data.data, data.size);
             iter->close();
         } else {
@@ -331,7 +328,7 @@ static char* convertSoundLabel(char*& data, int& size) {
     ShadyCore::readResource(&label, input, false);
     delete[] data;
 
-    size = 0x65 + strlen(label.getName());
+    size = 0x61 + strlen(label.getName());
     data = new char[size];
     membuf outputBuf(data, data + size);
     std::ostream output(&outputBuf);
