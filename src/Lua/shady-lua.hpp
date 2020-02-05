@@ -25,24 +25,26 @@ namespace ShadyLua {
 
     class Manager : public __Singleton<Manager> {
     public:
-        Soku::Module module;
-        inline bool isAvailable() {return !module.Name().empty();}
+        HMODULE moduleHandle;
+        inline bool isAvailable() {return moduleHandle != INVALID_HANDLE_VALUE;}
 
         template <typename ReturnType, typename ...ArgTypes>
         inline ReturnType ProcCall(void*& procAddr, const char* procName, ArgTypes... args) {
-            if (!module.IsInjected()) module.Inject();
-            if (!procAddr) procAddr = GetProcAddress(GetModuleHandleW(module.Name().c_str()), procName);
+            if (!procAddr) procAddr = GetProcAddress(moduleHandle, procName);
             return reinterpret_cast<ReturnType(*)(ArgTypes...)>(procAddr)(args...);
         }
 
     private:
-        static inline Soku::Module& findModule(const std::wstring& name) {
+        static inline HMODULE findModule(const std::wstring& name) {
             for (auto& m : Soku::GetModuleList()) {
-                if (m.Name() == name) return m;
-            } return Soku::Module(-1);
+                if (m.Name() == name) {
+                    if (!m.IsInjected()) m.Inject();
+                    return GetModuleHandleW(m.Name().c_str());
+                }
+            } return (HMODULE)INVALID_HANDLE_VALUE;
         }
 
-        Manager() : module(findModule(L"shady-lua")) {}
+        Manager() : moduleHandle(findModule(L"shady-lua")) {}
         friend __Singleton;
     };
 

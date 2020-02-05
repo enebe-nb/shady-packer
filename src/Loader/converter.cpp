@@ -474,7 +474,7 @@ void* EnablePackage(const std::string& name, const std::string& ext, std::vector
 }
 
 void DisablePackage(std::vector<FileID>& sokuIds, void* script) {
-    if (ShadyLua::isAvailable()) ShadyLua::FreeScript(script);
+    if (script && ShadyLua::isAvailable()) ShadyLua::FreeScript(script);
     for(auto& id : sokuIds) {
         Soku::RemoveFile(id);
     } sokuIds.clear();

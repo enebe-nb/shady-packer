@@ -97,23 +97,6 @@ namespace ImGui {
 
 static void EngineMenuCallback() {
 	if (!remoteConfig.isRunning() && !remoteConfig.isDone()) remoteConfig.start();
-	/* Example Tabs
-	ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(12, 8));
-	ImGui::PushStyleVar(ImGuiStyleVar_IndentSpacing, 2);
-	ImGui::PushStyleVar(ImGuiStyleVar_ItemInnerSpacing, ImVec2(1, 1));
-	ImGui::PushStyleColor(ImGuiCol_TabActive, ImVec4(0.94f, 0.27f, 0.02f, 1.00f));
-	if (ImGui::BeginTabBar("DownloadMod_Tags")) {
-		for (auto&& tag : tags) {
-			if (ImGui::BeginTabItem(tag.second)) {
-				selected_tag = tag.first;
-				ImGui::EndTabItem();
-			}
-		}
-		ImGui::EndTabBar();
-	}
-	ImGui::PopStyleColor(1);
-	ImGui::PopStyleVar(3);
-	*/
 	ImGui::PushID("shady-loader");
 	ImVec2 windowPos = ImGui::GetWindowPos();
 	char filterInput[256]; filterInput[0] = '\0';
@@ -143,13 +126,6 @@ static void EngineMenuCallback() {
 			ImGui::Text("%c", "|/-\\"[(int)(0.009f*GetTickCount()) & 3]);
 		}
 	} ImGui::EndChild();
-		/* Tabs
-		for (size_t i = 0; i < mods.size(); i++) {
-			if (selected_tag != Tag::None && !mods[i].FindTag(selected_tag)) continue;
-			ImGui::PushID(i);
-			ImGui::PopID();
-		}
-		*/
 	ImGui::PopID();
 
 	if (selectedPackage) {
