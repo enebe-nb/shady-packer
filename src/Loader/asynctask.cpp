@@ -66,7 +66,7 @@ void FetchJson::run() {
     curl_easy_setopt(curl, CURLOPT_URL, ("https://drive.google.com/uc?export=download&id=" + fileId).c_str());
 
     if(curl_easy_perform(curl) == CURLE_OK) {
-        buffer >> data;
+        try {buffer >> data;} catch (...) {}
     } curl_easy_cleanup(curl);
 }
 

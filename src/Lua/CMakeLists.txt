@@ -18,4 +18,4 @@ add_library(shady-lua MODULE
 target_link_libraries(shady-lua zipstatic zlibstatic shlwapi -static ${SOKULIB_LIBRARIES} liblua shady-core)
 set_target_properties(shady-lua PROPERTIES PREFIX "")
 
-install(TARGETS shady-loader LIBRARY DESTINATION shady-loader)
+install(TARGETS shady-lua LIBRARY DESTINATION soku-modules)

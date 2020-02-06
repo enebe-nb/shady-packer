@@ -10,6 +10,7 @@
 #include "../Core/package.hpp"
 #include "../Core/util/riffdocument.hpp"
 #include "../Lua/shady-lua.hpp"
+#include "reader.hpp"
 
 namespace {
     typedef FileID (*AddFile_t)(const std::wstring& path);
@@ -21,15 +22,6 @@ namespace {
     typedef bool (*RemoveAllFiles_t)();
     RemoveAllFiles_t tramp_RemoveAllFiles;
     ShadyCore::Package package;
-
-    typedef void (WINAPI* orig_dealloc_t)(int);
-	orig_dealloc_t orig_dealloc = (orig_dealloc_t)0x81f6fa;
-    struct reader_data {
-        ShadyCore::BasePackageEntry* entry;
-        std::istream* stream;
-        int size;
-        int bytes_read;
-    };
 }
 
 static DWORD DoIntercept(DWORD addr, DWORD target, int offset) {
@@ -117,96 +109,6 @@ static bool repl_RemoveAllFiles() {
     return true;
 }
 
-static void reader_open_stream(reader_data* data) {
-    data->stream = &data->entry->open();
-    data->size = data->entry->getSize();
-}
-
-static int WINAPI reader_destruct(int a) {
-	int ecx_value;
-	__asm mov ecx_value, ecx
-	if (!ecx_value) return 0;
-
-    reader_data *data = (reader_data *)(ecx_value+4);
-    if ((void*)data->entry == (void*)data->stream) {
-        delete data->stream;
-    } else data->entry->close();
-    if (a & 1) orig_dealloc(ecx_value);
-	__asm mov ecx, ecx_value
-	return ecx_value;
-}
-
-static int WINAPI reader_read(char *dest, int size) {
-	int ecx_value;
-	__asm mov ecx_value, ecx
-	if (!ecx_value) return 0;
-
-	reader_data *data = (reader_data *)(ecx_value + 4);
-	if (data->size == 0) reader_open_stream(data);
-	data->stream->read(dest, size);
-    data->bytes_read = data->stream->gcount();
-	__asm mov ecx, ecx_value
-	return data->bytes_read > 0;
-}
-
-static void WINAPI reader_seek(int offset, int whence) {
-	int ecx_value;
-	__asm mov ecx_value, ecx
-	if (ecx_value == 0) return;
-
-	reader_data *data = (reader_data *)(ecx_value + 4);
-	if (data->size == 0) reader_open_stream(data);
-	switch(whence) {
-	case SEEK_SET:
-		if (offset > data->size) data->stream->seekg(0, std::ios::end);
-		else data->stream->seekg(offset, std::ios::beg);
-		break;
-	case SEEK_CUR:
-		if ((int)data->stream->tellg() + offset > data->size) {
-			data->stream->seekg(0, std::ios::end);
-		} else if ((int)data->stream->tellg() + offset < 0) {
-			data->stream->seekg(0, std::ios::beg);
-		} else data->stream->seekg(offset, std::ios::cur);
-		break;
-	case SEEK_END:
-		if (offset > data->size) data->stream->seekg(0, std::ios::beg);
-		else data->stream->seekg(-offset, std::ios::end);
-		break;
-	}
-	__asm mov ecx, ecx_value
-}
-
-static int WINAPI reader_getSize() {
-	int ecx_value;
-	__asm mov ecx_value, ecx
-	if (ecx_value == 0) return 0;
-
-	reader_data *data = (reader_data *)(ecx_value + 4);
-	if (data->size == 0) reader_open_stream(data);
-	__asm mov ecx, ecx_value
-	return data->size;
-}
-
-static int WINAPI reader_getRead() {
-	int ecx_value;
-	__asm mov ecx_value, ecx
-	if (ecx_value == 0) return 0;
-
-	reader_data *data = (reader_data *)(ecx_value + 4);
-	__asm mov ecx, ecx_value
-	return data->bytes_read;
-}
-
-namespace {
-    functable reader_table = {
-        reader_destruct,
-        reader_read,
-        reader_getRead,
-        reader_seek,
-        reader_getSize
-    };
-}
-
 void FileLoaderCallback(SokuData::FileLoaderData& data) {
 	if (strcmp(PathFindExtension(data.fileName), ".lua") != 0)
         {std::lock_guard<std::mutex> lock(loadLock);}
@@ -229,13 +131,17 @@ void FileLoaderCallback(SokuData::FileLoaderData& data) {
         auto type = ShadyCore::FileType::get(*iter);
         if (type.isEncrypted) {
             data.inputFormat = DataFormat::RAW;
-            data.data = &*iter;
-            data.size = 0;
-            data.reader = &reader_table;
-        } else if (type == ShadyCore::FileType::TYPE_UNKNOWN
-                || type == ShadyCore::FileType::TYPE_IMAGE) {
-            data.inputFormat = (type == ShadyCore::FileType::TYPE_UNKNOWN)
-                ? DataFormat::RAW : DataFormat::PNG;
+            setup_entry_reader(data, *iter);
+        } else if (type == ShadyCore::FileType::TYPE_UNKNOWN) {
+            data.inputFormat = DataFormat::RAW;
+            std::istream& input = iter->open();
+            size_t size = iter->getSize();
+            char* buffer = new char[size];
+            input.read(buffer, size);
+            iter->close();
+            setup_buffer_reader(data, buffer, size);
+        } else if (type == ShadyCore::FileType::TYPE_IMAGE) {
+            data.inputFormat = DataFormat::PNG;
             std::istream& input = iter->open();
             data.size = iter->getSize();
             data.data = new char[data.size];
@@ -243,14 +149,13 @@ void FileLoaderCallback(SokuData::FileLoaderData& data) {
             iter->close();
         } else {
             std::istream& input = iter->open();
-            std::stringstream* buffer = new std::stringstream();
+            std::stringstream* buffer = new std::stringstream(std::ios::in|std::ios::out|std::ios::binary);
             ShadyCore::convertResource(type, input, *buffer);
-            data.size = buffer->tellp();
+            size_t size = buffer->tellp();
             iter->close();
 
             data.inputFormat = DataFormat::RAW;
-            data.data = buffer;
-            data.reader = &reader_table;
+            setup_stream_reader(data, buffer, size);
         }
     }
 }

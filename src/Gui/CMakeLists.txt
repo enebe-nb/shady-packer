@@ -15,7 +15,7 @@ set(SRC_GUI_Root
 )
 
 if(WIN32)
-	set(SHADY_VERSION 1.0.0.0)
+	set(SHADY_VERSION 1.2.0.0)
 	string(REPLACE . , SHADY_VERSION_COMMA ${SHADY_VERSION})
 	set(SHADY_TARGET_NAME "shady-viewer")
 	set(SHADY_NAME "Shady Viewer")

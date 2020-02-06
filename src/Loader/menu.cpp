@@ -290,7 +290,7 @@ static void LoadFromLocalData() {
 	if (PathFileExists((modulePath + "\\packages.json").c_str())) {
 		nlohmann::json localConfig;
 		std::ifstream input(modulePath + "\\packages.json");
-		input >> localConfig;
+		try {input >> localConfig;} catch (...) {}
 
 		for (auto& entry : localConfig.items()) {
 			std::string filename(modulePath + "\\" + entry.key() + ".zip");
