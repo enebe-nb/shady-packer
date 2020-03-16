@@ -129,17 +129,9 @@ void FileLoaderCallback(SokuData::FileLoaderData& data) {
 
     if (iter != package.end()) {
         auto type = ShadyCore::FileType::get(*iter);
-        if (type.isEncrypted) {
+        if (type.isEncrypted || type == ShadyCore::FileType::TYPE_UNKNOWN) {
             data.inputFormat = DataFormat::RAW;
             setup_entry_reader(data, *iter);
-        } else if (type == ShadyCore::FileType::TYPE_UNKNOWN) {
-            data.inputFormat = DataFormat::RAW;
-            std::istream& input = iter->open();
-            size_t size = iter->getSize();
-            char* buffer = new char[size];
-            input.read(buffer, size);
-            iter->close();
-            setup_buffer_reader(data, buffer, size);
         } else if (type == ShadyCore::FileType::TYPE_IMAGE) {
             data.inputFormat = DataFormat::PNG;
             std::istream& input = iter->open();

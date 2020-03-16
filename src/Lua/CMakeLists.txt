@@ -14,6 +14,7 @@ add_library(shady-lua MODULE
     lualibs/memory.cpp
     lualibs/resource.cpp
     lualibs/soku.cpp
+    ../Loader/reader.cpp
 )
 target_link_libraries(shady-lua zipstatic zlibstatic shlwapi -static ${SOKULIB_LIBRARIES} liblua shady-core)
 set_target_properties(shady-lua PROPERTIES PREFIX "")

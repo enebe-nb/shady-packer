@@ -13,25 +13,27 @@ namespace {
     orig_dealloc_t orig_dealloc = (orig_dealloc_t)0x81f6fa;
 }
 
-static int WINAPI reader_getSize() {
+static int WINAPI entry_reader_getSize() {
     int ecx_value;
     __asm mov ecx_value, ecx
     if (ecx_value == 0) return 0;
 
     reader_data_t *data = (reader_data_t *)(ecx_value + 4);
-    if (data->offset > data->size) data->offset = 0;
+    if (data->data == (void*)data->offset) data->offset = 0;
+    int size = ((entry_pair*)data->data)->first->getSize();
     __asm mov ecx, ecx_value
-    return data->size;
+    return size;
 }
 
-static int WINAPI reader_getRead() {
+static int WINAPI entry_reader_getRead() {
     int ecx_value;
     __asm mov ecx_value, ecx
     if (ecx_value == 0) return 0;
 
     reader_data_t *data = (reader_data_t *)(ecx_value + 4);
+    int read = ((entry_pair*)data->data)->second->gcount();
     __asm mov ecx, ecx_value
-    return data->read;
+    return read;
 }
 
 static int WINAPI entry_reader_destruct(int a) {
@@ -41,7 +43,7 @@ static int WINAPI entry_reader_destruct(int a) {
 
     reader_data_t *data = (reader_data_t *)(ecx_value+4);
     ((entry_pair*)data->data)->first->close();
-    delete (entry_pair*) data->data;
+    //delete (entry_pair*) data->data; // crash?????
     if (a & 1) orig_dealloc(ecx_value);
     __asm mov ecx, ecx_value
     return ecx_value;
@@ -54,10 +56,8 @@ static int WINAPI entry_reader_read(char *dest, int size) {
 
     reader_data_t *data = (reader_data_t *)(ecx_value + 4);
     ((entry_pair*)data->data)->second->read(dest, size);
-    data->read = ((entry_pair*)data->data)->second->gcount();
-    data->offset += data->read;
     __asm mov ecx, ecx_value
-    return data->read > 0;
+    return !((entry_pair*)data->data)->second->eof();
 }
 
 static void WINAPI entry_reader_seek(int offset, int whence) {
@@ -77,58 +77,28 @@ static void WINAPI entry_reader_seek(int offset, int whence) {
         ((entry_pair*)data->data)->second->seekg(-offset, std::ios::end);
         break;
     }
-    data->offset = ((entry_pair*)data->data)->second->tellg();
+    if (((entry_pair*)data->data)->second->fail()) ((entry_pair*)data->data)->second->clear();
     __asm mov ecx, ecx_value
 }
 
-static int WINAPI buffer_reader_destruct(int a) {
+static int WINAPI stream_reader_getSize() {
     int ecx_value;
     __asm mov ecx_value, ecx
-    if (!ecx_value) return 0;
-
-    reader_data_t *data = (reader_data_t *)(ecx_value+4);
-    delete[] (char*)data->data;
-    if (a & 1) orig_dealloc(ecx_value);
-    __asm mov ecx, ecx_value
-    return ecx_value;
-}
-
-static int WINAPI buffer_reader_read(char *dest, int size) {
-    int ecx_value;
-    __asm mov ecx_value, ecx
-    if (!ecx_value) return 0;
+    if (ecx_value == 0) return 0;
 
     reader_data_t *data = (reader_data_t *)(ecx_value + 4);
-    if (data->offset + size <= data->size) data->read = size;
-    else data->read = data->size - data->offset;
-    memcpy(dest, (char*)data->data + data->offset, data->read);
-    data->offset += data->read;
     __asm mov ecx, ecx_value
-    return data->read > 0;
+    return data->size;
 }
 
-static void WINAPI buffer_reader_seek(int offset, int whence) {
+static int WINAPI stream_reader_getRead() {
     int ecx_value;
     __asm mov ecx_value, ecx
-    if (ecx_value == 0) return;
+    if (ecx_value == 0) return 0;
 
     reader_data_t *data = (reader_data_t *)(ecx_value + 4);
-    switch(whence) {
-    case SEEK_SET:
-        if (offset > data->size) data->offset = data->size;
-        else data->offset = offset;
-        break;
-    case SEEK_CUR:
-        if (data->offset + offset > data->size) data->offset = data->size;
-        else if (data->offset + offset < 0) data->offset = 0;
-        else data->offset += offset;
-        break;
-    case SEEK_END:
-        if (offset > data->size) data->offset = 0;
-        else data->offset = data->size - offset;
-        break;
-    }
     __asm mov ecx, ecx_value
+    return data->read;
 }
 
 static int WINAPI stream_reader_destruct(int a) {
@@ -180,37 +150,23 @@ static void WINAPI stream_reader_seek(int offset, int whence) {
 functable entry_reader_table = {
     entry_reader_destruct,
     entry_reader_read,
-    reader_getRead,
+    entry_reader_getRead,
     entry_reader_seek,
-    reader_getSize
-};
-
-functable buffer_reader_table = {
-    buffer_reader_destruct,
-    buffer_reader_read,
-    reader_getRead,
-    buffer_reader_seek,
-    reader_getSize
+    entry_reader_getSize
 };
 
 functable stream_reader_table = {
     stream_reader_destruct,
     stream_reader_read,
-    reader_getRead,
+    stream_reader_getRead,
     stream_reader_seek,
-    reader_getSize
+    stream_reader_getSize
 };
 
 void setup_entry_reader(SokuData::FileLoaderData& data, ShadyCore::BasePackageEntry& entry) {
     data.data = new entry_pair(&entry, &entry.open());
     data.size = entry.getSize();
     data.reader = &entry_reader_table;
-}
-
-void setup_buffer_reader(SokuData::FileLoaderData& data, char* buffer, size_t size) {
-    data.data = buffer;
-    data.size = size;
-    data.reader = &buffer_reader_table;
 }
 
 void setup_stream_reader(SokuData::FileLoaderData& data, std::istream* stream, size_t size) {

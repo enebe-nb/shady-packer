@@ -2,6 +2,7 @@
 #include "../logger.hpp"
 #include "../strconv.hpp"
 #include "../../Core/resource/readerwriter.hpp"
+#include "../../Loader/reader.hpp"
 #include <SokuLib.h>
 #include <LuaBridge/LuaBridge.h>
 #include <LuaBridge/RefCountedPtr.h>
@@ -13,99 +14,11 @@ using namespace luabridge;
 
 namespace {
     std::unordered_map<int, EventID> subscribeMap;
-    typedef void (WINAPI* _orig_dealloc_t)(int);
-	_orig_dealloc_t _orig_dealloc = (_orig_dealloc_t)0x81f6fa;
-    struct _reader_data {
-        std::istream* stream;
-        void* unused;
-        int size;
-        int bytes_read;
-    };
 }
 
 template <int value>
 static inline int* enumMap()
     {static const int valueHolder = value; return (int*)&valueHolder;}
-
-static int WINAPI _reader_destruct(int a) {
-	int ecx_value;
-	__asm mov ecx_value, ecx
-	if (!ecx_value) return 0;
-
-    _reader_data *data = (_reader_data *)(ecx_value+4);
-    delete data->stream;
-    if (a & 1) _orig_dealloc(ecx_value);
-	__asm mov ecx, ecx_value
-	return ecx_value;
-}
-
-static int WINAPI _reader_read(char *dest, int size) {
-	int ecx_value;
-	__asm mov ecx_value, ecx
-	if (!ecx_value) return 0;
-
-	_reader_data *data = (_reader_data *)(ecx_value + 4);
-	data->stream->read(dest, size);
-    data->bytes_read = data->stream->gcount();
-	__asm mov ecx, ecx_value
-	return data->bytes_read > 0;
-}
-
-static void WINAPI _reader_seek(int offset, int whence) {
-	int ecx_value;
-	__asm mov ecx_value, ecx
-	if (ecx_value == 0) return;
-
-	_reader_data *data = (_reader_data *)(ecx_value + 4);
-	switch(whence) {
-	case SEEK_SET:
-		if (offset > data->size) data->stream->seekg(0, std::ios::end);
-		else data->stream->seekg(offset, std::ios::beg);
-		break;
-	case SEEK_CUR:
-		if ((int)data->stream->tellg() + offset > data->size) {
-			data->stream->seekg(0, std::ios::end);
-		} else if ((int)data->stream->tellg() + offset < 0) {
-			data->stream->seekg(0, std::ios::beg);
-		} else data->stream->seekg(offset, std::ios::cur);
-		break;
-	case SEEK_END:
-		if (offset > data->size) data->stream->seekg(0, std::ios::beg);
-		else data->stream->seekg(-offset, std::ios::end);
-		break;
-	}
-	__asm mov ecx, ecx_value
-}
-
-static int WINAPI _reader_getSize() {
-	int ecx_value;
-	__asm mov ecx_value, ecx
-	if (ecx_value == 0) return 0;
-
-	_reader_data *data = (_reader_data *)(ecx_value + 4);
-	__asm mov ecx, ecx_value
-	return data->size;
-}
-
-static int WINAPI _reader_getRead() {
-	int ecx_value;
-	__asm mov ecx_value, ecx
-	if (ecx_value == 0) return 0;
-
-	_reader_data *data = (_reader_data *)(ecx_value + 4);
-	__asm mov ecx, ecx_value
-	return data->bytes_read;
-}
-
-namespace {
-    functable reader_table = {
-        _reader_destruct,
-        _reader_read,
-        _reader_getRead,
-        _reader_seek,
-        _reader_getSize
-    };
-}
 
 static bool soku_Module(const char* name) {
     std::wstring wname(s2ws(name));
@@ -117,6 +30,23 @@ static bool soku_Module(const char* name) {
     } return false;
 }
 
+static int soku_Player_Character(const Soku::CPlayer* player) {
+    return (int)player->CharID();
+}
+
+static void soku_Player_PlaySE(const Soku::CPlayer* player, int id) {
+    const DWORD addr = player->ADDR();
+    __asm mov ecx, addr;
+    reinterpret_cast<void(WINAPI*)(int)>(0x00464980)(id);
+}
+
+static void soku_ReloadSE(int id) {
+    char buffer[] = "data/se/000.wav";
+    sprintf(buffer, "data/se/%03d.wav", id);
+    __asm mov ecx, 0x0089f9f8;
+    reinterpret_cast<void(WINAPI*)(int*, char*)>(0x00401af0)((int*)(0x00899D60 + id*4), buffer);
+}
+
 static int soku_SubscribeRender(lua_State* L) {
     if (lua_gettop(L) < 1 || !lua_isfunction(L, 1)) return luaL_error(L, "Must pass a callback");
     int callback = luaL_ref(L, LUA_REGISTRYINDEX);
@@ -125,7 +55,10 @@ static int soku_SubscribeRender(lua_State* L) {
         lua_pushinteger(L, (int)data.scene);
         lua_pushinteger(L, (int)data.mode);
         lua_pushinteger(L, (int)data.menu);
-        lua_pcall(L, 3, 0, 0);
+        if (lua_pcall(L, 3, 0, 0)) {
+            Logger::Error(lua_tostring(L, -1));
+            lua_pop(L, 1);
+        }
     });
     lua_pushnumber(L, callback);
     return 1;
@@ -139,7 +72,10 @@ static int soku_SubscribeWindowProc(lua_State* L) {
         lua_pushinteger(L, data.uMsg);
         lua_pushinteger(L, data.wParam);
         lua_pushinteger(L, data.lParam);
-        lua_pcall(L, 3, 0, 0);
+        if (lua_pcall(L, 3, 0, 0)) {
+            Logger::Error(lua_tostring(L, -1));
+            lua_pop(L, 1);
+        }
     });
     lua_pushnumber(L, callback);
     return 1;
@@ -152,7 +88,10 @@ static int soku_SubscribeKeyboard(lua_State* L) {
         lua_rawgeti(L, LUA_REGISTRYINDEX, callback);
         lua_pushinteger(L, data.key);
         lua_pushinteger(L, data.lParam);
-        lua_pcall(L, 2, 0, 0);
+        if (lua_pcall(L, 2, 0, 0)) {
+            Logger::Error(lua_tostring(L, -1));
+            lua_pop(L, 1);
+        }
     });
     lua_pushnumber(L, callback);
     return 1;
@@ -164,7 +103,10 @@ static int soku_SubscribeBattleEvent(lua_State* L) {
     subscribeMap[callback] = Soku::SubscribeEvent(SokuEvent::BattleEvent, [L, callback](SokuData::BattleEventData& data) {
         lua_rawgeti(L, LUA_REGISTRYINDEX, callback);
         lua_pushinteger(L, (int)data.event);
-        lua_pcall(L, 1, 0, 0);
+        if (lua_pcall(L, 1, 0, 0)) {
+            Logger::Error(lua_tostring(L, -1));
+            lua_pop(L, 1);
+        }
     });
     lua_pushnumber(L, callback);
     return 1;
@@ -176,9 +118,11 @@ static int soku_SubscribeGameEvent(lua_State* L) {
     subscribeMap[callback] = Soku::SubscribeEvent(SokuEvent::GameEvent, [L, callback](SokuData::GameEventData& data) {
         lua_rawgeti(L, LUA_REGISTRYINDEX, callback);
         lua_pushinteger(L, (int)data.event);
-        // TODO
-        //lua_pushinteger(L, (int)data.ptr);
-        lua_pcall(L, 1, 0, 0);
+        lua_pushinteger(L, (int)data.ptr);
+        if (lua_pcall(L, 2, 0, 0)) {
+            Logger::Error(lua_tostring(L, -1));
+            lua_pop(L, 1);
+        }
     });
     lua_pushnumber(L, callback);
     return 1;
@@ -190,9 +134,11 @@ static int soku_SubscribeStageSelect(lua_State* L) {
     subscribeMap[callback] = Soku::SubscribeEvent(SokuEvent::StageSelect, [L, callback](SokuData::StageData& data) {
         lua_rawgeti(L, LUA_REGISTRYINDEX, callback);
         lua_pushinteger(L, (int)data.stage);
-        lua_pcall(L, 1, 1, 0);
-        if (lua_isnumber(L, -1)) data.stage = (Stage)lua_tointeger(L, -1);
-        lua_pop(L, 1);
+        if (lua_pcall(L, 1, 1, 0)) {
+            Logger::Error(lua_tostring(L, -1));
+        } else {
+            if (lua_isnumber(L, -1)) data.stage = (Stage)lua_tointeger(L, -1);
+        } lua_pop(L, 1);
     });
     lua_pushnumber(L, callback);
     return 1;
@@ -204,8 +150,11 @@ static int soku_SubscribeFileLoader(lua_State* L) {
     subscribeMap[callback] = Soku::SubscribeEvent(SokuEvent::FileLoader, [L, callback](SokuData::FileLoaderData& data) {
         lua_rawgeti(L, LUA_REGISTRYINDEX, callback);
         lua_pushstring(L, data.fileName);
-        lua_pcall(L, 1, 2, 0);
-        switch (lua_type(L, 1)) {
+        if (lua_pcall(L, 1, 2, 0)) {
+            Logger::Error(lua_tostring(L, -1));
+            lua_pop(L, 1);
+            return;
+        } switch (lua_type(L, 1)) {
             case LUA_TSTRING: {
                 const char* format = lua_tostring(L, 2);
                 if (format && strcmp(format, "png") == 0)
@@ -220,10 +169,8 @@ static int soku_SubscribeFileLoader(lua_State* L) {
                 std::stringstream* buffer = new std::stringstream();
                 ShadyCore::Resource* resource = Stack<ShadyCore::Resource*>::get(L, 1);
                 ShadyCore::writeResource(resource, *buffer, true);
-                data.size = buffer->tellp();
                 data.inputFormat = DataFormat::RAW;
-                data.data = buffer;
-                data.reader = &reader_table;
+                setup_stream_reader(data, buffer, buffer->tellp());
             } break;
         }
         lua_pop(L, 2);
@@ -238,7 +185,10 @@ static int soku_SubscribeInput(lua_State* L) {
     subscribeMap[callback] = Soku::SubscribeEvent(SokuEvent::Input, [L, callback](SokuData::InputData& data) {
         lua_rawgeti(L, LUA_REGISTRYINDEX, callback);
         // TODO
-        lua_pcall(L, 0, 0, 0);
+        if (lua_pcall(L, 0, 0, 0)) {
+            Logger::Error(lua_tostring(L, -1));
+            lua_pop(L, 1);
+        }
     });
     lua_pushnumber(L, callback);
     return 1;
@@ -288,6 +238,30 @@ void ShadyLua::LualibSoku(lua_State* L) {
                 .addVariable("GameEnd", enumMap<(int)BattleEvent::GameEnd>(), false)
                 .addVariable("EndScreen", enumMap<(int)BattleEvent::EndScreen>(), false)
                 .addVariable("ResultScreen", enumMap<(int)BattleEvent::ResultScreen>(), false)
+            .endNamespace()
+            .beginNamespace("Character")
+                .addVariable("Reimu", enumMap<(int)Character::Reimu>(), false)
+                .addVariable("Marisa", enumMap<(int)Character::Marisa>(), false)
+                .addVariable("Sakuya", enumMap<(int)Character::Sakuya>(), false)
+                .addVariable("Alice", enumMap<(int)Character::Alice>(), false)
+                .addVariable("Patchouli", enumMap<(int)Character::Patchouli>(), false)
+                .addVariable("Youmu", enumMap<(int)Character::Youmu>(), false)
+                .addVariable("Remilia", enumMap<(int)Character::Remilia>(), false)
+                .addVariable("Yuyuko", enumMap<(int)Character::Yuyuko>(), false)
+                .addVariable("Yukari", enumMap<(int)Character::Yukari>(), false)
+                .addVariable("Suika", enumMap<(int)Character::Suika>(), false)
+                .addVariable("Reisen", enumMap<(int)Character::Reisen>(), false)
+                .addVariable("Aya", enumMap<(int)Character::Aya>(), false)
+                .addVariable("Komachi", enumMap<(int)Character::Komachi>(), false)
+                .addVariable("Iku", enumMap<(int)Character::Iku>(), false)
+                .addVariable("Tenshi", enumMap<(int)Character::Tenshi>(), false)
+                .addVariable("Sanae", enumMap<(int)Character::Sanae>(), false)
+                .addVariable("Cirno", enumMap<(int)Character::Cirno>(), false)
+                .addVariable("Meiling", enumMap<(int)Character::Meiling>(), false)
+                .addVariable("Utsuho", enumMap<(int)Character::Utsuho>(), false)
+                .addVariable("Suwako", enumMap<(int)Character::Suwako>(), false)
+                .addVariable("Random", enumMap<(int)Character::Random>(), false)
+                .addVariable("Namazu", enumMap<(int)Character::Namazu>(), false)
             .endNamespace()
             .beginNamespace("GameEvent")
                 .addVariable("ServerSetup", enumMap<(int)GameEvent::SERVER_SETUP>(), false)
@@ -377,7 +351,15 @@ void ShadyLua::LualibSoku(lua_State* L) {
                 .addVariable("CatwalkInGeyser", enumMap<(int)Stage::CatwalkInGeyser>(), false)
                 .addVariable("FusionReactorCore", enumMap<(int)Stage::FusionReactorCore>(), false)
             .endNamespace()
+            .beginClass<Soku::CPlayer>("Player")
+                .addProperty("Character", soku_Player_Character)
+                .addFunction("PlaySE", soku_Player_PlaySE)
+            .endClass()
+            .addVariable("P1", &Soku::P1)
+            .addVariable("P2", &Soku::P2)
             .addFunction("Module", soku_Module)
+            .addFunction("PlaySE", Soku::PlaySE)
+            .addFunction("ReloadSE", soku_ReloadSE)
             .addCFunction("SubscribeEvent", soku_SubscribeEvent)
             .addCFunction("SubscribeRender", soku_SubscribeRender)
             .addCFunction("SubscribeWindowProc", soku_SubscribeWindowProc)

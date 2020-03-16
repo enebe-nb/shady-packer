@@ -280,7 +280,7 @@ static void RenderCallback(SokuData::RenderData* data) {
 		ImGui::SetNextWindowPos(ImVec2(0, 480 - size.y));
 		ImGui::SetNextWindowSize(size);
 		ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.f);
-		ImGui::Begin("", 0, ImVec2(), .6f, ImGuiWindowFlags_NoDecoration);
+		ImGui::Begin("", 0, ImGuiWindowFlags_NoDecoration);
 		ImGui::Text(helpInfo.c_str());
 		ImGui::End();
 	}
