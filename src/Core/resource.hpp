@@ -418,7 +418,7 @@ namespace ShadyCore {
 		inline const char* getImageName() const { return imageName; }
         void setImageName(const char* value);
 
-        inline Animation& asAnimation() { if (type == FRAME_ANIMATION) return *(Animation*)impl; throw; }
+        inline Animation& asAnimation() { return *(Animation*)impl; }
         inline Move& asMove() { if (type == FRAME_MOVE) return *(Move*)impl; throw; }
 	};
 
@@ -522,7 +522,7 @@ namespace ShadyCore {
 		inline const Type& getType() const { return type; }
 
         inline Clone& asClone() { if (type == SEQUENCE_CLONE) return *(Clone*)impl; throw; }
-        inline Animation& asAnimation() { if (type == SEQUENCE_ANIMATION) return *(Animation*)impl; throw; }
+        inline Animation& asAnimation() { if (type == SEQUENCE_ANIMATION || type == SEQUENCE_MOVE) return *(Animation*)impl; throw; }
         inline Move& asMove() { if (type == SEQUENCE_MOVE) return *(Move*)impl; throw; }
 	};
 
@@ -563,6 +563,7 @@ namespace ShadyCore {
 
         inline const uint32_t& getIndex() const { return index; }
         inline const uint8_t& getLoop() const { return loop; }
+		inline void setIndex(const uint32_t value) { index = value; }
         inline void setLoop(const uint8_t value) { loop = value; }
 		inline const uint32_t getFrameCount() const { return frames.size(); }
 		inline const Frame& getFrame(int i) const { return *frames[i]; }

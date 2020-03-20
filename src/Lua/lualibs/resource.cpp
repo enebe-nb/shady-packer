@@ -6,6 +6,7 @@
 #include <LuaBridge/RefCountedPtr.h>
 #include <unordered_map>
 #include <sstream>
+#include <fstream>
 
 using namespace luabridge;
 extern std::unordered_map<lua_State*, ShadyLua::LuaScript*> scriptMap;
@@ -14,6 +15,8 @@ namespace {
     struct StringInputBuf : public std::streambuf {
         StringInputBuf(std::string& s) {setg((char*)s.data(), (char*)s.data(), (char*)(s.data() + s.size()));}
     };
+    template <int value> static inline int* enumMap()
+        {static const int valueHolder = value; return (int*)&valueHolder;}
 }
 
 /** Creates a resource from a file in script space */
@@ -29,6 +32,12 @@ static RefCountedPtr<ShadyCore::Resource> resource_createfromfile(const char* fi
 
     const ShadyCore::FileType& type = ShadyCore::FileType::get(filename, data);
     return ShadyCore::readResource(type, data);
+}
+
+/** Saves a resource into filesystem */
+static void resource_export(RefCountedPtr<ShadyCore::Resource> resource, const char* filename, bool encripted, lua_State* L) {
+    std::fstream out(filename, std::ios::out|std::ios::binary);
+    ShadyCore::writeResource(resource.get(), out, encripted);
 }
 
 static int resource_Text_getData(lua_State* L) {
@@ -110,6 +119,7 @@ void ShadyLua::LualibResource(lua_State* L) {
     getGlobalNamespace(L)
         .beginNamespace("resource")
             .addFunction("createfromfile", resource_createfromfile)
+            .addFunction("export", resource_export)
             .beginClass<ShadyCore::Resource>("Resource").endClass()
             .deriveClass<ShadyCore::TextResource, ShadyCore::Resource>("Text")
                 .addConstructor<void(*)(), RefCountedPtr<ShadyCore::TextResource>>()

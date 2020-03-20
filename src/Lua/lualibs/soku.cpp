@@ -14,11 +14,9 @@ using namespace luabridge;
 
 namespace {
     std::unordered_map<int, EventID> subscribeMap;
+    template <int value> static inline int* enumMap()
+        {static const int valueHolder = value; return (int*)&valueHolder;}
 }
-
-template <int value>
-static inline int* enumMap()
-    {static const int valueHolder = value; return (int*)&valueHolder;}
 
 static bool soku_Module(const char* name) {
     std::wstring wname(s2ws(name));
@@ -167,8 +165,8 @@ static int soku_SubscribeFileLoader(lua_State* L) {
             } break;
             case LUA_TUSERDATA: {
                 std::stringstream* buffer = new std::stringstream();
-                ShadyCore::Resource* resource = Stack<ShadyCore::Resource*>::get(L, 1);
-                ShadyCore::writeResource(resource, *buffer, true);
+                RefCountedPtr<ShadyCore::Resource> resource = Stack<ShadyCore::Resource*>::get(L, 1);
+                ShadyCore::writeResource(resource.get(), *buffer, true);
                 data.inputFormat = DataFormat::RAW;
                 setup_stream_reader(data, buffer, buffer->tellp());
             } break;
