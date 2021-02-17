@@ -1,7 +1,7 @@
 #include "dataentry.hpp"
 #include "package.hpp"
 #include <fstream>
-#include <boost/filesystem.hpp>
+#include <filesystem>
 #include <cmath>
 #include <cstring>
 
@@ -226,7 +226,7 @@ void ShadyCore::Package::saveData(std::ostream& output, Callback* callback, void
 		headerOutput.write((char*)&curOffset, 4);
 		headerOutput.write((char*)&entry.second->getSize(), 4);
 		headerOutput.put(len);
-		headerOutput.write(boost::filesystem::path(entry.first).generic_string().c_str(), len);
+		headerOutput.write(std::filesystem::path(entry.first).generic_string().c_str(), len);
 
 		curOffset += entry.second->getSize();
 	} delete headerOutput.rdbuf();

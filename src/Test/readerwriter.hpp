@@ -1,7 +1,7 @@
 #include "../Core/package.hpp"
 #include "../Core/resource/readerwriter.hpp"
 #include "util.hpp"
-#include <boost/filesystem.hpp>
+#include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <cinttypes>
@@ -52,8 +52,8 @@ void ReaderWriterSuite::testConvertion() {
 
 void ReaderWriterSuite::testPackageRead() {
 	for (auto data : dataArray) {
-		boost::filesystem::path zipFile = boost::filesystem::temp_directory_path() / boost::filesystem::unique_path();
-		boost::filesystem::path dataFile = boost::filesystem::temp_directory_path() / boost::filesystem::unique_path();
+		std::filesystem::path zipFile = std::filesystem::temp_directory_path() / std::tmpnam(nullptr);
+		std::filesystem::path dataFile = std::filesystem::temp_directory_path() / std::tmpnam(nullptr);
 		ShadyCore::Package package;
 		package.appendFile(data[0], data[0]);
 		package.appendFile(data[1], data[1]);
@@ -86,7 +86,7 @@ void ReaderWriterSuite::testPackageRead() {
 			package.clear();
 		}
 
-		boost::filesystem::remove(zipFile);
-		boost::filesystem::remove(dataFile);
+		std::filesystem::remove(zipFile);
+		std::filesystem::remove(dataFile);
 	}
 }

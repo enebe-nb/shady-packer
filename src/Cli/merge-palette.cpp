@@ -1,5 +1,6 @@
 #include "command.hpp"
 #include <png.h>
+#include <fstream>
 
 static void pngRead(png_structp pngData, png_bytep buffer, png_size_t length) {
 	std::istream* input = (std::istream*) png_get_io_ptr(pngData);
@@ -46,8 +47,8 @@ static inline bool transformImage(uint8_t** rows, const uint8_t* palette, uint32
     return true;
 }
 
-void ShadyCli::MergeCommand::processPalette(ShadyCore::Palette* palette, boost::filesystem::path filename) {
-    if (!boost::filesystem::is_regular_file(filename)) return; // ignore
+void ShadyCli::MergeCommand::processPalette(ShadyCore::Palette* palette, std::filesystem::path filename) {
+    if (!std::filesystem::is_regular_file(filename)) return; // ignore
     if (filename.extension() != ".png") return; // ignore
 
     std::fstream file(filename.string(), std::ios::in | std::ios::out | std::ios::binary);

@@ -1,6 +1,7 @@
 #include "command.hpp"
 #include "../Core/resource/readerwriter.hpp"
 #include <math.h>
+#include <fstream>
 
 namespace {
     typedef void (*funcPtr) (ShadyCore::Image*, uint8_t* source);
@@ -76,8 +77,8 @@ namespace {
     }
 }
 
-void ShadyCli::ScaleCommand::process(boost::filesystem::path filename, boost::filesystem::path targetPath) {
-    if (!boost::filesystem::is_regular_file(filename)) return; // ignore
+void ShadyCli::ScaleCommand::process(std::filesystem::path filename, std::filesystem::path targetPath) {
+    if (!std::filesystem::is_regular_file(filename)) return; // ignore
     
     std::ifstream input(filename.string(), std::fstream::binary);
     const ShadyCore::FileType& type = ShadyCore::FileType::get(filename.generic_string().c_str(), input);
@@ -90,8 +91,8 @@ void ShadyCli::ScaleCommand::process(boost::filesystem::path filename, boost::fi
             scalingAlgorithm(image, imageData);
             delete[] imageData;
 
-	        boost::filesystem::path targetName = targetPath / prefix; targetName += filename.filename();
-            boost::filesystem::create_directories(targetPath);
+	        std::filesystem::path targetName = targetPath / prefix; targetName += filename.filename();
+            std::filesystem::create_directories(targetPath);
 	        std::ofstream output(targetName.string(), std::fstream::binary);
             ShadyCore::writeResource(image, output, type.isEncrypted);
         } delete image;
@@ -99,8 +100,8 @@ void ShadyCli::ScaleCommand::process(boost::filesystem::path filename, boost::fi
         ShadyCore::Pattern* pattern = (ShadyCore::Pattern*)ShadyCore::readResource(type, input);
         process(pattern);
 
-        boost::filesystem::path targetName = targetPath / filename.filename();
-        boost::filesystem::create_directories(targetPath);
+        std::filesystem::path targetName = targetPath / filename.filename();
+        std::filesystem::create_directories(targetPath);
         std::ofstream output(targetName.string(), std::fstream::binary);
         ShadyCore::writeResource(pattern, output, type.isEncrypted);
         delete pattern;
@@ -128,7 +129,7 @@ void ShadyCli::ScaleCommand::process(ShadyCore::Pattern* pattern) {
 
 void ShadyCli::ScaleCommand::buildOptions(cxxopts::Options& options) {
 	options.add_options()
-		("o,output", "Target directory to save", cxxopts::value<std::string>()->default_value(boost::filesystem::current_path().string()))
+		("o,output", "Target directory to save", cxxopts::value<std::string>()->default_value(std::filesystem::current_path().string()))
 		("p,prefix", "Prefix to append to image filenames", cxxopts::value<std::string>()->default_value("scaled-"))
 		("a,algorithm", "Scaling algorithm to apply to the images. Available options: nearest, epx or eagle.", cxxopts::value<std::string>()->default_value("nearest"))
 		("files", "Source directories or files", cxxopts::value<std::vector<std::string> >())
@@ -140,7 +141,7 @@ void ShadyCli::ScaleCommand::buildOptions(cxxopts::Options& options) {
 
 void ShadyCli::ScaleCommand::run(const cxxopts::Options& options) {
     auto& files = options["files"].as<std::vector<std::string> >();
-	boost::filesystem::path outputPath(options["output"].as<std::string>());
+	std::filesystem::path outputPath(options["output"].as<std::string>());
     prefix = options["prefix"].as<std::string>();
     
     scalingAlgorithm = getScalingAlgorithm(options["algorithm"].as<std::string>());
@@ -151,14 +152,14 @@ void ShadyCli::ScaleCommand::run(const cxxopts::Options& options) {
 
 	size_t size = files.size();
 	for (size_t i = 0; i < size; ++i) {
-		boost::filesystem::path path(files[i]);
-		if (boost::filesystem::is_directory(path)) {
-            for (boost::filesystem::recursive_directory_iterator iter(path), end; iter != end; ++iter) {
-                if (!boost::filesystem::is_directory(iter->path())) {
-                    process(iter->path(), outputPath / boost::filesystem::relative(iter->path().parent_path(), path));
+		std::filesystem::path path(files[i]);
+		if (std::filesystem::is_directory(path)) {
+            for (std::filesystem::recursive_directory_iterator iter(path), end; iter != end; ++iter) {
+                if (!std::filesystem::is_directory(iter->path())) {
+                    process(iter->path(), outputPath / std::filesystem::relative(iter->path().parent_path(), path));
                 }
             }
-		} else if (boost::filesystem::exists(path)) {
+		} else if (std::filesystem::exists(path)) {
 			process(path, outputPath);
 		}
 	}

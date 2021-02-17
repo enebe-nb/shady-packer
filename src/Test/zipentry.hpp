@@ -1,6 +1,8 @@
 #include "../Core/zipentry.hpp"
 #include "../Core/package.hpp"
 #include "util.hpp"
+#include <filesystem>
+#include <fstream>
 
 class ZipEntrySuite : public CxxTest::TestSuite {
 public:
@@ -26,7 +28,7 @@ const char* ZipEntrySuite::dataArray[] = {
 };
 
 void ZipEntrySuite::testStreamRead() {
-	ShadyCore::ZipPackageEntry entry("test-data/zip-package.dat", "data_my-text.cv0", 12);
+	ShadyCore::ZipPackageEntry entry(0, "test-data/zip-package.dat", "data_my-text.cv0", 12);
 	std::istream& stream = entry.open();
 	char buffer[5];
 
@@ -54,7 +56,7 @@ void ZipEntrySuite::testStreamRead() {
 }
 
 void ZipEntrySuite::testStreamSeek() {
-	ShadyCore::ZipPackageEntry entry("test-data/zip-package.dat", "data_my-text.cv0", 12);
+	ShadyCore::ZipPackageEntry entry(0, "test-data/zip-package.dat", "data_my-text.cv0", 12);
 	std::istream& stream = entry.open();
 	char buffer[5];
 
@@ -99,8 +101,8 @@ void ZipEntrySuite::testPackageRead() {
 
 	for (const char* data : dataArray) {
 		std::istream& input = package.findFile(data)->open();
-		boost::filesystem::path fileName("test-data/zip-extracted"); fileName /= data;
-		boost::filesystem::ifstream expected(fileName, std::ios::binary);
+		std::filesystem::path fileName("test-data/zip-extracted"); fileName /= data;
+		std::ifstream expected(fileName, std::ios::binary);
 
 		TS_ASSERT_STREAM(input, expected);
 
@@ -110,7 +112,7 @@ void ZipEntrySuite::testPackageRead() {
 }
 
 void ZipEntrySuite::testPackageWrite() {
-	boost::filesystem::path tempFile = boost::filesystem::temp_directory_path() / boost::filesystem::unique_path();
+	std::filesystem::path tempFile = std::filesystem::temp_directory_path() / std::tmpnam(nullptr);
 	ShadyCore::Package package;
 	package.appendPackage("test-data/zip-extracted");
 	package.save(tempFile.string().c_str(), ShadyCore::Package::ZIP_MODE, 0, 0);
@@ -131,5 +133,5 @@ void ZipEntrySuite::testPackageWrite() {
 		expectedPackage.findFile(entry.getName())->close();
 	}
 
-	boost::filesystem::remove(tempFile);
+	std::filesystem::remove(tempFile);
 }

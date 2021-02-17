@@ -1,6 +1,9 @@
 cmake_minimum_required(VERSION 2.6)
 project(shady-packer)
 
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
 set(ENABLE_CLI TRUE CACHE BOOL "Enable command-line building")
 set(ENABLE_GUI TRUE CACHE BOOL "Enable gui building")
 set(ENABLE_TEST FALSE CACHE BOOL "Enable test building")

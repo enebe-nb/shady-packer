@@ -1,7 +1,8 @@
 #include "../Core/package.hpp"
 #include "../Core/resource/readerwriter.hpp"
 #include "util.hpp"
-#include <boost/filesystem.hpp>
+#include <filesystem>
+#include <fstream>
  
 class PackageSuite : public CxxTest::TestSuite {
 public:
@@ -14,7 +15,7 @@ public:
 void PackageSuite::testStreamEntry() {
 	ShadyCore::Package package;
 	std::stringstream entryBase("Hello World!");
-	ShadyCore::StreamPackageEntry entry(entryBase, "stream-entry", 12);
+	ShadyCore::StreamPackageEntry entry(0, entryBase, "stream-entry", 12);
 	char buffer[15];
 
 	TS_ASSERT_EQUALS(entry.open().read(buffer, 15).gcount(), 12);
@@ -131,12 +132,12 @@ void FilterSuite::testDecrypt() {
 	package.appendPackage("test-data/encrypted");
 	ShadyCore::PackageFilter::apply(package, ShadyCore::PackageFilter::FILTER_DECRYPT_ALL);
 
-	for (boost::filesystem::recursive_directory_iterator iter("test-data/decrypted"), e; iter != e; ++iter) {
-		boost::filesystem::path fileName = boost::filesystem::relative(iter->path(), "test-data/decrypted").generic();
+	for (std::filesystem::recursive_directory_iterator iter("test-data/decrypted"), e; iter != e; ++iter) {
+		std::filesystem::path fileName = std::filesystem::relative(iter->path(), "test-data/decrypted").generic_string();
 
-		if (boost::filesystem::is_regular_file(fileName)) {
+		if (std::filesystem::is_regular_file(fileName)) {
 			std::istream& input = package.findFile(fileName.string().c_str())->open();
-			boost::filesystem::ifstream output(iter->path(), std::ios::binary);
+			std::ifstream output(iter->path(), std::ios::binary);
 
 			TS_ASSERT_STREAM(input, output);
 
@@ -151,12 +152,12 @@ void FilterSuite::testEncrypt() {
 	package.appendPackage("test-data/decrypted");
 	ShadyCore::PackageFilter::apply(package, ShadyCore::PackageFilter::FILTER_ENCRYPT_ALL);
 
-	for (boost::filesystem::recursive_directory_iterator iter("test-data/encrypted"), e; iter != e; ++iter) {
-		boost::filesystem::path fileName = boost::filesystem::relative(iter->path(), "test-data/encrypted").generic();
+	for (std::filesystem::recursive_directory_iterator iter("test-data/encrypted"), e; iter != e; ++iter) {
+		std::filesystem::path fileName = std::filesystem::relative(iter->path(), "test-data/encrypted").generic_string();
 
-		if (boost::filesystem::is_regular_file(fileName)) {
+		if (std::filesystem::is_regular_file(fileName)) {
 			std::istream& input = package.findFile(fileName.string().c_str())->open();
-			boost::filesystem::ifstream output(iter->path(), std::ios::binary);
+			std::ifstream output(iter->path(), std::ios::binary);
 
 			TS_ASSERT_STREAM(input, output);
 

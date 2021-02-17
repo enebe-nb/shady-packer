@@ -2,7 +2,7 @@
 #include "resource/readerwriter.hpp"
 
 #include <fstream>
-#include <boost/filesystem.hpp>
+#include <filesystem>
 
 ShadyCore::Package::~Package() {
 	for (auto entry : entries) {
@@ -24,11 +24,11 @@ bool ShadyCore::Package::addOrReplace(BasePackageEntry* entry) {
 }
 
 int ShadyCore::Package::appendPackage(const char* filename) {
-    if (boost::filesystem::is_directory(filename)) {
+    if (std::filesystem::is_directory(filename)) {
         return appendDirPackage(filename);
     }
 
-    if (!boost::filesystem::is_regular_file(filename)) throw; // TODO better error handling
+    if (!std::filesystem::is_regular_file(filename)) throw; // TODO better error handling
 	char magicWord[6];
 
     std::ifstream input(filename, std::ios::binary);
@@ -62,18 +62,18 @@ ShadyCore::Package::iterator ShadyCore::Package::renameFile(iterator iter, const
 void ShadyCore::Package::save(const char* filename, Mode mode, Callback* callback, void* userData) {
 	if (mode == DIR_MODE) return saveDirectory(filename, callback, userData);
 
-	boost::filesystem::path target = boost::filesystem::absolute(filename);
-	if (!boost::filesystem::exists(target.parent_path()))
-		boost::filesystem::create_directories(target.parent_path());
+	std::filesystem::path target = std::filesystem::absolute(filename);
+	if (!std::filesystem::exists(target.parent_path()))
+		std::filesystem::create_directories(target.parent_path());
 
-    boost::filesystem::path tempFile = boost::filesystem::temp_directory_path() / boost::filesystem::unique_path();
+    std::filesystem::path tempFile = std::filesystem::temp_directory_path() / std::tmpnam(nullptr);
 	std::ofstream output(tempFile.string(), std::ios::binary);
 	if (mode == DATA_MODE) saveData(output, callback, userData);
     if (mode == ZIP_MODE) saveZip(output, callback, userData);
 	output.close();
 
-    boost::filesystem::copy_file(tempFile, target, boost::filesystem::copy_option::overwrite_if_exists);
-    boost::filesystem::remove(tempFile);
+    std::filesystem::copy_file(tempFile, target, std::filesystem::copy_options::overwrite_existing);
+    std::filesystem::remove(tempFile);
 }
 
 void ShadyCore::Package::clear() {

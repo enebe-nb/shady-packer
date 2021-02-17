@@ -75,8 +75,8 @@ void ShadyCli::PackCommand::run(const cxxopts::Options& options) {
 
 	size_t size = files.size();
 	for (size_t i = 0; i < size; ++i) {
-		boost::filesystem::path path(files[i]);
-		if (boost::filesystem::exists(path)) {
+		std::filesystem::path path(files[i]);
+		if (std::filesystem::exists(path)) {
 			package.appendPackage(path.string().c_str());
 		}
 	}

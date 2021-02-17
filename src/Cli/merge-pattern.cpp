@@ -323,8 +323,8 @@ static void processSequence(XmlReaderData* data, ShadyCore::Pattern* pattern) {
     }
 }
 
-void ShadyCli::MergeCommand::processPattern(ShadyCore::Pattern* pattern, boost::filesystem::path filename) {
-    if (!boost::filesystem::is_regular_file(filename)) return; // ignore
+void ShadyCli::MergeCommand::processPattern(ShadyCore::Pattern* pattern, std::filesystem::path filename) {
+    if (!std::filesystem::is_regular_file(filename)) return; // ignore
     if (filename.extension() != ".xml") return; // ignore
 
     std::ifstream input(filename.string(), std::ios::in | std::ios::binary);

@@ -1,5 +1,6 @@
 #include "command.hpp"
 #include "../Core/resource/readerwriter.hpp"
+#include <fstream>
 
 void ShadyCli::MergeCommand::buildOptions(cxxopts::Options& options) {
 	options.add_options()
@@ -13,7 +14,7 @@ void ShadyCli::MergeCommand::buildOptions(cxxopts::Options& options) {
 }
 
 static inline ShadyCore::Palette* getPalette(std::string filename) {
-    if (!boost::filesystem::is_regular_file(filename)) {
+    if (!std::filesystem::is_regular_file(filename)) {
         printf("File \"%s\" is not readable.\n", filename.c_str());
         return 0;
     }
@@ -29,7 +30,7 @@ static inline ShadyCore::Palette* getPalette(std::string filename) {
 }
 
 static inline ShadyCore::Pattern* getPattern(std::string filename) {
-    if (!boost::filesystem::is_regular_file(filename)) {
+    if (!std::filesystem::is_regular_file(filename)) {
         printf("File \"%s\" is not readable.\n", filename.c_str());
         return 0;
     }
@@ -67,15 +68,15 @@ void ShadyCli::MergeCommand::run(const cxxopts::Options& options) {
 
 	size_t size = files.size();
 	for (size_t i = 0; i < size; ++i) {
-		boost::filesystem::path path(files[i]);
-		if (boost::filesystem::is_directory(path)) {
-            for (boost::filesystem::recursive_directory_iterator iter(path), end; iter != end; ++iter) {
-                if (!boost::filesystem::is_directory(iter->path())) {
+		std::filesystem::path path(files[i]);
+		if (std::filesystem::is_directory(path)) {
+            for (std::filesystem::recursive_directory_iterator iter(path), end; iter != end; ++iter) {
+                if (!std::filesystem::is_directory(iter->path())) {
                     if (palette) processPalette(palette, iter->path());
                     if (pattern) processPattern(pattern, iter->path());
                 }
             }
-		} else if (boost::filesystem::exists(path)) {
+		} else if (std::filesystem::exists(path)) {
 			if (palette) processPalette(palette, path);
             if (pattern) processPattern(pattern, path);
 		}

@@ -1,13 +1,14 @@
 #include "package.hpp"
 
-#include <boost/filesystem.hpp>
+#include <filesystem>
+#include <fstream>
 
 static bool FilterFromZipTextFileExtension(ShadyCore::PackageFilter& filter, ShadyCore::BasePackageEntry& entry) {
 	if (entry.getType() != ShadyCore::BasePackageEntry::TYPE_ZIP) return false;
 	const ShadyCore::FileType& type = ShadyCore::FileType::get(entry);
 
 	if (type.isEncrypted && type == ShadyCore::FileType::TYPE_TEXT) {
-		boost::filesystem::path path(entry.getName());
+		std::filesystem::path path(entry.getName());
 		path.replace_extension(type.inverseExt);
 		return filter.renameEntry(path.generic_string().c_str());
 	} return false;
@@ -17,7 +18,7 @@ static bool FilterToZipTextFileExtension(ShadyCore::PackageFilter& filter, Shady
 	const ShadyCore::FileType& type = ShadyCore::FileType::get(entry);
 
 	if (!type.isEncrypted && type == ShadyCore::FileType::TYPE_TEXT) {
-		boost::filesystem::path path(entry.getName());
+		std::filesystem::path path(entry.getName());
 		path.replace_extension(type.inverseExt);
 		return filter.renameEntry(path.generic_string().c_str());
 	} return false;
@@ -424,12 +425,12 @@ bool ShadyCore::PackageFilter::renameEntry(const char* name) {
 }
 
 bool ShadyCore::PackageFilter::convertEntry(const FileType& type) {
-	boost::filesystem::path tempFile = boost::filesystem::temp_directory_path() / boost::filesystem::unique_path();
+	std::filesystem::path tempFile = std::filesystem::temp_directory_path() / std::tmpnam(nullptr);
 	std::ofstream output(tempFile.string().c_str(), std::ios::binary);
 	ShadyCore::convertResource(type, iter->open(), output);
 	output.close(); iter->close();
 
-	boost::filesystem::path path(iter->getName());
+	std::filesystem::path path(iter->getName());
 	path.replace_extension(type.inverseExt);
 	package.appendFile(path.generic_string().c_str(), tempFile.string().c_str(), iter->getId());
 
@@ -438,7 +439,7 @@ bool ShadyCore::PackageFilter::convertEntry(const FileType& type) {
 }
 
 bool ShadyCore::PackageFilter::convertData(const FileType& type) {
-	boost::filesystem::path tempFile = boost::filesystem::temp_directory_path() / boost::filesystem::unique_path();
+	std::filesystem::path tempFile = std::filesystem::temp_directory_path() / std::tmpnam(nullptr);
 	std::ofstream output(tempFile.string().c_str(), std::ios::binary);
 	ShadyCore::convertResource(type, iter->open(), output);
 	output.close(); iter->close();

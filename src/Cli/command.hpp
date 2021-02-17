@@ -1,6 +1,6 @@
 #pragma once
 #include "../Core/resource.hpp"
-#include <boost/filesystem.hpp>
+#include <filesystem>
 #include <cxxopts.hpp>
 
 namespace ShadyCli {
@@ -18,7 +18,7 @@ namespace ShadyCli {
 
 	class ConvertCommand : public Command {
 	private:
-        void processFile(boost::filesystem::path, boost::filesystem::path, bool);
+        void processFile(std::filesystem::path, std::filesystem::path, bool);
 	public:
 		inline ConvertCommand() : Command("convert", "Converts game files into their encrypted/decrypted counterpart.") {}
         void buildOptions(cxxopts::Options&) override;
@@ -27,8 +27,8 @@ namespace ShadyCli {
 
 	class MergeCommand : public Command {
 	private:
-        void processPalette(ShadyCore::Palette*, boost::filesystem::path);
-        void processPattern(ShadyCore::Pattern*, boost::filesystem::path);
+        void processPalette(ShadyCore::Palette*, std::filesystem::path);
+        void processPattern(ShadyCore::Pattern*, std::filesystem::path);
 	public:
 		inline MergeCommand() : Command("merge", "Merge many kind of files") {}
         void buildOptions(cxxopts::Options&) override;
@@ -46,7 +46,7 @@ namespace ShadyCli {
 	private:
 		std::string prefix;
 		void (*scalingAlgorithm)(ShadyCore::Image*, uint8_t* source);
-		void process(boost::filesystem::path, boost::filesystem::path);
+		void process(std::filesystem::path, std::filesystem::path);
 		void process(ShadyCore::Pattern* pattern);
 	public:
 		inline ScaleCommand() : Command("scale", "Scale sprites and increase textures sizes in pattern files.") {}

@@ -1,6 +1,8 @@
 #include "../Core/fileentry.hpp"
 #include "../Core/package.hpp"
 #include "util.hpp"
+#include <filesystem>
+#include <fstream>
 
 class FileEntrySuite : public CxxTest::TestSuite {
 public:
@@ -26,7 +28,7 @@ const char* FileEntrySuite::dataArray[] = {
 };
 
 void FileEntrySuite::testFileRead() {
-	ShadyCore::FilePackageEntry entry("data/my-text.txt", "test-data/decrypted/data/my-text.txt");
+	ShadyCore::FilePackageEntry entry(0, "data/my-text.txt", "test-data/decrypted/data/my-text.txt");
 	std::istream& input = entry.open();
 	std::ifstream expected("test-data/decrypted/data/my-text.txt");
 
@@ -37,19 +39,19 @@ void FileEntrySuite::testFileRead() {
 }
 
 void FileEntrySuite::testFileTemporary() {
-	boost::filesystem::path tempFile = boost::filesystem::temp_directory_path() / boost::filesystem::unique_path();
-	boost::filesystem::copy_file("test-data/decrypted/data/my-text.txt", tempFile);
-	TS_ASSERT(boost::filesystem::exists(tempFile));
+	std::filesystem::path tempFile = std::filesystem::temp_directory_path() / std::tmpnam(nullptr);
+	std::filesystem::copy_file("test-data/decrypted/data/my-text.txt", tempFile);
+	TS_ASSERT(std::filesystem::exists(tempFile));
 
 	char buffer[255]; strcpy(buffer, tempFile.string().c_str());
-	ShadyCore::FilePackageEntry* entry = new ShadyCore::FilePackageEntry("data/my-text.txt", buffer, true);
+	ShadyCore::FilePackageEntry* entry = new ShadyCore::FilePackageEntry(0, "data/my-text.txt", buffer, true);
 	std::istream& input = entry->open();
 	std::ifstream expected("test-data/decrypted/data/my-text.txt");
 	TS_ASSERT_STREAM(input, expected);
 	entry->close();
 
 	delete entry;
-	TS_ASSERT(!boost::filesystem::exists(tempFile));
+	TS_ASSERT(!std::filesystem::exists(tempFile));
 }
 
 void FileEntrySuite::testPackageRead() {
@@ -58,8 +60,8 @@ void FileEntrySuite::testPackageRead() {
 
 	for (const char* data : dataArray) {
 		std::istream& input = package.findFile(data)->open();
-		boost::filesystem::path fileName("test-data/encrypted"); fileName /= data;
-		boost::filesystem::ifstream expected(fileName, std::ios::binary);
+		std::filesystem::path fileName("test-data/encrypted"); fileName /= data;
+		std::ifstream expected(fileName, std::ios::binary);
 
 		TS_ASSERT_STREAM(input, expected);
 
@@ -91,25 +93,25 @@ void FileEntrySuite::testPackageWrite() {
 	ShadyCore::Package package;
 	package.appendPackage("test-data/decrypted");
 
-	boost::filesystem::path tempFile = boost::filesystem::temp_directory_path() / boost::filesystem::unique_path();
+	std::filesystem::path tempFile = std::filesystem::temp_directory_path() / std::tmpnam(nullptr);
 	package.save(tempFile.string().c_str(), ShadyCore::Package::DIR_MODE, 0, 0);
 
-	for (boost::filesystem::recursive_directory_iterator iter("test-data/decrypted"), e; iter != e; ++iter) {
-		boost::filesystem::path fileName = tempFile / boost::filesystem::relative(iter->path(), "test-data/decrypted");
+	for (std::filesystem::recursive_directory_iterator iter("test-data/decrypted"), e; iter != e; ++iter) {
+		std::filesystem::path fileName = tempFile / std::filesystem::relative(iter->path(), "test-data/decrypted");
 
-		TS_ASSERT(boost::filesystem::exists(fileName));
-		if (boost::filesystem::is_regular_file(fileName)) {
-			boost::filesystem::ifstream input(fileName, std::ios::binary);
-			boost::filesystem::ifstream expected(iter->path(), std::ios::binary);
+		TS_ASSERT(std::filesystem::exists(fileName));
+		if (std::filesystem::is_regular_file(fileName)) {
+			std::ifstream input(fileName, std::ios::binary);
+			std::ifstream expected(iter->path(), std::ios::binary);
 
 			TS_ASSERT_STREAM(input, expected);
 
 			input.close();
 			expected.close();
 		} else {
-			TS_ASSERT(!boost::filesystem::is_regular_file(iter->path()));
+			TS_ASSERT(!std::filesystem::is_regular_file(iter->path()));
 		}
 	}
 
-	boost::filesystem::remove_all(tempFile);
+	std::filesystem::remove_all(tempFile);
 }

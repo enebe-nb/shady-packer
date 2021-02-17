@@ -14,33 +14,6 @@ macro(add_git_module target uri branch)
     endif()
 endmacro()
 
-# Boost Library
-add_git_module(boost git://github.com/boostorg/boost.git boost-1.65.1
-    libs/assert
-    libs/config
-    libs/core
-    libs/detail
-    libs/filesystem
-    libs/functional
-    libs/io
-    libs/iterator
-    libs/mpl
-    libs/predef
-    libs/preprocessor
-    libs/range
-    libs/smart_ptr
-    libs/static_assert
-    libs/system
-    libs/throw_exception
-    libs/type_traits
-    libs/winapi
-    tools/build
-)
-include (${CMAKE_SOURCE_DIR}/thirdparty/boost.cmake)
-set(BOOST_INCLUDE_DIR ${BOOST_INCLUDE_DIR} PARENT_SCOPE)
-set(BOOST_LIBRARY_DIR ${BOOST_BINARY_DIR}/lib PARENT_SCOPE)
-set(BOOST_LIBRARIES ${BOOST_LIBRARIES} PARENT_SCOPE)
-
 # SOKULIB Library
 set(SOKULIB_INCLUDE_DIR ${CMAKE_SOURCE_DIR}/thirdparty/SokuLib PARENT_SCOPE)
 set(SOKULIB_LIBRARIES ${CMAKE_SOURCE_DIR}/thirdparty/SokuLib/SokuLib.lib PARENT_SCOPE)

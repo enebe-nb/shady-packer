@@ -1,7 +1,7 @@
 #include "zipentry.hpp"
 #include "package.hpp"
 #include <zip.h>
-#include <boost/filesystem.hpp>
+#include <filesystem>
 
 std::streambuf::int_type ShadyCore::ZipStream::underflow() {
 	if (!pool.empty()) return pool.top();
@@ -204,7 +204,7 @@ static void zipProgress(double percent) {
 int ShadyCore::Package::appendZipPackage(std::istream& input, const char* filename) {
 	filename = allocateString(filename);
 
-	BasePackageEntry* entry = new StreamPackageEntry(nextId, input, filename, boost::filesystem::file_size(filename));
+	BasePackageEntry* entry = new StreamPackageEntry(nextId, input, filename, std::filesystem::file_size(filename));
 	zip_source_t* inputSource = zip_source_function_create(zipInputFunc, createZipEntry(entry), 0);
 	zip_t* file = zip_open_from_source(inputSource, ZIP_RDONLY, 0);
 

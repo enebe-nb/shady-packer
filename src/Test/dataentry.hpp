@@ -1,7 +1,8 @@
 #include "../Core/dataentry.hpp"
 #include "../Core/package.hpp"
 #include "util.hpp"
-#include <boost/filesystem.hpp>
+#include <filesystem>
+#include <fstream>
 
 class FilterMock : public ShadyCore::StreamFilter {
 public:
@@ -160,8 +161,8 @@ void DataEntrySuite::testPackageRead() {
 		std::istream& input = package.findFile(data)->open();
 		TS_ASSERT(input.good());
 
-		boost::filesystem::path fileName("test-data/encrypted"); fileName /= data;
-		boost::filesystem::ifstream expected(fileName, std::ios::binary);
+		std::filesystem::path fileName("test-data/encrypted"); fileName /= data;
+		std::ifstream expected(fileName, std::ios::binary);
 		TS_ASSERT_STREAM(input, expected);
 
 		package.findFile(data)->close();
@@ -172,15 +173,15 @@ void DataEntrySuite::testPackageRead() {
 void DataEntrySuite::testPackageWrite() {
 	ShadyCore::Package package;
 	package.appendPackage("test-data/encrypted");
-	boost::filesystem::path tempFile = boost::filesystem::temp_directory_path() / boost::filesystem::unique_path();
+	std::filesystem::path tempFile = std::filesystem::temp_directory_path() / std::tmpnam(nullptr);
 	package.save(tempFile.string().c_str(), ShadyCore::Package::DATA_MODE, 0, 0);
 
-	boost::filesystem::ifstream input(tempFile, std::ios::binary);
+	std::ifstream input(tempFile, std::ios::binary);
 	TS_ASSERT(input.good());
-	boost::filesystem::ifstream expected("test-data/data-package.dat", std::ios::binary);
+	std::ifstream expected("test-data/data-package.dat", std::ios::binary);
 	TS_ASSERT_STREAM(input, expected);
 
 	input.close();
 	expected.close();
-	boost::filesystem::remove(tempFile);
+	std::filesystem::remove(tempFile);
 }
