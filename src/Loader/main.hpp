@@ -4,14 +4,15 @@
 #include <windows.h>
 #include <mutex>
 #include <Sokulib.h>
+#include "decodehtml.hpp"
 
-extern std::string modulePath;
 extern struct IniConfig {
     bool useIntercept;
     bool autoUpdate;
     bool useLoadLock;
 } iniConfig;
 extern std::mutex loadLock;
+extern bool hasSokuEngine;
 
 void LoadSettings();
 void SaveSettings();
@@ -20,10 +21,11 @@ void UnloadEngineMenu();
 void LoadIntercept();
 void UnloadIntercept();
 void LoadConverter();
+void LoadTamper();
+void UnloadTamper();
 
-void DecodeHtml(std::string& data);
 void FileLoaderCallback(SokuData::FileLoaderData& data);
-void* EnablePackage(const std::string& name, const std::string& ext, std::vector<FileID>& sokuIds);
+void* EnablePackage(const std::filesystem::path& name, const std::filesystem::path& ext, std::vector<FileID>& sokuIds);
 void DisablePackage(std::vector<FileID>& sokuIds, void* script);
 
 inline std::string ws2s(const std::wstring& wstr) {

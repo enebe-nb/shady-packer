@@ -169,8 +169,24 @@ void setup_entry_reader(SokuData::FileLoaderData& data, ShadyCore::BasePackageEn
     data.reader = &entry_reader_table;
 }
 
+int setup_entry_reader(int esi, ShadyCore::BasePackageEntry& entry) {
+    int *filedata = (int *)(esi+4);
+    filedata[0] = (int)new entry_pair(&entry, &entry.open());
+    filedata[1] = entry.getSize();
+    *(int*)esi = (int)&entry_reader_table;
+    return filedata[0];
+}
+
 void setup_stream_reader(SokuData::FileLoaderData& data, std::istream* stream, size_t size) {
     data.data = stream;
     data.size = size;
     data.reader = &stream_reader_table;
+}
+
+int setup_stream_reader(int esi, std::istream* stream, size_t size) {
+    int *filedata = (int *)(esi+4);
+    filedata[0] = (int)stream;
+    filedata[1] = size;
+    *(int*)esi = (int) &stream_reader_table;
+    return filedata[0];
 }

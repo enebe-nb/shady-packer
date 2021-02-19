@@ -1,15 +1,14 @@
 #pragma once
 
-#include "main.hpp"
+#include <filesystem>
 #include <thread>
 #include <nlohmann/json.hpp>
-#include <SokuLib-util.h>
 
 class AsyncTask {
 protected:
     virtual void run() = 0;
 private:
-    boolean done = false;
+    bool done = false;
     std::thread* thread = 0;
     static inline void _start(AsyncTask* task) {task->run(); task->done = true;}
 public:
@@ -33,9 +32,9 @@ protected:
     void run();
 private:
     std::string fileId;
-    std::string filename;
+    std::filesystem::path filename;
 public:
-    inline FetchFile(const std::string& fileId, const std::string& filename)
+    inline FetchFile(const std::string& fileId, const std::filesystem::path& filename)
         : fileId(fileId), filename(filename) {}
 };
 
@@ -55,6 +54,7 @@ protected:
 private:
     std::string fileId;
 public:
-    struct Texture* texture = 0;
+    std::filesystem::path filename;
     inline FetchImage(const std::string& fileId) : fileId(fileId) {}
+    inline void Dispose() { std::filesystem::remove(filename); }
 };

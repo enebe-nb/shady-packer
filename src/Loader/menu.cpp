@@ -14,25 +14,18 @@ namespace {
 	ItemID EngineMenuID;
 	EventID RenderEvtID;
 
-	std::vector<ModPackage*> packageList;
 	ModPackage* selectedPackage = 0;
 	FetchJson remoteConfig("1EpxozKDE86N3Vb8b4YIwx798J_YfR_rt");
-
-	std::string extensions[] = {".zip", "", ".dat"};
 }
 
-static ModPackage* findPackage(const std::string& name) {
-	for(auto& pack : packageList) if(name == pack->name) return pack;
-	return 0;
-}
-
+/*
 static bool filterPackage(const char* input, ModPackage* package)  {
 	char buffer[256];
 	std::transform(input, input + strlen(input), buffer, ::tolower);
 	bool discard = false;
 	for (char* token = strtok(buffer, " "); token; token = strtok(0, " ")) {
 		bool found = false;
-		if (package->nameLower.find(token) != std::string::npos) found = true;
+		if (package->name.find(token) != std::string::npos) found = true;
 		else for (auto& tag : package->tags) {
 			if (tag.find(token) != std::string::npos) {
 				found = true; break;
@@ -42,33 +35,16 @@ static bool filterPackage(const char* input, ModPackage* package)  {
 	}
 	return true;
 }
+*/
 
-void LoadSettings() {
-	iniConfig.useIntercept = GetPrivateProfileInt("Options", "useIntercept",
-		false, (modulePath + "\\shady-loader.ini").c_str());
-	iniConfig.autoUpdate = GetPrivateProfileInt("Options", "autoUpdate",
-		true, (modulePath + "\\shady-loader.ini").c_str());
-	iniConfig.useLoadLock = GetPrivateProfileInt("Options", "useLoadLock",
-		true, (modulePath + "\\shady-loader.ini").c_str());
-}
-
-void SaveSettings() {
-	WritePrivateProfileString("Options", "useIntercept",
-		iniConfig.useIntercept ? "1" : "0", (modulePath + "\\shady-loader.ini").c_str());
-	WritePrivateProfileString("Options", "autoUpdate",
-		iniConfig.autoUpdate ? "1" : "0", (modulePath + "\\shady-loader.ini").c_str());
-	WritePrivateProfileString("Options", "useLoadLock",
-		iniConfig.useLoadLock ? "1" : "0", (modulePath + "\\shady-loader.ini").c_str());
-
-	nlohmann::json root;
-	for (auto& package : packageList) {
-		root[package->name] = package->data;
-		if (package->fileExists) WritePrivateProfileString("Packages", package->name.c_str(),
-			package->isEnabled() ? "1" : "0", (modulePath + "\\shady-loader.ini").c_str());
+static void setPackageEnabled(ModPackage* package, bool value) {
+	if (package->enabled == value) return;
+	package->enabled = value;
+	if (package->enabled) {
+		package->script = EnablePackage(package->name, package->ext, package->sokuIds);
+	} else {
+		DisablePackage(package->sokuIds, package->script);
 	}
-
-	std::ofstream output(modulePath + "\\packages.json");
-	output << root;
 }
 
 namespace ImGui {
@@ -103,19 +79,19 @@ static void EngineMenuCallback() {
 	float screenHeight = ImGui::GetContentRegionAvail().y;
 
 	if (ImGui::BeginChild("Package List", ImVec2(140, screenHeight), true, ImGuiWindowFlags_None)) {
-		ImGui::SetNextItemWidth(140);
-		ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(8, 4));
-		ImGui::InputTextWithHint("", "Search", filterInput, 256);
-		ImGui::PopStyleVar();
-		for (auto package : packageList) {
-			if (strlen(filterInput) && !filterPackage(filterInput, package)) continue;
+		//ImGui::SetNextItemWidth(140);
+		//ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(8, 4));
+		//ImGui::InputTextWithHint("", "Search", filterInput, 256);
+		//ImGui::PopStyleVar();
+		for (auto package : ModPackage::packageList) {
+			//if (strlen(filterInput) && !filterPackage(filterInput, package)) continue;
 
 			ImU32 color = selectedPackage == package ? IM_COL32(0, 0, 92, 255)
-				: package->isEnabled() ? IM_COL32(0, 92, 0, 255)
+				: package->enabled ? IM_COL32(0, 92, 0, 255)
 				: package->requireUpdate ? IM_COL32(64, 64, 0, 255)
 				//: package->isLocal() ? IM_COL32(0, 64, 64, 255)
 				: IM_COL32(0, 0, 0, 0);
-			if (ImGui::PackageSelectable(package->name.c_str(), color)) {
+			if (ImGui::PackageSelectable(package->name.string().c_str(), color)) {
 				selectedPackage = package;
 				if (!package->previewTask) package->downloadPreview();
 			}
@@ -189,12 +165,12 @@ static void EngineMenuCallback() {
 
 				ImGui::NextColumn(); ImGui::NextColumn();
 				ImGui::Text("Enabled:"); ImGui::NextColumn();
-				if (selectedPackage->isEnabled())
+				if (selectedPackage->enabled)
 					ImGui::TextColored(ImVec4(.4f, 1.f, .4f, 1.f), "true");
 				else ImGui::TextColored(ImVec4(.7f, .7f, .7f, 1.f), "false");
 
-				if (ImGui::Button(selectedPackage->isEnabled() ? "Disable" : "Enable")) {
-					selectedPackage->setEnabled(!selectedPackage->isEnabled());
+				if (ImGui::Button(selectedPackage->enabled ? "Disable" : "Enable")) {
+					setPackageEnabled(selectedPackage, !selectedPackage->enabled);
 					SaveSettings();
 				}
 			} else {
@@ -215,9 +191,9 @@ static void EngineMenuCallback() {
 					ImGui::SetCursorPos(ImVec2(ImGui::GetContentRegionAvail().x / 2,
 						screenHeight - ImGui::GetTextLineHeightWithSpacing()));
 					ImGui::Text("%c", "|/-\\"[(int)(0.009f*GetTickCount()) & 3]);
-				} else if (selectedPackage->previewTask->texture) {
-					ImGui::SetCursorPos(ImVec2(0, screenHeight - 270));
-					ImGui::Image(selectedPackage->previewTask->texture->id, ImVec2(360, 270));
+				//} else if (selectedPackage->previewTask->texture) {
+					//ImGui::SetCursorPos(ImVec2(0, screenHeight - 270));
+					//ImGui::Image(selectedPackage->previewTask->texture->id, ImVec2(360, 270));
 				}
 			}
 		} ImGui::EndChild();
@@ -232,42 +208,36 @@ static void RenderCallback(SokuData::RenderData* data) {
 		remoteLoaded = true;
 		// We are sync here
 		if (!remoteConfig.data.is_object()) return;
-		for (auto& entry : remoteConfig.data.items()) {
-			ModPackage* package = findPackage(entry.key());
-			if (package) {
-				package->merge(entry.value());
-				if (iniConfig.autoUpdate
-					&& package->requireUpdate
-					&& package->version().size()) {
-					package->downloadFile();
-					helpInfo = "Updating " + package->name;
-					helpTimeout = 240;
-				}
-			} else {
-				packageList.push_back(package = new ModPackage(entry.key(), entry.value()));
-				package->data.erase("version");
+		ModPackage::LoadFromRemote(remoteConfig.data);
+		if (iniConfig.autoUpdate) for (auto& package : ModPackage::packageList) {
+			if (!package->isLocal() && package->requireUpdate) {
+				package->downloadFile();
+				helpInfo = "Updating " + package->name.string();
+				helpTimeout = 240;
 			}
 		}
 	}
 
-	for (auto& package : packageList) {
+	for (auto& package : ModPackage::packageList) {
 		if (package->downloadTask && package->downloadTask->isDone()) {
-			bool wasEnabled = package->isEnabled();
-			if (wasEnabled) package->setEnabled(false);
-			std::string filename(modulePath + "\\" + package->name + package->ext);
-			if (PathFileExists((filename + ".part").c_str())
-				&& MoveFileEx((filename + ".part").c_str(), filename.c_str(),
-				MOVEFILE_REPLACE_EXISTING | MOVEFILE_COPY_ALLOWED | MOVEFILE_WRITE_THROUGH)) {
-				package->data["version"] = remoteConfig.data[package->name]["version"];
+			bool wasEnabled = package->enabled;
+			if (wasEnabled) setPackageEnabled(package, false);
+			std::filesystem::path filename(ModPackage::basePath / package->name);
+			filename += package->ext; filename += ".part";
+			if (std::filesystem::exists(filename)) {
+				std::filesystem::path target(filename);
+				target.replace_extension();
+                std::filesystem::rename(filename, target);
+				package->data["version"] = package->data.value("remoteVersion", "");
 				package->requireUpdate = false;
 				package->fileExists = true;
-				helpInfo = "Finished " + package->name + " Download";
+				helpInfo = "Finished " + package->name.string() + " Download";
 			} else {
-				helpInfo = package->name + " Download Failed";
+				helpInfo = package->name.string() + " Download Failed";
 			} helpTimeout = 240;
 			delete package->downloadTask;
 			package->downloadTask = 0;
-			if (wasEnabled) package->setEnabled(true);
+			if (wasEnabled) setPackageEnabled(package, true);
 			SaveSettings();
 		}
 	}
@@ -286,57 +256,31 @@ static void RenderCallback(SokuData::RenderData* data) {
 	}
 }
 
-static void LoadFromLocalData() {
-	if (PathFileExists((modulePath + "\\packages.json").c_str())) {
-		nlohmann::json localConfig;
-		std::ifstream input(modulePath + "\\packages.json");
-		try {input >> localConfig;} catch (...) {}
-
-		for (auto& entry : localConfig.items()) {
-			std::string filename(modulePath + "\\" + entry.key() + ".zip");
-			if (PathFileExists(filename.c_str()))
-				packageList.push_back(new ModPackage(entry.key(), entry.value()));
-		}
-	}
-}
-
-static void LoadFromFilesystem() {
-	WIN32_FIND_DATA findData;
-	HANDLE hFind;
-	if ((hFind = FindFirstFile((modulePath + "\\*").c_str(), &findData)) != INVALID_HANDLE_VALUE) {
-		do {
-			char* ext = PathFindExtension(findData.cFileName);
-			if (findData.cFileName[0] == '.') continue;
-			if (findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY
-				|| strcmp(ext, ".zip") == 0
-				|| strcmp(ext, ".dat") == 0) {
-				std::string name(findData.cFileName, ext);
-				if (!findPackage(name)) packageList.push_back(new ModPackage(findData.cFileName));
-			}
-		} while(FindNextFile(hFind, &findData));
-		FindClose(hFind);
-	}
-}
-
 void LoadEngineMenu() {
-	LoadFromLocalData();
-	LoadFromFilesystem();
+	ModPackage::LoadFromLocalData();
+	ModPackage::LoadFromFilesystem();
 
-	for (auto& package : packageList) {
-		package->setEnabled(GetPrivateProfileInt("Packages",
-			package->name.c_str(), false, (modulePath + "\\shady-loader.ini").c_str()));
+	for (auto& package : ModPackage::packageList) {
+		setPackageEnabled(package, GetPrivateProfileIntA("Packages",
+			package->name.string().c_str(), false, (ModPackage::basePath / "shady-loader.ini").string().c_str()));
 	}
 
-	EngineMenuID = Soku::AddItem(SokuComponent::EngineMenu, "Package Load", {EngineMenuCallback});
-	RenderEvtID = Soku::SubscribeEvent(SokuEvent::Render, {RenderCallback});
-	if (iniConfig.autoUpdate) remoteConfig.start();
+	if (hasSokuEngine) {
+		EngineMenuID = Soku::AddItem(SokuComponent::EngineMenu, "Package Load", {EngineMenuCallback});
+		RenderEvtID = Soku::SubscribeEvent(SokuEvent::Render, {RenderCallback});
+		if (iniConfig.autoUpdate) remoteConfig.start();
+	}
 }
 
 void UnloadEngineMenu() {
-	Soku::RemoveItem(EngineMenuID);
-	Soku::UnsubscribeEvent(RenderEvtID);
-
-	for (auto& package : packageList) {
-		package->setEnabled(false);
+	if (hasSokuEngine) {
+		Soku::RemoveItem(EngineMenuID);
+		Soku::UnsubscribeEvent(RenderEvtID);
 	}
+
+	for (auto& package : ModPackage::packageList) {
+		setPackageEnabled(package, false);
+		delete package;
+	}
+	ModPackage::packageList.clear();
 }

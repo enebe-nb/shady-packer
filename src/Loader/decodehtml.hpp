@@ -1,7 +1,7 @@
-#include "main.hpp"
+#pragma once
 #include <string>
 
-static const char *const NAMED_ENTITIES[][2] = {
+static const char *const _html_NAMED_ENTITIES[][2] = {
 	{ "AElig;", "Æ" },
 	{ "Aacute;", "Á" },
 	{ "Acirc;", "Â" },
@@ -257,23 +257,23 @@ static const char *const NAMED_ENTITIES[][2] = {
 	{ "zwnj;", "\xE2\x80\x8C" }
 };
 
-static int cmp(const void *key, const void *value) {
+static int _htmlcmp(const void *key, const void *value) {
 	return strncmp((const char *)key, *(const char *const *)value,
 		strlen(*(const char *const *)value));
 }
 
-static const char *getNamedEntity(const char *name) {
+static const char *_htmlNamedEntity(const char *name) {
 	const char *const *entity = (const char *const *)bsearch(name,
-		NAMED_ENTITIES, sizeof NAMED_ENTITIES / sizeof *NAMED_ENTITIES,
-		sizeof *NAMED_ENTITIES, cmp);
+		_html_NAMED_ENTITIES, sizeof _html_NAMED_ENTITIES / sizeof *_html_NAMED_ENTITIES,
+		sizeof *_html_NAMED_ENTITIES, _htmlcmp);
 	return entity ? entity[1] : NULL;
 }
 
-void DecodeHtml(std::string& data) {
+static void DecodeHtml(std::string& data) {
     int i = 0, j = 0; while (i < data.size()) {
         if(data[i] == '&') {
             std::string entity(data, i + 1, data.find(';', i) - i);
-            const char* value = getNamedEntity(entity.c_str());
+            const char* value = _htmlNamedEntity(entity.c_str());
             while(*value) data[j++] = *value++;
             i += entity.size() + 1;
         } else {

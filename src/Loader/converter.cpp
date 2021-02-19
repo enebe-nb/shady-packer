@@ -2,7 +2,9 @@
 
 #include <shlwapi.h>
 #include <SokuLib.h>
+#include <SokuLib.hpp>
 #include <string>
+#include <filesystem>
 #include <fstream>
 #include <sstream>
 #include <stack>
@@ -11,6 +13,7 @@
 #include "../Core/util/riffdocument.hpp"
 #include "../Lua/shady-lua.hpp"
 #include "reader.hpp"
+#include "ModPackage.hpp"
 
 namespace {
     typedef FileID (*AddFile_t)(const std::wstring& path);
@@ -22,6 +25,9 @@ namespace {
     typedef bool (*RemoveAllFiles_t)();
     RemoveAllFiles_t tramp_RemoveAllFiles;
     ShadyCore::Package package;
+
+	typedef int (WINAPI* read_constructor_t)(const char *filename, void *a, void *b);
+	read_constructor_t orig_read_constructor = (read_constructor_t)0x41c080;
 }
 
 static DWORD DoIntercept(DWORD addr, DWORD target, int offset) {
@@ -67,25 +73,25 @@ static void applyGameFilters(int id = -1) {
 }
 
 static FileID repl_AddFile(const std::wstring& path) {
-    std::string pathu8 = ws2s(path);
-    DWORD attr = GetFileAttributes(pathu8.c_str());
-    if (attr == INVALID_FILE_ATTRIBUTES) return -1;
-    if (attr & FILE_ATTRIBUTE_DIRECTORY) {
+    if (std::filesystem::is_directory(path)) {
+        std::string pathu8 = ws2s(path);
         int id = package.appendPackage(pathu8.c_str());
         applyGameFilters(id);
         return id;
     }
 
-    std::ifstream file(pathu8);
+    std::ifstream file(path);
     if (file.fail()) return -1;
-    int id;
+    std::string pathu8 = ws2s(path);
     auto type = ShadyCore::FileType::get(pathu8.c_str(), file);
     file.close();
+
+    int id;
     if (type == ShadyCore::FileType::TYPE_PACKAGE) {
         id = package.appendPackage(pathu8.c_str());
     } else {
         const char* filename = pathu8.c_str();
-        id = package.appendFile(PathFindFileName(filename), filename);
+        id = package.appendFile(std::filesystem::path(path).filename().string().c_str(), filename);
     }
 
     applyGameFilters(id);
@@ -109,8 +115,72 @@ static bool repl_RemoveAllFiles() {
     return true;
 }
 
+static int WINAPI repl_read_constructor(const char *filename, void *a, void *b) {
+    int esi_value;
+	__asm mov esi_value, esi
+
+    size_t len = strlen(filename);
+	char* filenameB = new char[len + 1];
+	char* extension = 0;
+	for (int i = 0; i < len; ++i) {
+		if (filename[i] == '/') filenameB[i] = '_';
+		else filenameB[i] = tolower(filename[i]);
+		if (filenameB[i] == '.') extension = &filenameB[i];
+	} filenameB[len] = 0;
+
+    auto iter = package.findFile(filenameB);
+    if (iter == package.end()) {
+        auto type = ShadyCore::FileType::getSimple(filenameB);
+        if (type.type != ShadyCore::FileType::TYPE_UNKNOWN) {
+            size_t size = strlen(filenameB);
+            char* filename = new char[size + 1];
+            strcpy(filename, filenameB);
+            strcpy(filename + size - 4, type.inverseExt);
+            iter = package.findFile(filename);
+            delete[] filename;
+        }
+    }
+
+    int result;
+    if (iter != package.end()) {
+        auto type = ShadyCore::FileType::get(*iter);
+        if (type.isEncrypted || type == ShadyCore::FileType::TYPE_UNKNOWN) {
+            result = setup_entry_reader(esi_value, *iter);
+        } else {
+            std::istream& input = iter->open();
+            std::stringstream* buffer = new std::stringstream(std::ios::in|std::ios::out|std::ios::binary);
+            ShadyCore::convertResource(type, input, *buffer);
+            size_t size = buffer->tellp();
+            iter->close();
+
+            result = setup_stream_reader(esi_value, buffer, size);
+        }
+    } else {
+        __asm mov esi, esi_value
+		result = orig_read_constructor(filename, a, b);
+    }
+
+    delete[] filenameB;
+    return result;
+}
+
+void LoadTamper() {
+    DWORD dwOldProtect;
+    ::VirtualProtect(reinterpret_cast<LPVOID>(TEXT_SECTION_OFFSET), TEXT_SECTION_SIZE, PAGE_EXECUTE_WRITECOPY, &dwOldProtect);
+    orig_read_constructor = (read_constructor_t) SokuLib::TamperNearJmpOpr(0x0040D227, reinterpret_cast<DWORD>(repl_read_constructor));
+    ::VirtualProtect(reinterpret_cast<LPVOID>(TEXT_SECTION_OFFSET), TEXT_SECTION_SIZE, dwOldProtect, &dwOldProtect);
+}
+
+void UnloadTamper() {
+    DWORD dwOldProtect;
+    ::VirtualProtect(reinterpret_cast<LPVOID>(TEXT_SECTION_OFFSET), TEXT_SECTION_SIZE, PAGE_EXECUTE_WRITECOPY, &dwOldProtect);
+    SokuLib::TamperNearJmpOpr(0x0040D227, reinterpret_cast<DWORD>(orig_read_constructor));
+    ::VirtualProtect(reinterpret_cast<LPVOID>(TEXT_SECTION_OFFSET), TEXT_SECTION_SIZE, dwOldProtect, &dwOldProtect);
+}
+
 void FileLoaderCallback(SokuData::FileLoaderData& data) {
-	if (strcmp(PathFindExtension(data.fileName), ".lua") != 0)
+    const char* ext = std::strrchr(data.fileName, '.');
+	if (!ext || strcmp(ext, ".lua") != 0)
         {std::lock_guard<std::mutex> lock(loadLock);}
     if (!iniConfig.useIntercept) return;
 
@@ -153,7 +223,7 @@ void FileLoaderCallback(SokuData::FileLoaderData& data) {
 }
 
 void LoadIntercept() {
-    HMODULE handle = GetModuleHandle("SokuEngine.dll");
+    HMODULE handle = GetModuleHandle(TEXT("SokuEngine.dll"));
 	if (handle != INVALID_HANDLE_VALUE) {
         // AddFile(filename)
         DWORD addr = (DWORD) GetProcAddress(handle, "?AddFile@Soku@@YAHABV?$basic_string@_WU?$char_traits@_W@std@@V?$allocator@_W@2@@std@@@Z");
@@ -173,7 +243,7 @@ void LoadIntercept() {
 void UnloadIntercept() {
     package.clear();
 
-    HMODULE handle = GetModuleHandle("SokuEngine.dll");
+    HMODULE handle = GetModuleHandle(TEXT("SokuEngine.dll"));
 	if (handle != INVALID_HANDLE_VALUE) {
         // AddFile(filename)
         DWORD addr = (DWORD) GetProcAddress(handle, "?AddFile@Soku@@YAHABV?$basic_string@_WU?$char_traits@_W@std@@V?$allocator@_W@2@@std@@@Z");
@@ -313,19 +383,28 @@ size_t _lua_read(void* userdata, void* file, char* buffer, size_t size) {
     } return size;
 }
 
-void* EnablePackage(const std::string& name, const std::string& ext, std::vector<FileID>& sokuIds) {
-	std::string path(name + ext);
-	if (PathIsRelative(path.c_str())) path = modulePath + "\\" + path;
+void* EnablePackage(const std::filesystem::path& name, const std::filesystem::path& ext, std::vector<FileID>& sokuIds) {
+	std::filesystem::path path(name); path += ext;
+	if (path.is_relative()) path = ModPackage::basePath / path;
     void* script = 0;
 
-	if (iniConfig.useIntercept) {
-		sokuIds.push_back(Soku::AddFile(s2ws(path)));
+	if (!hasSokuEngine) {
+        if (std::filesystem::is_directory(path)
+            || std::filesystem::is_regular_file(path)) {
+            
+            std::string pathu8 = ws2s(path);
+            int id = package.appendPackage(pathu8.c_str());
+            applyGameFilters(id);
+            sokuIds.push_back(id);
+        }
+    } else if (iniConfig.useIntercept) {
+		sokuIds.push_back(Soku::AddFile(path));
         if (ShadyLua::isAvailable() && package.findFile("init.lua") != package.end())
             script = ShadyLua::LoadFromGeneric(&package, _lua_open, _lua_read, "init.lua");
 	} else if (ext == ".zip") {
-		sokuIds.push_back(Soku::AddFile(s2ws(path)));
-        if (ShadyLua::isAvailable() && ShadyLua::ZipExists(path.c_str(), "init.lua"))
-            script = ShadyLua::LoadFromZip(path.c_str(), "init.lua");
+		sokuIds.push_back(Soku::AddFile(path));
+        if (ShadyLua::isAvailable() && ShadyLua::ZipExists(path.string().c_str(), "init.lua"))
+            script = ShadyLua::LoadFromZip(path.string().c_str(), "init.lua");
 	} else if (ext == ".dat") {
 		char magicWord[6];
 		std::ifstream input; input.open(path, std::ios::binary);
@@ -333,37 +412,21 @@ void* EnablePackage(const std::string& name, const std::string& ext, std::vector
 		input.read(magicWord, 6);
 		input.close();
 		if (strncmp(magicWord, "PK\x03\x04", 4) == 0 || strncmp(magicWord, "PK\x05\x06", 4) == 0 ) {
-			sokuIds.push_back(Soku::AddFile(s2ws(path)));
+			sokuIds.push_back(Soku::AddFile(path));
 		} else {
-			reinterpret_cast<void(*)(const char *)>(0x0040D1D0u)(path.c_str());
+			reinterpret_cast<void(*)(const char *)>(0x0040D1D0u)(path.string().c_str());
 		}
 	} else {
-		unsigned int attr = GetFileAttributes(path.c_str());
-		if (attr == INVALID_FILE_ATTRIBUTES) return 0;
-		if (attr & FILE_ATTRIBUTE_DIRECTORY) {
-			std::stack<std::string> dirStack;
-			dirStack.push(path);
-            std::string luaRoot(modulePath + "\\" + name + ext + "\\init.lua");
+		if (std::filesystem::is_directory(path)) {
+            std::filesystem::path luaRoot(path / "init.lua");
 
-			while (!dirStack.empty()) {
-				WIN32_FIND_DATA findData;
-				HANDLE hFind;
-				std::string current = dirStack.top(); dirStack.pop();
-				if ((hFind = FindFirstFile((current + "\\*").c_str(), &findData)) != INVALID_HANDLE_VALUE) {
-					do {
-						if (findData.cFileName[0] == '.') continue;
-                        std::string filename(current + "\\" + findData.cFileName);
-						if (findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
-							dirStack.push(filename);
-						else {
-                            sokuIds.push_back(Soku::AddFile(s2ws(filename)));
-                            if (ShadyLua::isAvailable() && filename == luaRoot)
-                                script = ShadyLua::LoadFromFilesystem(filename.c_str());
-                        }
-					} while(FindNextFile(hFind, &findData));
-					FindClose(hFind);
-				}
-			}
+            for (std::filesystem::recursive_directory_iterator iter(path), end; iter != end; ++iter) {
+                if (std::filesystem::is_regular_file(iter->path())) {
+                    sokuIds.push_back(Soku::AddFile(iter->path()));
+                    if (ShadyLua::isAvailable() && iter->path() == luaRoot)
+                        script = ShadyLua::LoadFromFilesystem(iter->path().string().c_str());
+                }
+            }
 		}
 	}
 
@@ -371,8 +434,9 @@ void* EnablePackage(const std::string& name, const std::string& ext, std::vector
 }
 
 void DisablePackage(std::vector<FileID>& sokuIds, void* script) {
-    if (script && ShadyLua::isAvailable()) ShadyLua::FreeScript(script);
+    if (script && hasSokuEngine && ShadyLua::isAvailable()) ShadyLua::FreeScript(script);
     for(auto& id : sokuIds) {
-        Soku::RemoveFile(id);
+        if (hasSokuEngine) Soku::RemoveFile(id);
+        else if (id >= 0) package.detach(id);
     } sokuIds.clear();
 }

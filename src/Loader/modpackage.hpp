@@ -3,24 +3,27 @@
 #include <string>
 #include <thread>
 #include <vector>
-#include <SokuLib.h>
 #include <nlohmann/json.hpp>
 #include "asynctask.hpp"
 
 class ModPackage {
-private:
-    bool enabled = false;
 public:
-    std::string name;
-    std::string nameLower;
-    std::string ext;
+    static std::filesystem::path basePath;
+    static std::vector<ModPackage*> packageList;
+    static void LoadFromLocalData();
+    static void LoadFromFilesystem();
+    static void LoadFromRemote(const nlohmann::json& data);
+
+    bool enabled = false;
+    std::filesystem::path name;
+    std::filesystem::path ext;
     nlohmann::json data;
-    std::vector<FileID> sokuIds;
+    std::vector<int> sokuIds;
     std::vector<std::string> tags;
     bool requireUpdate = false;
     bool fileExists = false;
 
-    inline bool isEnabled() {return enabled;}
+    //inline bool isEnabled() {return enabled;}
     inline bool isLocal() {return fileExists && (!data.count("version") || data.value("version", "").empty());}
     inline std::string driveId() {return data.value("id", "");}
     inline std::string version() {return data.value("version", "");}
@@ -33,12 +36,12 @@ public:
     void* script = 0;
 
     ModPackage(const std::string& name, const nlohmann::json::value_type& data);
-    ModPackage(const std::string& filename);
+    ModPackage(const std::filesystem::path& filename);
     ModPackage(const ModPackage&) = delete;
     ModPackage(ModPackage&&) = delete;
     ~ModPackage();
 
-    void setEnabled(bool value);
+    //void setEnabled(bool value);
     void downloadFile();
     void downloadPreview();
     void merge(const nlohmann::json::value_type& remote);

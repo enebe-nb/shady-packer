@@ -1,28 +1,25 @@
 #include "modpackage.hpp"
-#include "main.hpp"
-#include <shlwapi.h>
+#include <fstream>
+//#include "main.hpp"
+
+std::filesystem::path ModPackage::basePath(std::filesystem::current_path());
+std::vector<ModPackage*> ModPackage::packageList;
 
 ModPackage::ModPackage(const std::string& name, const nlohmann::json::value_type& data)
     : name(name), data(data), ext(".zip") {
-    nameLower.resize(name.size());
-    std::transform(name.begin(), name.end(), nameLower.begin(), std::tolower);
 
     if (data.count("tags") && data["tags"].is_array()) for (auto& tag : data["tags"]) {
 		tags.push_back(tag.get<std::string>());
 	}
 
-	std::string filename(modulePath + "\\" + name + ext);
-	fileExists = PathFileExists(filename.c_str());
+	std::filesystem::path path(basePath / name); path += ext;
+	fileExists = std::filesystem::exists(path);
 }
 
-ModPackage::ModPackage(const std::string& filename) 
-    : name(filename, 0, filename.find_last_of(".")), data({}) {
-    nameLower.resize(name.size());
-    std::transform(name.begin(), name.end(), nameLower.begin(), std::tolower);
+ModPackage::ModPackage(const std::filesystem::path& filename) 
+    : name(filename.stem().string()), ext(filename.extension().string()), data({}) {
 
-    size_t index = filename.find_last_of(".");
-    ext = index == std::string::npos ? "" : std::string(filename, index);
-	fileExists = PathFileExists((modulePath + "\\" + filename).c_str());
+	fileExists = std::filesystem::exists(basePath / filename);
 }
 
 ModPackage::~ModPackage() {
@@ -30,22 +27,14 @@ ModPackage::~ModPackage() {
 	if (downloadTask) delete downloadTask;
 }
 
-void ModPackage::setEnabled(bool value) {
-	if (enabled == value) return;
-	enabled = value;
-	if (enabled) {
-		script = EnablePackage(name, ext, sokuIds);
-	} else {
-		DisablePackage(sokuIds, script);
-	}
-}
-
 void ModPackage::downloadFile() {
     if (downloadTask) return;
-    std::string filename = modulePath + "\\" + name + (ext = ".zip") + ".part";
-    if (!DeleteFile(filename.c_str())
-        && GetLastError() == ERROR_ACCESS_DENIED) return;
-
+    std::filesystem::path filename(basePath / name);
+	filename += (ext = ".zip"); filename += ".part";
+	try {
+		std::filesystem::remove(filename);
+	} catch (std::filesystem::filesystem_error err) {return;}
+	
     downloadTask = new FetchFile(driveId(), filename);
     downloadTask->start();
 }
@@ -62,6 +51,7 @@ void ModPackage::merge(const nlohmann::json::value_type& remote) {
 	data["creator"] = remote.value("creator", "");
 	data["description"] = remote.value("description", "");
 	data["preview"] = remote.value("preview", "");
+    data["remoteVersion"] = remote.value("version", "");
 	data["tags"].clear();
 	tags.clear();
 
@@ -71,4 +61,46 @@ void ModPackage::merge(const nlohmann::json::value_type& remote) {
 	}
 
 	requireUpdate = data.value("version", "") != remote.value("version", "");
+}
+
+static ModPackage* findPackage(const std::string& name) {
+	for(auto& pack : ModPackage::packageList) if(name == pack->name) return pack;
+	return 0;
+}
+
+void ModPackage::LoadFromLocalData() {
+	if (std::filesystem::exists(basePath / "packages.json")) {
+		nlohmann::json localConfig;
+		std::ifstream input(basePath / "packages.json");
+		try {input >> localConfig;} catch (...) {}
+
+		for (auto& entry : localConfig.items()) {
+			std::filesystem::path filename(basePath / (entry.key() + ".zip"));
+			if (std::filesystem::exists(filename))
+				packageList.push_back(new ModPackage(entry.key(), entry.value()));
+		}
+	}
+}
+
+void ModPackage::LoadFromFilesystem() {
+	for (std::filesystem::directory_iterator iter(basePath), end; iter != end; ++iter) {
+        bool isDir = std::filesystem::is_directory(iter->path());
+        auto ext = iter->path().extension();
+        if (isDir || ext == ".zip" || ext == ".dat") {
+			if (!findPackage(iter->path().stem().string())) packageList.push_back(new ModPackage(iter->path().filename()));
+		}
+	}
+}
+
+void ModPackage::LoadFromRemote(const nlohmann::json& data) {
+    for (auto& entry : data.items()) {
+        ModPackage* package = findPackage(entry.key());
+        if (package) {
+            package->merge(entry.value());
+        } else {
+            packageList.push_back(package = new ModPackage(entry.key(), entry.value()));
+            package->data["remoteVersion"] = package->data.value("version", "");
+            package->data.erase("version");
+        }
+    }
 }
