@@ -172,6 +172,8 @@ void LoadTamper() {
 }
 
 void UnloadTamper() {
+    package.clear();
+
     DWORD dwOldProtect;
     ::VirtualProtect(reinterpret_cast<LPVOID>(TEXT_SECTION_OFFSET), TEXT_SECTION_SIZE, PAGE_EXECUTE_WRITECOPY, &dwOldProtect);
     SokuLib::TamperNearJmpOpr(0x0040D227, reinterpret_cast<DWORD>(orig_read_constructor));
@@ -398,9 +400,14 @@ void* EnablePackage(const std::filesystem::path& name, const std::filesystem::pa
             sokuIds.push_back(id);
         }
     } else if (iniConfig.useIntercept) {
-		sokuIds.push_back(Soku::AddFile(path));
-        if (ShadyLua::isAvailable() && package.findFile("init.lua") != package.end())
-            script = ShadyLua::LoadFromGeneric(&package, _lua_open, _lua_read, "init.lua");
+        FileID id = Soku::AddFile(path);
+		sokuIds.push_back(id);
+        if (ShadyLua::isAvailable()) {
+            auto iter = package.findFile("init.lua");
+            if (iter != package.end() && iter->getId() == id) {
+                script = ShadyLua::LoadFromGeneric(&package, _lua_open, _lua_read, "init.lua");
+            }
+        }
 	} else if (ext == ".zip") {
 		sokuIds.push_back(Soku::AddFile(path));
         if (ShadyLua::isAvailable() && ShadyLua::ZipExists(path.string().c_str(), "init.lua"))
@@ -416,18 +423,16 @@ void* EnablePackage(const std::filesystem::path& name, const std::filesystem::pa
 		} else {
 			reinterpret_cast<void(*)(const char *)>(0x0040D1D0u)(path.string().c_str());
 		}
-	} else {
-		if (std::filesystem::is_directory(path)) {
-            std::filesystem::path luaRoot(path / "init.lua");
+	} else if (std::filesystem::is_directory(path)) {
+        std::filesystem::path luaRoot(path / "init.lua");
 
-            for (std::filesystem::recursive_directory_iterator iter(path), end; iter != end; ++iter) {
-                if (std::filesystem::is_regular_file(iter->path())) {
-                    sokuIds.push_back(Soku::AddFile(iter->path()));
-                    if (ShadyLua::isAvailable() && iter->path() == luaRoot)
-                        script = ShadyLua::LoadFromFilesystem(iter->path().string().c_str());
-                }
+        for (std::filesystem::recursive_directory_iterator iter(path), end; iter != end; ++iter) {
+            if (std::filesystem::is_regular_file(iter->path())) {
+                sokuIds.push_back(Soku::AddFile(iter->path()));
+                if (ShadyLua::isAvailable() && iter->path() == luaRoot)
+                    script = ShadyLua::LoadFromFilesystem(iter->path().string().c_str());
             }
-		}
+        }
 	}
 
     return script;
