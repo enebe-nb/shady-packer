@@ -37,7 +37,8 @@ void ShadyGui::LongTaskDialog::on_show() {
 
 void ShadyGui::SavePackageTask::runTask() {
     auto callback = (void(*)(void*, const char*, unsigned int, unsigned int)) &SavePackageTask::callback;
-    auto filters |= ShadyCore::PackageFilter::FILTER_FROM_ZIP_TEXT_EXTENSION;
+    ShadyCore::PackageFilter::Filter filters = ShadyCore::PackageFilter::FILTER_NONE;
+    filters |= ShadyCore::PackageFilter::FILTER_FROM_ZIP_TEXT_EXTENSION;
 	switch (mode) {
 	case ShadyCore::Package::DATA_MODE:
 		filters |= ShadyCore::PackageFilter::FILTER_ENCRYPT_ALL;

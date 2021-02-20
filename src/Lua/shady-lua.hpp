@@ -30,7 +30,7 @@ namespace ShadyLua {
 
         template <typename ReturnType, typename ...ArgTypes>
         inline ReturnType ProcCall(void*& procAddr, const char* procName, ArgTypes... args) {
-            if (!procAddr) procAddr = GetProcAddress(moduleHandle, procName);
+            if (!procAddr) procAddr = (void*)GetProcAddress(moduleHandle, procName);
             return reinterpret_cast<ReturnType(*)(ArgTypes...)>(procAddr)(args...);
         }
 

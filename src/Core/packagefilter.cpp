@@ -425,7 +425,7 @@ bool ShadyCore::PackageFilter::renameEntry(const char* name) {
 }
 
 bool ShadyCore::PackageFilter::convertEntry(const FileType& type) {
-	std::filesystem::path tempFile = std::filesystem::temp_directory_path() / std::tmpnam(nullptr);
+	std::filesystem::path tempFile = ShadyCore::TempFile();
 	std::ofstream output(tempFile.string().c_str(), std::ios::binary);
 	ShadyCore::convertResource(type, iter->open(), output);
 	output.close(); iter->close();
@@ -439,7 +439,7 @@ bool ShadyCore::PackageFilter::convertEntry(const FileType& type) {
 }
 
 bool ShadyCore::PackageFilter::convertData(const FileType& type) {
-	std::filesystem::path tempFile = std::filesystem::temp_directory_path() / std::tmpnam(nullptr);
+	std::filesystem::path tempFile = ShadyCore::TempFile();
 	std::ofstream output(tempFile.string().c_str(), std::ios::binary);
 	ShadyCore::convertResource(type, iter->open(), output);
 	output.close(); iter->close();

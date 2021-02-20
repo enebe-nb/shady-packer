@@ -7,8 +7,13 @@
 #include <mutex>
 #include <functional>
 #include <cstring>
+#include <filesystem>
 
 namespace ShadyCore {
+	// Required to bypass bug on MSYS
+	const std::filesystem::path& TempDir();
+	std::filesystem::path TempFile(const std::filesystem::path& base = TempDir());
+
     class StreamPackageEntry : public BasePackageEntry {
     private:
         std::istream& stream;
@@ -69,8 +74,6 @@ namespace ShadyCore {
 			inline iterator& operator=(const iterator& other) { iter = other.iter; return *this; }
             inline iterator& operator++() { ++iter; return *this; }
 			inline iterator operator++(int) { return iterator(iter++); }
-			inline iterator& operator--() { --iter; return *this; }
-			inline iterator operator--(int) { return iterator(iter--); }
 			inline bool operator==(const iterator& other) const { return iter == other.iter; }
 			inline bool operator!=(const iterator& other) const { return iter != other.iter; }
             inline BasePackageEntry& operator*() const { return *iter->second; }
@@ -88,7 +91,7 @@ namespace ShadyCore {
 
 		iterator detachFile(iterator iter);
 		inline void detachFile(const char* name) { auto iter = entries.find(name); if (iter != entries.end()) detachFile(iter); }
-		inline void detach(int id) { auto& iter = entries.begin(); while(iter != entries.end()) if (iter->second->getId() == id) iter = entries.erase(iter); else ++iter;}
+		inline void detach(int id) {auto iter = entries.begin(); while(iter != entries.end()) if (iter->second->getId() == id) iter = entries.erase(iter); else ++iter;}
 		iterator renameFile(iterator iter, const char* name);
 		inline void renameFile(const char* oldName, const char* newName) { auto iter = entries.find(oldName); if (iter != entries.end()) renameFile(iter, newName); }
 
@@ -106,6 +109,7 @@ namespace ShadyCore {
 		inline PackageFilter(Package& package) : package(package) {}
 	public:
 		enum Filter : int {
+			FILTER_NONE	= 0,
 			// Sequence Order
 			FILTER_FROM_ZIP_TEXT_EXTENSION	= 1 << 0,
 			FILTER_DECRYPT_ALL				= 1 << 1,

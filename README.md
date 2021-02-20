@@ -1,6 +1,15 @@
 # Shady Packer
 A specific fighting game resource manipulation tools
 
+## Downloading ready-to-use version
+Go to (https://github.com/enebe-nb/shady-packer/releases) and download your preferred version.
+
+Modules are on `shady-loader` folder and executables on `bin` folder.
+- shady-viewer: GUI tool for manipulating data files.
+- shady-cli: monolithic(don't require extra dlls) console tool like the packer.
+- shady-loader: Module for automatic loading of custom files in the game.
+- shady-lua: Module for lua script execution inside the game.
+
 ## Building
 
 ### Preparing the build envoirment

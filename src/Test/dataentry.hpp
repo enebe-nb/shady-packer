@@ -174,7 +174,7 @@ void DataEntrySuite::testPackageRead() {
 void DataEntrySuite::testPackageWrite() {
 	ShadyCore::Package package;
 	package.appendPackage("test-data/encrypted");
-	std::filesystem::path tempFile = std::filesystem::temp_directory_path() / std::tmpnam(nullptr);
+	std::filesystem::path tempFile = ShadyCore::TempFile();
 	package.save(tempFile.string().c_str(), ShadyCore::Package::DATA_MODE, 0, 0);
 
 	ShadyCore::Package packageTemp;

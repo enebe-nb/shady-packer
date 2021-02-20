@@ -112,7 +112,7 @@ void ZipEntrySuite::testPackageRead() {
 }
 
 void ZipEntrySuite::testPackageWrite() {
-	std::filesystem::path tempFile = std::filesystem::temp_directory_path() / std::tmpnam(nullptr);
+	std::filesystem::path tempFile = ShadyCore::TempFile();
 	ShadyCore::Package package;
 	package.appendPackage("test-data/zip-extracted");
 	package.save(tempFile.string().c_str(), ShadyCore::Package::ZIP_MODE, 0, 0);

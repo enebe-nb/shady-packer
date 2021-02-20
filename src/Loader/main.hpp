@@ -5,6 +5,7 @@
 #include <mutex>
 #include <Sokulib.h>
 #include "decodehtml.hpp"
+#include <filesystem>
 
 extern struct IniConfig {
     bool useIntercept;

@@ -2,7 +2,6 @@
 
 #include <shlwapi.h>
 #include <SokuLib.h>
-#include <SokuLib.hpp>
 #include <string>
 #include <filesystem>
 #include <fstream>
@@ -14,6 +13,9 @@
 #include "../Lua/shady-lua.hpp"
 #include "reader.hpp"
 #include "ModPackage.hpp"
+
+#define TEXT_SECTION_OFFSET  0x00401000
+#define TEXT_SECTION_SIZE    0x00445000
 
 namespace {
     typedef FileID (*AddFile_t)(const std::wstring& path);
@@ -28,6 +30,12 @@ namespace {
 
 	typedef int (WINAPI* read_constructor_t)(const char *filename, void *a, void *b);
 	read_constructor_t orig_read_constructor = (read_constructor_t)0x41c080;
+}
+
+inline DWORD TamperNearJmpOpr(DWORD addr, DWORD target) {
+    DWORD old = *reinterpret_cast<PDWORD>(addr + 1) + (addr + 5);
+    *reinterpret_cast<PDWORD>(addr + 1) = target - (addr + 5);
+    return old;
 }
 
 static DWORD DoIntercept(DWORD addr, DWORD target, int offset) {
@@ -73,16 +81,15 @@ static void applyGameFilters(int id = -1) {
 }
 
 static FileID repl_AddFile(const std::wstring& path) {
+    std::string pathu8 = ws2s(path);
     if (std::filesystem::is_directory(path)) {
-        std::string pathu8 = ws2s(path);
         int id = package.appendPackage(pathu8.c_str());
         applyGameFilters(id);
         return id;
     }
 
-    std::ifstream file(path);
+    std::ifstream file(pathu8);
     if (file.fail()) return -1;
-    std::string pathu8 = ws2s(path);
     auto type = ShadyCore::FileType::get(pathu8.c_str(), file);
     file.close();
 
@@ -167,7 +174,7 @@ static int WINAPI repl_read_constructor(const char *filename, void *a, void *b) 
 void LoadTamper() {
     DWORD dwOldProtect;
     ::VirtualProtect(reinterpret_cast<LPVOID>(TEXT_SECTION_OFFSET), TEXT_SECTION_SIZE, PAGE_EXECUTE_WRITECOPY, &dwOldProtect);
-    orig_read_constructor = (read_constructor_t) SokuLib::TamperNearJmpOpr(0x0040D227, reinterpret_cast<DWORD>(repl_read_constructor));
+    orig_read_constructor = (read_constructor_t) TamperNearJmpOpr(0x0040D227, reinterpret_cast<DWORD>(repl_read_constructor));
     ::VirtualProtect(reinterpret_cast<LPVOID>(TEXT_SECTION_OFFSET), TEXT_SECTION_SIZE, dwOldProtect, &dwOldProtect);
 }
 
@@ -176,7 +183,7 @@ void UnloadTamper() {
 
     DWORD dwOldProtect;
     ::VirtualProtect(reinterpret_cast<LPVOID>(TEXT_SECTION_OFFSET), TEXT_SECTION_SIZE, PAGE_EXECUTE_WRITECOPY, &dwOldProtect);
-    SokuLib::TamperNearJmpOpr(0x0040D227, reinterpret_cast<DWORD>(orig_read_constructor));
+    TamperNearJmpOpr(0x0040D227, reinterpret_cast<DWORD>(orig_read_constructor));
     ::VirtualProtect(reinterpret_cast<LPVOID>(TEXT_SECTION_OFFSET), TEXT_SECTION_SIZE, dwOldProtect, &dwOldProtect);
 }
 

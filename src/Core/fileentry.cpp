@@ -32,7 +32,7 @@ int ShadyCore::Package::appendFile(const char* name, const char* filename, int i
 }
 
 int ShadyCore::Package::appendFile(const char* name, std::istream& input) {
-	std::filesystem::path tempFile = std::filesystem::temp_directory_path() / std::tmpnam(nullptr);
+	std::filesystem::path tempFile = ShadyCore::TempFile();
 	std::ofstream output(tempFile.string().c_str(), std::ios::binary);
 
 	char buffer[4096]; int read;
@@ -60,7 +60,7 @@ void ShadyCore::Package::saveDirectory(const char* directory, Callback* callback
 			std::filesystem::create_directories(filename.parent_path());
 
 		if (callback) callback(userData, entry.first, ++index, fileCount);
-		std::filesystem::path tempFile = std::filesystem::temp_directory_path() / std::tmpnam(nullptr);
+		std::filesystem::path tempFile = ShadyCore::TempFile();
 		std::ofstream output(tempFile.string(), std::ios::binary);
 		std::istream& input = entry.second->open();
 

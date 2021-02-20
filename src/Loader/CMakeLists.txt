@@ -8,7 +8,7 @@ include_directories(
 
 add_definitions(-DIMGUI_DISABLE_INCLUDE_IMCONFIG_H)
 add_library(shady-loader MODULE main.cpp menu.cpp converter.cpp modpackage.cpp asynctask.cpp reader.cpp)
-target_link_libraries(shady-loader zipstatic zlibstatic libcurl -static ${SOKULIB_LIBRARIES} SokuLib shady-core)
+target_link_libraries(shady-loader zipstatic zlibstatic libcurl -static ${SOKULIB_LIBRARIES} shady-core)
 set_target_properties(shady-loader PROPERTIES LINK_FLAGS "/DELAYLOAD:SokuEngine.dll")
 #set_target_properties(shady-loader PROPERTIES PREFIX "")
 

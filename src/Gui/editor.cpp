@@ -340,13 +340,27 @@ void ShadyGui::ImageEditor::onCmdImage(bool isNext) {
     }
 
     ShadyCore::Package& package = parent->getPackage();
-    for (auto iter = package.findFile(path.c_str()); isNext ? ++iter != package.end() : iter-- != package.begin();) {
+    if (isNext) for (auto iter = package.findFile(path.c_str()); ++iter != package.end();) {
         const ShadyCore::FileType& iterType = ShadyCore::FileType::get(*iter);
         if (iterType == ShadyCore::FileType::TYPE_IMAGE) {
             ShadyCore::readResource(resource, iter->open(), iterType.isEncrypted); iter->close();
             canvas.setImage((ShadyCore::Image*)resource);
             window->set_title(path = iter->getName());
             return;
+        }
+    } else {
+        auto lastAcceptable = package.end();
+        for (auto iter = package.begin(); iter != package.end(); ++iter) {
+            if (strcmp(path.c_str(), iter->getName()) == 0) {
+                if (lastAcceptable == package.end()) return;
+                const ShadyCore::FileType& iterType = ShadyCore::FileType::get(*iter);
+                ShadyCore::readResource(resource, lastAcceptable->open(), iterType.isEncrypted); lastAcceptable->close();
+                canvas.setImage((ShadyCore::Image*)resource);
+                window->set_title(path = lastAcceptable->getName());
+            } else {
+                const ShadyCore::FileType& iterType = ShadyCore::FileType::get(*iter);
+                if (iterType == ShadyCore::FileType::TYPE_IMAGE) lastAcceptable = iter;
+            }
         }
     }
 }

@@ -39,7 +39,7 @@ void FileEntrySuite::testFileRead() {
 }
 
 void FileEntrySuite::testFileTemporary() {
-	std::filesystem::path tempFile = std::filesystem::temp_directory_path() / std::tmpnam(nullptr);
+	std::filesystem::path tempFile = ShadyCore::TempFile();
 	std::filesystem::copy_file("test-data/decrypted/data/my-text.txt", tempFile);
 	TS_ASSERT(std::filesystem::exists(tempFile));
 
@@ -93,7 +93,7 @@ void FileEntrySuite::testPackageWrite() {
 	ShadyCore::Package package;
 	package.appendPackage("test-data/decrypted");
 
-	std::filesystem::path tempFile = std::filesystem::temp_directory_path() / std::tmpnam(nullptr);
+	std::filesystem::path tempFile = ShadyCore::TempFile();
 	package.save(tempFile.string().c_str(), ShadyCore::Package::DIR_MODE, 0, 0);
 
 	for (std::filesystem::recursive_directory_iterator iter("test-data/decrypted"), e; iter != e; ++iter) {
