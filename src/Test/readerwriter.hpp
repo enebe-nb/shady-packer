@@ -21,7 +21,7 @@ const char* ReaderWriterSuite::dataArray[][2] = {
 	{ "test-data/encrypted/data/my-image-indexed.cv2", "test-data/decrypted/data/my-image-indexed.png" },
 	{ "test-data/encrypted/data/my-palette.pal", "test-data/decrypted/data/my-palette.act" },
 	{ "test-data/encrypted/data/my-sfx.cv3", "test-data/decrypted/data/my-sfx.wav" },
-	{ "test-data/encrypted/data/my-gui.dat", "test-data/decrypted/data/my-gui.gui" },
+	{ "test-data/encrypted/data/my-gui.dat", "test-data/decrypted/data/my-gui.xml" },
 	{ "test-data/encrypted/data/my-pattern.pat", "test-data/decrypted/data/my-pattern.xml" },
 	{ "test-data/encrypted/data/my-effect.pat", "test-data/decrypted/data/my-effect.xml" },
 };

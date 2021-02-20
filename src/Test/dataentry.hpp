@@ -3,6 +3,7 @@
 #include "util.hpp"
 #include <filesystem>
 #include <fstream>
+#include <iostream>
 
 class FilterMock : public ShadyCore::StreamFilter {
 public:
@@ -176,12 +177,17 @@ void DataEntrySuite::testPackageWrite() {
 	std::filesystem::path tempFile = std::filesystem::temp_directory_path() / std::tmpnam(nullptr);
 	package.save(tempFile.string().c_str(), ShadyCore::Package::DATA_MODE, 0, 0);
 
-	std::ifstream input(tempFile, std::ios::binary);
-	TS_ASSERT(input.good());
-	std::ifstream expected("test-data/data-package.dat", std::ios::binary);
-	TS_ASSERT_STREAM(input, expected);
-
-	input.close();
-	expected.close();
+	ShadyCore::Package packageTemp;
+	packageTemp.appendPackage(tempFile.string().c_str());
+	TS_ASSERT_EQUALS(package.size(), packageTemp.size());
+	for (auto& file : package) {
+		auto tempFile = packageTemp.findFile(file.getName());
+		TS_ASSERT(tempFile != packageTemp.end());
+		std::istream& fileS = file.open();
+		std::istream& tempFileS = tempFile->open();
+		TSM_ASSERT_STREAM(file.getName(), fileS, tempFileS);
+		file.close();
+		tempFile->close();
+	}
 	std::filesystem::remove(tempFile);
 }

@@ -465,8 +465,8 @@ void ShadyCore::ResourceEReader::accept(Sequence::Move& resource) {
 void ShadyCore::ResourceDReader::accept(Pattern& resource) {
 	if (!tempData) tempData = new XmlReaderData(input);
 	XmlReaderData* readerData = (XmlReaderData*)tempData;
-	char* c = readerData->current->name(); while(c) *c++ = tolower(*c);
-	resource.initialize(readerData->current->name() == "animpattern");
+	char* c = readerData->current->name(); while(*c) *c++ = tolower(*c);
+	resource.initialize(strcmp(readerData->current->name(), "animpattern") == 0);
 
 	for (rapidxml::xml_node<>* iter = readerData->current = readerData->current->first_node(); iter; iter = readerData->current = iter->next_sibling()) {
 		resource.createSequence().visit(this);

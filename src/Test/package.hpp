@@ -92,13 +92,15 @@ void FilterSuite::testUnderline() {
 	ShadyCore::PackageFilter::apply(package, ShadyCore::PackageFilter::FILTER_SLASH_TO_UNDERLINE);
 
 	int i = 0; for (auto& entry : package) {
-		TS_ASSERT_EQUALS(strcmp(entry.getName(), names[i++][1]), 0);
+		TS_ASSERT(package.findFile(names[i  ][0]) == package.end());
+		TS_ASSERT(package.findFile(names[i++][1]) != package.end());
 	} TS_ASSERT_EQUALS(i, 3);
 
 	ShadyCore::PackageFilter::apply(package, ShadyCore::PackageFilter::FILTER_UNDERLINE_TO_SLASH);
 
 	i = 0; for (auto& entry : package) {
-		TS_ASSERT_EQUALS(strcmp(entry.getName(), names[i++][0]), 0);
+		TS_ASSERT(package.findFile(names[i  ][0]) != package.end());
+		TS_ASSERT(package.findFile(names[i++][1]) == package.end());
 	} TS_ASSERT_EQUALS(i, 3);
 }
 
