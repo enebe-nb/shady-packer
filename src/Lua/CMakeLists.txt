@@ -1,11 +1,4 @@
-include_directories(
-    ${LUA_INCLUDE_DIR}
-    ${SOKULIB_INCLUDE_DIR}
-    ${ZLIB_INCLUDE_DIR}
-    ${LIBZIP_INCLUDE_DIR})
-
-add_definitions(-DIMGUI_DISABLE_INCLUDE_IMCONFIG_H -DSHADY_EXPORTS)
-add_library(shady-lua MODULE
+set(SRC_LUA
     exports.cpp
     logger.cpp
     script.cpp
@@ -16,7 +9,11 @@ add_library(shady-lua MODULE
     lualibs/soku.cpp
     ../Loader/reader.cpp
 )
-target_link_libraries(shady-lua zipstatic zlibstatic shlwapi -static ${SOKULIB_LIBRARIES} liblua shady-core)
-set_target_properties(shady-lua PROPERTIES PREFIX "")
 
-install(TARGETS shady-lua LIBRARY DESTINATION soku-modules)
+if(NOT WIN32 OR NOT CMAKE_SIZEOF_VOID_P EQUAL 4)
+	message(WARNING Skipping shady-lua: Can only build on Windows 32bits)
+else()
+    add_library(shady-lua MODULE ${SRC_LUA})
+    target_link_libraries(shady-lua -static shady-core SokuEngine zip liblua LuaBridge shlwapi)
+    install(TARGETS shady-lua LIBRARY DESTINATION soku-modules)
+endif()

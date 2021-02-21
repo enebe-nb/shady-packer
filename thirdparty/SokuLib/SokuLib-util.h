@@ -9,8 +9,8 @@
 #else
 	#define SOKU_API	__declspec(dllimport)
 	#define SOKU_MODULE	extern "C" __declspec(dllexport) void
-	#pragma comment(lib, "SokuLib.lib")
 	#define IMGUI_DISABLE_INCLUDE_IMCONFIG_H
+	#define IMGUI_API __declspec( dllimport )
 	#undef IMGUI_EXPORTS
 #endif
 

@@ -11,4 +11,5 @@ Lua-cURLv3/
 LuaBridge/
 rapidxml/
 rtaudio/
+termcolor/
 zlib/

@@ -1,114 +1,114 @@
 find_package(Git REQUIRED)
 
 macro(add_git_module target uri branch)
-    if(NOT EXISTS ${CMAKE_SOURCE_DIR}/thirdparty/${target})
+    if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/${target})
 		message(STATUS "Cloning ${target} from ${uri}")
 		execute_process(COMMAND ${GIT_EXECUTABLE} clone --branch ${branch} --depth 1
-            ${uri} ${CMAKE_SOURCE_DIR}/thirdparty/${target})
+            ${uri} ${CMAKE_CURRENT_SOURCE_DIR}/${target} ERROR_QUIET)
+        if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/${target})
+            message(FATAL_ERROR "Dependency error: Failed to download ${target}")
+        endif()
         execute_process(COMMAND ${GIT_EXECUTABLE} submodule update --init --depth 1 ${ARGN}
-            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/thirdparty/${target})
-        if(EXISTS ${CMAKE_SOURCE_DIR}/thirdparty/${target}.patch)
-            execute_process(COMMAND ${GIT_EXECUTABLE} apply ${CMAKE_SOURCE_DIR}/thirdparty/${target}.patch
-                WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/thirdparty/${target})
+            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/${target})
+        if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/${target}.patch)
+            execute_process(COMMAND ${GIT_EXECUTABLE} apply ${CMAKE_CURRENT_SOURCE_DIR}/${target}.patch
+                WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/${target})
         endif()
     endif()
 endmacro()
 
-# SOKULIB Library
-set(SOKULIB_INCLUDE_DIR ${CMAKE_SOURCE_DIR}/thirdparty/SokuLib PARENT_SCOPE)
-set(SOKULIB_LIBRARIES ${CMAKE_SOURCE_DIR}/thirdparty/SokuLib/SokuLib.lib PARENT_SCOPE)
+macro(add_download_module target suffix uri)
+    if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/${target})
+		message(STATUS "Downloading ${target} from ${uri}")
+        set(path ${CMAKE_CURRENT_SOURCE_DIR}/${target})
+        file(DOWNLOAD ${uri} ${path}${suffix}.zip)
+        if(NOT EXISTS ${path}${suffix}.zip)
+            message(FATAL_ERROR "Dependency error: Failed to download ${target}")
+        endif()
+        execute_process(COMMAND ${CMAKE_COMMAND} -E tar xfz "${path}${suffix}.zip" WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}" )
+        file(RENAME "${path}${suffix}" "${path}")
+        file(REMOVE "${path}${suffix}.zip")
+    endif()
+endmacro()
+
+option(BUILD_SHARED_LIBS "Build shared libraries" OFF)
+set(SKIP_INSTALL_ALL TRUE)
 
 # rapidxml Library
-set(RAPIDXML_ROOT ${CMAKE_SOURCE_DIR}/thirdparty/rapidxml)
-if(NOT EXISTS ${RAPIDXML_ROOT})
-    set(RAPIDXML_URI https://downloads.sourceforge.net/project/rapidxml/rapidxml/rapidxml%201.13/rapidxml-1.13.zip)
-    message(STATUS "Downloading rapidxml from ${RAPIDXML_URI}")
-    file(DOWNLOAD ${RAPIDXML_URI} ${RAPIDXML_ROOT}-1.13.zip)
-    execute_process(COMMAND ${CMAKE_COMMAND} -E tar xfz ${RAPIDXML_ROOT}-1.13.zip WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}/thirdparty" )
-    file(RENAME ${RAPIDXML_ROOT}-1.13 ${RAPIDXML_ROOT})
-    file(REMOVE ${RAPIDXML_ROOT}-1.13.zip)
-endif()
-set(RAPIDXML_INCLUDE_DIR ${RAPIDXML_ROOT} PARENT_SCOPE)
+add_download_module(rapidxml "-1.13" https://downloads.sourceforge.net/project/rapidxml/rapidxml/rapidxml%201.13/rapidxml-1.13.zip)
+add_library(rapidxml INTERFACE)
+target_include_directories(rapidxml INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/rapidxml)
 
 # zlib Library
 add_git_module(zlib git://github.com/madler/zlib.git v1.2.11)
-add_subdirectory(${CMAKE_SOURCE_DIR}/thirdparty/zlib EXCLUDE_FROM_ALL)
-set(ZLIB_LIBRARY zlibstatic)
-set(ZLIB_INCLUDE_DIR ${CMAKE_SOURCE_DIR}/thirdparty/zlib ${CMAKE_BINARY_DIR}/thirdparty/zlib)
-file(READ ${CMAKE_SOURCE_DIR}/thirdparty/zlib/zlib.h _zlib_h_contents)
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/zlib EXCLUDE_FROM_ALL)
+set(ZLIB_LIBRARY ${CMAKE_CURRENT_BINARY_DIR}/zlib/Release/zlibstatic.lib)
+set(ZLIB_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/zlib)
+file(READ ${CMAKE_CURRENT_SOURCE_DIR}/zlib/zlib.h _zlib_h_contents)
 string(REGEX REPLACE ".*#define[ \t]+ZLIB_VERSION[ \t]+\"([-0-9A-Za-z.]+)\".*" "\\1" ZLIB_VERSION_STRING ${_zlib_h_contents})
-add_library(ZLIB::ZLIB INTERFACE IMPORTED)
-foreach(name LINK_LIBRARIES INCLUDE_DIRECTORIES COMPILE_DEFINITIONS COMPILE_OPTIONS)
-    get_property(value TARGET zlibstatic PROPERTY ${name})
-    set_property(TARGET ZLIB::ZLIB PROPERTY INTERFACE_${name} ${value})
-endforeach()
+find_package(ZLIB REQUIRED)
+set_target_properties(ZLIB::ZLIB PROPERTIES INTERFACE_INCLUDE_DIRECTORIES "${ZLIB_INCLUDE_DIRS};${CMAKE_CURRENT_BINARY_DIR}/zlib")
+add_dependencies(ZLIB::ZLIB zlibstatic)
 
 # libpng Library
-set(DISABLE_SYMLINK FALSE CACHE BOOL "Disable use of symlink")
-set(SKIP_INSTALL_EXPORT TRUE) # TODO install
 add_git_module(libpng git://git.code.sf.net/p/libpng/code libpng16)
-add_subdirectory(${CMAKE_SOURCE_DIR}/thirdparty/libpng EXCLUDE_FROM_ALL)
-set(LIBPNG_INCLUDE_DIR ${CMAKE_SOURCE_DIR}/thirdparty/libpng ${CMAKE_BINARY_DIR}/thirdparty/libpng PARENT_SCOPE)
-add_dependencies(png_static zlibstatic)
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/libpng EXCLUDE_FROM_ALL)
+target_include_directories(png_static PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/libpng ${CMAKE_CURRENT_BINARY_DIR}/zlib ${CMAKE_CURRENT_BINARY_DIR}/libpng)
 
 # libzip Library
-set(DISABLE_BZIP TRUE CACHE BOOL "Disable use of bzip library")
-add_git_module(libzip git://github.com/nih-at/libzip.git rel-1-3-0)
-add_subdirectory(${CMAKE_SOURCE_DIR}/thirdparty/libzip EXCLUDE_FROM_ALL)
-set(LIBZIP_INCLUDE_DIR ${CMAKE_SOURCE_DIR}/thirdparty/libzip/lib ${CMAKE_BINARY_DIR}/thirdparty/libzip PARENT_SCOPE)
-target_compile_definitions(zipstatic INTERFACE ZIP_STATIC)
-add_dependencies(zipstatic zlibstatic)
+add_git_module(libzip git://github.com/nih-at/libzip.git v1.7.3)
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/libzip EXCLUDE_FROM_ALL)
+#target_compile_definitions(zip INTERFACE ZIP_STATIC)
 
-set(ZLIB_INCLUDE_DIR ${ZLIB_INCLUDE_DIR} PARENT_SCOPE)
+if(SHADY_ENABLE_MODULE)
+    # SokuEngine Library
+    add_library(SokuEngine UNKNOWN IMPORTED GLOBAL)
+    target_include_directories(SokuEngine INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/SokuLib)
+    set_target_properties(SokuEngine PROPERTIES IMPORTED_LOCATION ${CMAKE_CURRENT_SOURCE_DIR}/SokuLib/SokuEngineLib.lib)
 
-if(WIN32 AND CMAKE_SIZEOF_VOID_P EQUAL 4)
     # libcurl Library
-    set(LIBCURL_ROOT ${CMAKE_SOURCE_DIR}/thirdparty/curl)
-    if(NOT EXISTS ${LIBCURL_ROOT})
-        set(LIBCURL_URI https://curl.haxx.se/download/curl-7.67.0.zip)
-        message(STATUS "Downloading libcurl from ${LIBCURL_URI}")
-        file(DOWNLOAD ${LIBCURL_URI} ${LIBCURL_ROOT}-7.67.0.zip)
-        execute_process(COMMAND ${CMAKE_COMMAND} -E tar xfz ${LIBCURL_ROOT}-7.67.0.zip WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}/thirdparty" )
-        file(RENAME ${LIBCURL_ROOT}-7.67.0 ${LIBCURL_ROOT})
-        file(REMOVE ${LIBCURL_ROOT}-7.67.0.zip)
-    endif()
-    set(BUILD_SHARED_LIBS OFF)
-    set(CMAKE_USE_WINSSL ON)
-    add_subdirectory(${LIBCURL_ROOT} EXCLUDE_FROM_ALL)
-    set(CURL_INCLUDE_DIR ${LIBCURL_ROOT}/include PARENT_SCOPE)
+    add_download_module(curl "-7.75.0" https://curl.haxx.se/download/curl-7.75.0.zip)
+    #set(CMAKE_USE_SCHANEL ON)
+    add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/curl EXCLUDE_FROM_ALL)
 
     # nlohmann JSON Library
-    add_git_module(json https://github.com/nlohmann/json v3.7.3)
-    set(JSON_INCLUDE_DIR ${CMAKE_SOURCE_DIR}/thirdparty/json/include PARENT_SCOPE)
+    add_git_module(json https://github.com/nlohmann/json v3.9.1)
+    add_library(json INTERFACE)
+    target_include_directories(json INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/json/include)
 
     # Lua Library
-    add_git_module(lua https://github.com/lua/lua v5.3.5)
-    add_subdirectory(${CMAKE_SOURCE_DIR}/thirdparty/lua EXCLUDE_FROM_ALL)
-    add_git_module(LuaBridge https://github.com/vinniefalco/LuaBridge 2.4.1)
-    set(LUA_INCLUDE_DIR ${CMAKE_SOURCE_DIR}/thirdparty/lua
-        ${CMAKE_SOURCE_DIR}/thirdparty/LuaBridge/Source
-        PARENT_SCOPE)
+    add_git_module(lua https://github.com/lua/lua v5.4.2)
+    add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/lua EXCLUDE_FROM_ALL)
+    add_git_module(LuaBridge https://github.com/vinniefalco/LuaBridge 2.6)
+    set(LUABRIDGE_TESTING OFF)
+    add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/LuaBridge EXCLUDE_FROM_ALL)
+
+    # termcolor Library
+    add_git_module(termcolor https://github.com/ikalnytskyi/termcolor v1.0.1)
+    add_library(termcolor INTERFACE)
+    target_include_directories(termcolor INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/termcolor/include)
 endif()
 
-if(ENABLE_CLI)
+if(SHADY_ENABLE_CLI OR SHADY_ENABLE_MODULE)
     # cxxopts Library
     add_git_module(cxxopts git://github.com/jarro2783/cxxopts.git v1.4.4)
-    set(CXXOPTS_INCLUDE_DIR ${CMAKE_SOURCE_DIR}/thirdparty/cxxopts/include PARENT_SCOPE)
+    add_library(cxxopts INTERFACE)
+    target_include_directories(cxxopts INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/cxxopts/include)
 endif()
 
-if(ENABLE_TEST)
+if(SHADY_ENABLE_TEST)
     # cxxtest Library
     enable_testing()
     add_git_module(cxxtest git://github.com/cxxtest/cxxtest 4.4)
-    set(CXXTEST_ROOT ${CMAKE_SOURCE_DIR}/thirdparty/cxxtest PARENT_SCOPE)
+    set(CXXTEST_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/cxxtest PARENT_SCOPE)
 endif()
 
-if(ENABLE_GUI)
+if(SHADY_ENABLE_GUI)
     # rtaudio Library
     if(APPLE)
         # TODO Mac OSX Core Library
     elseif(UNIX)
-        set(ALSA_ROOT ${CMAKE_SOURCE_DIR}/thirdparty/alsa-lib)
+        set(ALSA_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/alsa-lib)
         if(NOT EXISTS ${ALSA_ROOT})
             add_git_module(alsa-lib git://alsa-project.org/alsa-lib.git v1.1.5)
             execute_process(COMMAND ${ALSA_ROOT}/gitcompile WORKING_DIRECTORY ${ALSA_ROOT})
@@ -117,8 +117,8 @@ if(ENABLE_GUI)
         set(ALSA_LIBRARY ${ALSA_ROOT}/src/.libs/libasound.so)
     endif()
     add_git_module(rtaudio git://github.com/thestk/rtaudio.git v5.0.0)
-    add_subdirectory(${CMAKE_SOURCE_DIR}/thirdparty/rtaudio EXCLUDE_FROM_ALL)
-    set(RTAUDIO_INCLUDE_DIR ${CMAKE_SOURCE_DIR}/thirdparty/rtaudio PARENT_SCOPE)
+    add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/rtaudio EXCLUDE_FROM_ALL)
+    set(RTAUDIO_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/rtaudio PARENT_SCOPE)
 
     # gtkmm Library
     find_package(PkgConfig REQUIRED)

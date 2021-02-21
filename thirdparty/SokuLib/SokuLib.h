@@ -3,6 +3,7 @@
 
 namespace Soku
 {
+	using byte = unsigned char;
 	class SOKU_API CPlayer : Object<CPlayer>
 	{
 	public:
@@ -122,7 +123,7 @@ namespace Soku
 
 	/*##############################################################################################################################
 	##############################################################################################################################*/
-	
+
 	class SOKU_API CBattleManager : Object<CBattleManager>
 	{
 	public:
@@ -164,7 +165,7 @@ namespace Soku
 
 	SOKU_API CServer& Server();
 	SOKU_API extern CServer server;
-	
+
 	/*##############################################################################################################################
 	##############################################################################################################################*/
 
@@ -192,21 +193,21 @@ namespace Soku
 	/*##############################################################################################################################
 	##############################################################################################################################*/
 
-	class SOKU_API Module : Object<Module> 
+	class SOKU_API Module : Object<Module>
 	{
-	public:				
+	public:
 		std::wstring	Path() const;
 		std::wstring	Name() const;
 		bool			IsInjected() const;
 		bool			IsEnabled() const;
 		bool			Inject();
 		bool			Eject();
-						Module(int id);
+		Module(int id);
 	};
 
 	SOKU_API std::vector<Module>	GetModuleList();
 	SOKU_API Module					GetModule();
-	
+
 	/*##############################################################################################################################
 	##############################################################################################################################*/
 
@@ -248,7 +249,7 @@ namespace Soku
 		void		TotalFrames(int num);
 		int			TotalFrames() const;
 		int			LoadedFrames() const;
-		int			Delay—ounter() const;
+		int			DelayCounter() const;
 		void		AddImage(ImTextureID tex);
 		void		Display(ImVec2& size, ImVec2& pos);
 		void		Reset();

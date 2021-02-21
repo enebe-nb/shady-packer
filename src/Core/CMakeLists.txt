@@ -1,11 +1,3 @@
-link_directories(${BOOST_LIBRARY_DIR})
-include_directories(
-    ${RAPIDXML_INCLUDE_DIR}
-    ${LIBZIP_INCLUDE_DIR}
-    ${LIBPNG_INCLUDE_DIR}
-    ${BOOST_INCLUDE_DIR}
-)
-
 set(SRC_CORE_Resource
 	resource/image.cpp
 	resource/gui.cpp
@@ -41,6 +33,5 @@ set(SRC_CORE_Root
 source_group("Source Files" FILES ${SRC_CORE_Root})
 
 add_library(shady-core STATIC ${SRC_CORE_Resource} ${SRC_CORE_Util} ${SRC_CORE_Root})
-target_link_libraries(shady-core zipstatic png_static ${BOOST_LIBRARIES})
+target_link_libraries(shady-core zip png_static rapidxml)
 target_compile_definitions(shady-core PRIVATE USEWINDOWS_CALLBACK)
-add_dependencies(shady-core boost)
