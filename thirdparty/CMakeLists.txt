@@ -42,7 +42,11 @@ target_include_directories(rapidxml INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/rapidx
 # zlib Library
 add_git_module(zlib git://github.com/madler/zlib.git v1.2.11)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/zlib EXCLUDE_FROM_ALL)
-set(ZLIB_LIBRARY ${CMAKE_CURRENT_BINARY_DIR}/zlib/Release/zlibstatic.lib)
+if (MSVC)
+    set(ZLIB_LIBRARY ${CMAKE_CURRENT_BINARY_DIR}/zlib/Release/zlibstatic.lib)
+else()
+    set(ZLIB_LIBRARY ${CMAKE_CURRENT_BINARY_DIR}/zlib/libzlibstatic.a)
+endif()
 set(ZLIB_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/zlib)
 file(READ ${CMAKE_CURRENT_SOURCE_DIR}/zlib/zlib.h _zlib_h_contents)
 string(REGEX REPLACE ".*#define[ \t]+ZLIB_VERSION[ \t]+\"([-0-9A-Za-z.]+)\".*" "\\1" ZLIB_VERSION_STRING ${_zlib_h_contents})
@@ -68,7 +72,7 @@ if(SHADY_ENABLE_MODULE)
 
     # libcurl Library
     add_download_module(curl "-7.75.0" https://curl.haxx.se/download/curl-7.75.0.zip)
-    #set(CMAKE_USE_SCHANEL ON)
+    set(CMAKE_USE_SCHANNEL ON)
     add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/curl EXCLUDE_FROM_ALL)
 
     # nlohmann JSON Library
