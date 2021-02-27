@@ -1,27 +1,9 @@
 #include "package.hpp"
 #include "resource/readerwriter.hpp"
+#include "util/tempfiles.hpp"
 
 #include <fstream>
 #include <filesystem>
-#include <windows.h>
-
-const std::filesystem::path& ShadyCore::TempDir() {
-	static std::filesystem::path p;
-	if (p.empty()) {
-		std::wstring buffer;
-		buffer.resize(MAX_PATH + 1);
-		int len = GetTempPathW(buffer.size(), buffer.data());
-		if (len == 0) throw "Failure while finding the temp dir";
-
-		buffer.resize(len);
-		p = buffer;
-	}
-	return p;
-}
-
-std::filesystem::path ShadyCore::TempFile(const std::filesystem::path& base) {
-	return base / _wtempnam(base.c_str(), L"shady-");
-}
 
 ShadyCore::Package::~Package() {
 	for (auto entry : entries) {
@@ -85,7 +67,7 @@ void ShadyCore::Package::save(const char* filename, Mode mode, Callback* callbac
 	if (!std::filesystem::exists(target.parent_path()))
 		std::filesystem::create_directories(target.parent_path());
 
-    std::filesystem::path tempFile = ShadyCore::TempFile();
+    std::filesystem::path tempFile = ShadyUtil::TempFile();
 	std::ofstream output(tempFile.string(), std::ios::binary);
 	if (mode == DATA_MODE) saveData(output, callback, userData);
     if (mode == ZIP_MODE) saveZip(output, callback, userData);

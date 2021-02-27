@@ -1,5 +1,6 @@
 #include "package.hpp"
 
+#include "util/tempfiles.hpp"
 #include <filesystem>
 #include <fstream>
 
@@ -425,11 +426,12 @@ bool ShadyCore::PackageFilter::renameEntry(const char* name) {
 }
 
 bool ShadyCore::PackageFilter::convertEntry(const FileType& type) {
-	std::filesystem::path tempFile = ShadyCore::TempFile();
+	std::filesystem::path tempFile = ShadyUtil::TempFile();
 	std::ofstream output(tempFile.string().c_str(), std::ios::binary);
 	ShadyCore::convertResource(type, iter->open(), output);
 	output.close(); iter->close();
 
+	// TODO do better here (locale)
 	std::filesystem::path path(iter->getName());
 	path.replace_extension(type.inverseExt);
 	package.appendFile(path.generic_string().c_str(), tempFile.string().c_str(), iter->getId());
@@ -439,7 +441,7 @@ bool ShadyCore::PackageFilter::convertEntry(const FileType& type) {
 }
 
 bool ShadyCore::PackageFilter::convertData(const FileType& type) {
-	std::filesystem::path tempFile = ShadyCore::TempFile();
+	std::filesystem::path tempFile = ShadyUtil::TempFile();
 	std::ofstream output(tempFile.string().c_str(), std::ios::binary);
 	ShadyCore::convertResource(type, iter->open(), output);
 	output.close(); iter->close();

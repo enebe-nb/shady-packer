@@ -10,10 +10,6 @@
 #include <filesystem>
 
 namespace ShadyCore {
-	// Required to bypass bug on MSYS
-	const std::filesystem::path& TempDir();
-	std::filesystem::path TempFile(const std::filesystem::path& base = TempDir());
-
     class StreamPackageEntry : public BasePackageEntry {
     private:
         std::istream& stream;
