@@ -1,6 +1,7 @@
 #include "../Core/dataentry.hpp"
 #include "../Core/package.hpp"
 #include "util.hpp"
+#include "../Core/util/tempfiles.hpp"
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -174,7 +175,7 @@ void DataEntrySuite::testPackageRead() {
 void DataEntrySuite::testPackageWrite() {
 	ShadyCore::Package package;
 	package.appendPackage("test-data/encrypted");
-	std::filesystem::path tempFile = ShadyCore::TempFile();
+	std::filesystem::path tempFile = ShadyUtil::TempFile();
 	package.save(tempFile.string().c_str(), ShadyCore::Package::DATA_MODE, 0, 0);
 
 	ShadyCore::Package packageTemp;

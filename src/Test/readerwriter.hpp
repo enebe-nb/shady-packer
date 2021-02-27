@@ -1,6 +1,7 @@
 #include "../Core/package.hpp"
 #include "../Core/resource/readerwriter.hpp"
 #include "util.hpp"
+#include "../Core/util/tempfiles.hpp"
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -53,8 +54,8 @@ void ReaderWriterSuite::testConvertion() {
 
 void ReaderWriterSuite::testPackageRead() {
 	for (auto data : dataArray) {
-		std::filesystem::path zipFile = ShadyCore::TempFile();
-		std::filesystem::path dataFile = ShadyCore::TempFile();
+		std::filesystem::path zipFile = ShadyUtil::TempFile();
+		std::filesystem::path dataFile = ShadyUtil::TempFile();
 		ShadyCore::Package package;
 		package.appendFile(data[0], data[0]);
 		package.appendFile(data[1], data[1]);
