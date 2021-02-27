@@ -18,12 +18,11 @@ public:
     std::filesystem::path name;
     std::filesystem::path ext;
     nlohmann::json data;
-    std::vector<int> sokuIds;
+    int packageId;
     std::vector<std::string> tags;
     bool requireUpdate = false;
     bool fileExists = false;
 
-    //inline bool isEnabled() {return enabled;}
     inline bool isLocal() {return fileExists && (!data.count("version") || data.value("version", "").empty());}
     inline std::string driveId() {return data.value("id", "");}
     inline std::string version() {return data.value("version", "");}

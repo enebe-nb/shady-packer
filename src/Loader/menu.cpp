@@ -2,7 +2,6 @@
 #include "modpackage.hpp"
 #include "asynctask.hpp"
 
-#include <shlwapi.h>
 #include <SokuLib.h>
 #include <vector>
 #include <algorithm>
@@ -18,35 +17,17 @@ namespace {
 	FetchJson remoteConfig("1EpxozKDE86N3Vb8b4YIwx798J_YfR_rt");
 }
 
-/*
-static bool filterPackage(const char* input, ModPackage* package)  {
-	char buffer[256];
-	std::transform(input, input + strlen(input), buffer, ::tolower);
-	bool discard = false;
-	for (char* token = strtok(buffer, " "); token; token = strtok(0, " ")) {
-		bool found = false;
-		if (package->name.find(token) != std::string::npos) found = true;
-		else for (auto& tag : package->tags) {
-			if (tag.find(token) != std::string::npos) {
-				found = true; break;
-			}
-		}
-		if (!found) return false;
-	}
-	return true;
-}
-*/
-
 static void setPackageEnabled(ModPackage* package, bool value) {
 	if (package->enabled == value) return;
 	package->enabled = value;
 	if (package->enabled) {
-		package->script = EnablePackage(package->name, package->ext, package->sokuIds);
+		package->packageId = EnablePackage(package->name, package->ext);
 	} else {
-		DisablePackage(package->sokuIds, package->script);
+		DisablePackage(package->packageId, package->script);
 	}
 }
 
+/*
 namespace ImGui {
 	bool PackageSelectable(const char* label, ImU32 color) {
 		float width = ImGui::GetContentRegionAvail().x;
@@ -199,49 +180,69 @@ static void EngineMenuCallback() {
 		} ImGui::EndChild();
 	}
 }
+*/
 
-static void RenderCallback(SokuData::RenderData* data) {
-	static std::string helpInfo;
-	static int helpTimeout = -1;
-	static bool remoteLoaded = false;
-	if (!remoteLoaded && remoteConfig.isDone()) {
-		remoteLoaded = true;
-		// We are sync here
-		if (!remoteConfig.data.is_object()) return;
-		ModPackage::LoadFromRemote(remoteConfig.data);
-		if (iniConfig.autoUpdate) for (auto& package : ModPackage::packageList) {
-			if (!package->isLocal() && package->requireUpdate) {
-				package->downloadFile();
-				helpInfo = "Updating " + package->name.string();
-				helpTimeout = 240;
+namespace{
+	class : public AsyncTask {
+	protected:
+		void run() {
+			using namespace std::chrono_literals;
+			std::list<ModPackage*> downloads;
+
+			// Wait for module database
+			while (true) {
+				//static std::string helpInfo;
+				//static int helpTimeout = -1;
+				if (remoteConfig.isDone()) {
+					// We are sync here
+					if (!remoteConfig.data.is_object()) return;
+					ModPackage::LoadFromRemote(remoteConfig.data);
+					if (iniAutoUpdate) for (auto& package : ModPackage::packageList) {
+						if (!package->isLocal() && package->requireUpdate) {
+							package->downloadFile();
+							downloads.push_back(package);
+							//helpInfo = "Updating " + package->name.string();
+							//helpTimeout = 240;
+						}
+					}
+					break;
+				}
+				std::this_thread::sleep_for(100ms);
+			}
+
+			while (!downloads.empty()) {
+				for (auto i = downloads.begin(); i != downloads.end();) {
+					if ((*i)->downloadTask && (*i)->downloadTask->isDone()) {
+						ModPackage* package = (*i);
+						bool wasEnabled = package->enabled;
+						if (wasEnabled) setPackageEnabled(package, false);
+						std::filesystem::path filename(ModPackage::basePath / package->name);
+						filename += package->ext; filename += L".part";
+						if (std::filesystem::exists(filename)) {
+							std::filesystem::path target(filename);
+							target.replace_extension();
+							std::filesystem::rename(filename, target);
+							package->data["version"] = package->data.value("remoteVersion", "");
+							package->requireUpdate = false;
+							package->fileExists = true;
+							//helpInfo = "Finished " + package->name.string() + " Download";
+						} else {
+							//helpInfo = package->name.string() + " Download Failed";
+						} //helpTimeout = 240;
+						delete package->downloadTask;
+						package->downloadTask = 0;
+						if (wasEnabled) setPackageEnabled(package, true);
+						SaveSettings();
+						i = downloads.erase(i);
+					} else ++i;
+				}
+				std::this_thread::sleep_for(100ms);
 			}
 		}
-	}
+	} updateController;
+}
 
-	for (auto& package : ModPackage::packageList) {
-		if (package->downloadTask && package->downloadTask->isDone()) {
-			bool wasEnabled = package->enabled;
-			if (wasEnabled) setPackageEnabled(package, false);
-			std::filesystem::path filename(ModPackage::basePath / package->name);
-			filename += package->ext; filename += ".part";
-			if (std::filesystem::exists(filename)) {
-				std::filesystem::path target(filename);
-				target.replace_extension();
-                std::filesystem::rename(filename, target);
-				package->data["version"] = package->data.value("remoteVersion", "");
-				package->requireUpdate = false;
-				package->fileExists = true;
-				helpInfo = "Finished " + package->name.string() + " Download";
-			} else {
-				helpInfo = package->name.string() + " Download Failed";
-			} helpTimeout = 240;
-			delete package->downloadTask;
-			package->downloadTask = 0;
-			if (wasEnabled) setPackageEnabled(package, true);
-			SaveSettings();
-		}
-	}
-
+/*
 	if (helpTimeout > 0) {
 		--helpTimeout;
 		ImGuiStyle& style = ImGui::GetStyle();
@@ -254,27 +255,31 @@ static void RenderCallback(SokuData::RenderData* data) {
 		ImGui::Text(helpInfo.c_str());
 		ImGui::End();
 	}
-}
+*/
 
 void LoadEngineMenu() {
 	ModPackage::LoadFromLocalData();
 	ModPackage::LoadFromFilesystem();
 
 	for (auto& package : ModPackage::packageList) {
-		setPackageEnabled(package, GetPrivateProfileIntA("Packages",
-			package->name.string().c_str(), false, (ModPackage::basePath / "shady-loader.ini").string().c_str()));
+		bool isEnabled = GetPrivateProfileIntW(L"Packages", package->name.c_str(),
+			false, (ModPackage::basePath / L"shady-loader.ini").c_str());
+		setPackageEnabled(package, isEnabled);
 	}
 
 	if (hasSokuEngine) {
-		EngineMenuID = Soku::AddItem(SokuComponent::EngineMenu, "Package Load", {EngineMenuCallback});
-		RenderEvtID = Soku::SubscribeEvent(SokuEvent::Render, {RenderCallback});
-		if (iniConfig.autoUpdate) remoteConfig.start();
+		//EngineMenuID = Soku::AddItem(SokuComponent::EngineMenu, "Package Load", {EngineMenuCallback});
+		//RenderEvtID = Soku::SubscribeEvent(SokuEvent::Render, {RenderCallback});
+		if (iniAutoUpdate) {
+			remoteConfig.start();
+			updateController.start();
+		}
 	}
 }
 
 void UnloadEngineMenu() {
 	if (hasSokuEngine) {
-		Soku::RemoveItem(EngineMenuID);
+		//Soku::RemoveItem(EngineMenuID);
 		Soku::UnsubscribeEvent(RenderEvtID);
 	}
 

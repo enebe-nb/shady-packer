@@ -1,6 +1,6 @@
 #include "modpackage.hpp"
 #include <fstream>
-//#include "main.hpp"
+// NOTE: Don't use wchar is this file, so it can be build on linux
 
 std::filesystem::path ModPackage::basePath(std::filesystem::current_path());
 std::vector<ModPackage*> ModPackage::packageList;
@@ -17,7 +17,7 @@ ModPackage::ModPackage(const std::string& name, const nlohmann::json::value_type
 }
 
 ModPackage::ModPackage(const std::filesystem::path& filename) 
-    : name(filename.stem().string()), ext(filename.extension().string()), data({}) {
+    : name(filename.stem()), ext(filename.extension()), data({}) {
 
 	fileExists = std::filesystem::exists(basePath / filename);
 }

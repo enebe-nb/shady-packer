@@ -1,7 +1,6 @@
 #include "main.hpp"
 #include "modpackage.hpp"
 
-#include <shlwapi.h>
 #include <curl/curl.h>
 #include <fstream>
 
@@ -9,9 +8,25 @@ namespace {
 	const BYTE TARGET_HASH[16] = { 0xdf, 0x35, 0xd1, 0xfb, 0xc7, 0xb5, 0x83, 0x31, 0x7a, 0xda, 0xbe, 0x8c, 0xd9, 0xf5, 0x3b, 0x2e };
 	EventID fileLoaderEvent;
 }
-struct IniConfig iniConfig;
+bool iniAutoUpdate;
+bool iniUseLoadLock;
 std::mutex loadLock;
 bool hasSokuEngine;
+
+static bool GetModulePath(HMODULE handle, std::filesystem::path& result) {
+	// use wchar for better path handling
+	std::wstring buffer;
+	int len = MAX_PATH + 1;
+	do {
+		buffer.resize(len);
+		len = GetModuleFileNameW(handle, buffer.data(), buffer.size());
+	} while(len > buffer.size());
+
+	if (len) {
+		result = std::filesystem::path(buffer).parent_path();
+	}
+	return len;
+}
 
 extern "C" __declspec(dllexport) bool CheckVersion(const BYTE hash[16]) {
 	return ::memcmp(TARGET_HASH, hash, sizeof TARGET_HASH) == 0;
@@ -22,23 +37,15 @@ extern "C" __declspec(dllexport) bool Initialize(HMODULE hMyModule, HMODULE hPar
 	hasSokuEngine = GetModuleHandle(TEXT("SokuEngine")) != NULL && GetModuleHandle(TEXT("SokuEngine")) != INVALID_HANDLE_VALUE;
 	if (hasSokuEngine) fileLoaderEvent = Soku::SubscribeEvent(SokuEvent::FileLoader, {FileLoaderCallback});
 
-	TCHAR tmpPath[MAX_PATH];
-	GetModuleFileName(hMyModule, tmpPath, MAX_PATH);
-	ModPackage::basePath = std::filesystem::path(tmpPath).parent_path();
-
+	GetModulePath(hMyModule, ModPackage::basePath);
 	LoadSettings();
-	if (hasSokuEngine) {
-		if (iniConfig.useIntercept) LoadIntercept();
-		else LoadConverter();
-	} else {
-		LoadTamper();
-	}
+	if (!hasSokuEngine) LoadTamper();
 
-	if (!iniConfig.useLoadLock) loadLock.unlock();
+	if (!iniUseLoadLock) loadLock.unlock();
 	curl_global_init(CURL_GLOBAL_DEFAULT);
 	LoadEngineMenu();
 
-	if (iniConfig.useLoadLock) loadLock.unlock();
+	if (iniUseLoadLock) loadLock.unlock();
 	return TRUE;
 }
 
@@ -46,7 +53,6 @@ extern "C" __declspec(dllexport) void AtExit() {
 	UnloadEngineMenu();
 	if (hasSokuEngine) {
 		Soku::UnsubscribeEvent(fileLoaderEvent);
-		if (iniConfig.useIntercept) UnloadIntercept();
 	} else {
 		UnloadTamper();
 	}
@@ -58,29 +64,25 @@ BOOL WINAPI DllMain(HMODULE hModule, DWORD fdwReason, LPVOID lpReserved) {
 }
 
 void LoadSettings() {
-	iniConfig.useIntercept = GetPrivateProfileIntA("Options", "useIntercept",
-		false, (ModPackage::basePath / "shady-loader.ini").string().c_str());
-	iniConfig.autoUpdate = GetPrivateProfileIntA("Options", "autoUpdate",
-		true, (ModPackage::basePath / "shady-loader.ini").string().c_str());
-	iniConfig.useLoadLock = GetPrivateProfileIntA("Options", "useLoadLock",
-		true, (ModPackage::basePath / "shady-loader.ini").string().c_str());
+	iniAutoUpdate = GetPrivateProfileIntW(L"Options", L"autoUpdate",
+		true, (ModPackage::basePath / L"shady-loader.ini").c_str());
+	iniUseLoadLock = GetPrivateProfileIntW(L"Options", L"useLoadLock",
+		true, (ModPackage::basePath / L"shady-loader.ini").c_str());
 }
 
 void SaveSettings() {
-	WritePrivateProfileStringA("Options", "useIntercept",
-		iniConfig.useIntercept ? "1" : "0", (ModPackage::basePath / "shady-loader.ini").string().c_str());
-	WritePrivateProfileStringA("Options", "autoUpdate",
-		iniConfig.autoUpdate ? "1" : "0", (ModPackage::basePath / "shady-loader.ini").string().c_str());
-	WritePrivateProfileStringA("Options", "useLoadLock",
-		iniConfig.useLoadLock ? "1" : "0", (ModPackage::basePath / "shady-loader.ini").string().c_str());
+	WritePrivateProfileStringW(L"Options", L"autoUpdate",
+		iniAutoUpdate ? L"1" : L"0", (ModPackage::basePath / L"shady-loader.ini").c_str());
+	WritePrivateProfileStringW(L"Options", L"useLoadLock",
+		iniUseLoadLock ? L"1" : L"0", (ModPackage::basePath / L"shady-loader.ini").c_str());
 
 	nlohmann::json root;
 	for (auto& package : ModPackage::packageList) {
 		root[package->name.string()] = package->data;
-		if (package->fileExists) WritePrivateProfileStringA("Packages", package->name.string().c_str(),
-			package->enabled ? "1" : "0", (ModPackage::basePath / "shady-loader.ini").string().c_str());
+		if (package->fileExists) WritePrivateProfileStringW(L"Packages", package->name.c_str(),
+			package->enabled ? L"1" : L"0", (ModPackage::basePath / L"shady-loader.ini").c_str());
 	}
 
-	std::ofstream output(ModPackage::basePath / "packages.json");
+	std::ofstream output(ModPackage::basePath / L"packages.json");
 	output << root;
 }

@@ -3,6 +3,12 @@
 #include <curl/curl.h>
 #include <fstream>
 #include <sstream>
+#include "../Core/util/tempfiles.hpp"
+// NOTE: Don't use wchar is this file, so it can be build on linux
+
+namespace {
+    std::string cookieFile = (ShadyUtil::TempDir() / "shady-cookies.jar").string();
+}
 
 static size_t write_callback(char *ptr, size_t size, size_t nmemb, void *userdata) {
     ((std::ostream*)userdata)->write(ptr, size * nmemb);
@@ -29,7 +35,7 @@ void FetchFile::run() {
     curl_easy_setopt(curl, CURLOPT_AUTOREFERER, 1L);
     curl_easy_setopt(curl, CURLOPT_ACCEPT_ENCODING, "");
     curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
-    curl_easy_setopt(curl, CURLOPT_COOKIEJAR, "-");
+    curl_easy_setopt(curl, CURLOPT_COOKIEJAR, cookieFile.c_str());
     //curl_easy_setopt(curl, CURLOPT_SSL_VERIFYSTATUS, 1L);
 
     std::ofstream output; output.open(filename, std::ios::out | std::ios::binary);
@@ -37,20 +43,20 @@ void FetchFile::run() {
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_callback);
     curl_easy_setopt(curl, CURLOPT_URL, ("https://drive.google.com/uc?export=download&id=" + fileId).c_str());
 
-    if(curl_easy_perform(curl) == CURLE_OK) {
+    CURLcode result = curl_easy_perform(curl);
+    if (result == CURLE_OK) {
         char *contentType;
         curl_easy_getinfo(curl, CURLINFO_CONTENT_TYPE, &contentType);
         if (strncmp("text/html", contentType, 9) == 0) {
             output.close();
             curl_easy_setopt(curl, CURLOPT_URL, ("https://drive.google.com" + findConfirmUrl(filename)).c_str());
-            std::filesystem::remove(filename);
             output.open(filename, std::ios::out | std::ios::binary);
-            curl_easy_perform(curl);
+            result = curl_easy_perform(curl);
         }
     } output.close();
 
     long response; curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response);
-    if (response != 200) std::filesystem::remove(filename);
+    if (result != CURLE_OK || response != 200) std::filesystem::remove(filename);
     curl_easy_cleanup(curl);
 }
 
@@ -65,7 +71,7 @@ void FetchJson::run() {
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_callback);
     curl_easy_setopt(curl, CURLOPT_URL, ("https://drive.google.com/uc?export=download&id=" + fileId).c_str());
 
-    if(curl_easy_perform(curl) == CURLE_OK) {
+    if (curl_easy_perform(curl) == CURLE_OK) {
         try {buffer >> data;} catch (...) {}
     } curl_easy_cleanup(curl);
 }
@@ -83,9 +89,10 @@ void FetchImage::run() {
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_callback);
     curl_easy_setopt(curl, CURLOPT_URL, ("https://drive.google.com/uc?export=download&id=" + fileId).c_str());
 
-    if(curl_easy_perform(curl) == CURLE_OK) {
-        long response; curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response);
-        if (response == 200) output.close();
-    } else output.close();
+    CURLcode result = curl_easy_perform(curl);
+    output.close();
+
+    long response; curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response);
+    if (result != CURLE_OK || response != 200) std::filesystem::remove(filename);    
     curl_easy_cleanup(curl);
 }

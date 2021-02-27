@@ -7,11 +7,8 @@
 #include "decodehtml.hpp"
 #include <filesystem>
 
-extern struct IniConfig {
-    bool useIntercept;
-    bool autoUpdate;
-    bool useLoadLock;
-} iniConfig;
+extern bool iniAutoUpdate;
+extern bool iniUseLoadLock;
 extern std::mutex loadLock;
 extern bool hasSokuEngine;
 
@@ -21,13 +18,12 @@ void LoadEngineMenu();
 void UnloadEngineMenu();
 void LoadIntercept();
 void UnloadIntercept();
-void LoadConverter();
 void LoadTamper();
 void UnloadTamper();
 
 void FileLoaderCallback(SokuData::FileLoaderData& data);
-void* EnablePackage(const std::filesystem::path& name, const std::filesystem::path& ext, std::vector<FileID>& sokuIds);
-void DisablePackage(std::vector<FileID>& sokuIds, void* script);
+int EnablePackage(const std::filesystem::path& name, const std::filesystem::path& ext);
+void DisablePackage(int sokuIds, void* script);
 
 inline std::string ws2s(const std::wstring& wstr) {
     int size_needed = WideCharToMultiByte(CP_UTF8, 0, &wstr[0], (int)wstr.size(), NULL, 0, NULL, NULL);

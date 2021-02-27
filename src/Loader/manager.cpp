@@ -3,6 +3,8 @@
 #include <fstream>
 #include <termcolor/termcolor.hpp>
 #include "modpackage.hpp"
+// NOTE: Don't use wchar is this file, so it can be build on linux
+// TODO find replacement for PrivateProfile on linux
 
 void saveJson() {
     nlohmann::json root;
@@ -41,7 +43,7 @@ void showIntro() {
 }
 
 bool enterViewMod(ModPackage* package) {
-    std::cout << "Name: " << termcolor::green << package->name << termcolor::reset << std::endl;
+    std::cout << std::endl << "Name: "<< termcolor::green << package->name << termcolor::reset << std::endl;
     std::cout << "Version: " << package->version() << std::endl;
     std::cout << "Creator: " << package->creator() << std::endl;
     std::cout << "Description: " << package->description() << std::endl << std::endl;
@@ -80,7 +82,7 @@ bool enterViewMod(ModPackage* package) {
         case 'O': std::cout << "d[O]wnload; "; break;
         case 'B': std::cout << "[B]ack/cancel; "; break;
         }
-    } std::cout << "\b\b" << termcolor::yellow << "): ";
+    } std::cout << "\b\b" << termcolor::reset << "): ";
     char choice; std::cin >> choice;
     choice = std::toupper(choice);
     if (std::find(options.begin(), options.end(), choice) == options.end()) {
@@ -150,10 +152,10 @@ bool enterManage2() {
 
 void enterManage() {
     std::cout << "Parsing local mods..." << std::endl;
-    if (ModPackage::packageList.empty()) {
-        ModPackage::LoadFromLocalData();
-        ModPackage::LoadFromFilesystem();
-    }
+    for (auto& package : ModPackage::packageList) delete package;
+	ModPackage::packageList.clear();
+    ModPackage::LoadFromLocalData();
+    ModPackage::LoadFromFilesystem();
     for (auto& package : ModPackage::packageList) {
 		package->enabled = GetPrivateProfileIntA("Packages", package->name.string().c_str(), false,
             (ModPackage::basePath / "shady-loader.ini").string().c_str());
