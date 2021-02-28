@@ -183,6 +183,10 @@ static void EngineMenuCallback() {
 */
 
 namespace{
+	std::mutex helpLock;
+	std::string helpInfo;
+	int helpTimeout = -1;
+
 	class : public AsyncTask {
 	protected:
 		void run() {
@@ -191,8 +195,6 @@ namespace{
 
 			// Wait for module database
 			while (true) {
-				//static std::string helpInfo;
-				//static int helpTimeout = -1;
 				if (remoteConfig.isDone()) {
 					// We are sync here
 					if (!remoteConfig.data.is_object()) return;
@@ -201,8 +203,9 @@ namespace{
 						if (!package->isLocal() && package->requireUpdate) {
 							package->downloadFile();
 							downloads.push_back(package);
-							//helpInfo = "Updating " + package->name.string();
-							//helpTimeout = 240;
+							std::lock_guard guard(helpLock);
+							helpInfo = "Updating " + package->name.string();
+							helpTimeout = 240;
 						}
 					}
 					break;
@@ -228,15 +231,17 @@ namespace{
 							package->data["version"] = package->data.value("remoteVersion", "");
 							package->requireUpdate = false;
 							package->fileExists = true;
-							//helpInfo = "Finished " + package->name.string() + " Download";
+							std::lock_guard guard(helpLock);
+							helpInfo = "Finished " + package->name.string() + " Download";
 						} else {
-							//helpInfo = package->name.string() + " Download Failed";
-						} //helpTimeout = 240;
+							std::lock_guard guard(helpLock);
+							helpInfo = package->name.string() + " Download Failed";
+						} helpTimeout = 240;
 						delete package->downloadTask;
 						package->downloadTask = 0;
 						if (wasEnabled) {
 							setPackageEnabled(package, true);
-							if (iniUseLoadLock) loadLock.lock();
+							if (iniUseLoadLock) loadLock.unlock();
 						}
 						SaveSettings();
 						i = downloads.erase(i);
@@ -248,8 +253,9 @@ namespace{
 	} updateController;
 }
 
-/*
+void RenderCallback(SokuData::RenderData& data) {
 	if (helpTimeout > 0) {
+		std::lock_guard guard(helpLock);
 		--helpTimeout;
 		ImGuiStyle& style = ImGui::GetStyle();
 		ImVec2 size = ImGui::CalcTextSize(helpInfo.c_str(), 0, false, 640);
@@ -261,7 +267,7 @@ namespace{
 		ImGui::Text(helpInfo.c_str());
 		ImGui::End();
 	}
-*/
+}
 
 void LoadEngineMenu() {
 	ModPackage::LoadFromLocalData();
@@ -275,7 +281,7 @@ void LoadEngineMenu() {
 
 	if (hasSokuEngine) {
 		//EngineMenuID = Soku::AddItem(SokuComponent::EngineMenu, "Package Load", {EngineMenuCallback});
-		//RenderEvtID = Soku::SubscribeEvent(SokuEvent::Render, {RenderCallback});
+		RenderEvtID = Soku::SubscribeEvent(SokuEvent::Render, {RenderCallback});
 	}
 	if (iniAutoUpdate) {
 		remoteConfig.start();
@@ -286,7 +292,7 @@ void LoadEngineMenu() {
 void UnloadEngineMenu() {
 	if (hasSokuEngine) {
 		//Soku::RemoveItem(EngineMenuID);
-		//Soku::UnsubscribeEvent(RenderEvtID);
+		Soku::UnsubscribeEvent(RenderEvtID);
 	}
 
 	loadLock.lock();
