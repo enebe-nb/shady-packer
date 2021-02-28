@@ -37,37 +37,9 @@ inline DWORD TamperNearJmpOpr(DWORD addr, DWORD target) {
     return old;
 }
 
-static DWORD DoIntercept(DWORD addr, DWORD target, int offset) {
-    char* lpAddr = (char*)addr;
-    char* lpTramp = new char[offset + 5];
-    DWORD tramp = (DWORD) lpTramp;
-    DWORD dwOldProtect;
-
-    for (int i = 0; i < offset; ++i) *lpTramp++ = *lpAddr++;
-    *lpTramp++ = 0xE9;
-    *(int*)lpTramp = (int)addr - (int)tramp - 5;
-    VirtualProtect(reinterpret_cast<LPVOID>(tramp), offset+5, PAGE_EXECUTE_READWRITE, &dwOldProtect);
-
-    VirtualProtect(reinterpret_cast<LPVOID>(addr), offset, PAGE_EXECUTE_READWRITE, &dwOldProtect);
-    *(char*)addr = 0xE9;
-    *(int*)(addr + 1) = (int)target - (int)addr - 5;
-    VirtualProtect(reinterpret_cast<LPVOID>(addr), offset, dwOldProtect, &dwOldProtect);
-
-    FlushInstructionCache(GetCurrentProcess(), 0, 0);
-    return tramp;
-}
-
-static void UndoIntercept(DWORD addr, DWORD tramp, int offset) {
-    char* lpAddr = (char*)addr;
-    char* lpTramp = (char*)tramp;
-    DWORD dwOldProtect;
-
-    ::VirtualProtect(reinterpret_cast<LPVOID>(addr), offset, PAGE_EXECUTE_READWRITE, &dwOldProtect);
-    for (int i = 0; i < offset; ++i) *lpAddr++ = *lpTramp++;
-    ::VirtualProtect(reinterpret_cast<LPVOID>(addr), offset, dwOldProtect, &dwOldProtect);
-
-    delete[] (char*)tramp;
-    FlushInstructionCache(GetCurrentProcess(), 0, 0);
+inline void TamperNearCall(DWORD addr, DWORD target) {
+    *reinterpret_cast<PBYTE>(addr + 0) = 0xE8;
+    TamperNearJmpOpr(addr, target);
 }
 
 static void applyGameFilters(int id = -1) {
@@ -129,20 +101,28 @@ static int WINAPI repl_read_constructor(const char *filename, unsigned int *size
     return result;
 }
 
+int _LoadTamper() {
+    DWORD dwOldProtect;
+    ::VirtualProtect(reinterpret_cast<LPVOID>(0x0040D227), 5, PAGE_EXECUTE_WRITECOPY, &dwOldProtect);
+    orig_read_constructor = (read_constructor_t) TamperNearJmpOpr(0x0040D227, reinterpret_cast<DWORD>(repl_read_constructor));
+    ::VirtualProtect(reinterpret_cast<LPVOID>(0x0040D227), 5, dwOldProtect, &dwOldProtect);
+    return *(int*)0x008943b8;
+}
+
 void LoadTamper() {
     DWORD dwOldProtect;
-    ::VirtualProtect(reinterpret_cast<LPVOID>(TEXT_SECTION_OFFSET), TEXT_SECTION_SIZE, PAGE_EXECUTE_WRITECOPY, &dwOldProtect);
-    orig_read_constructor = (read_constructor_t) TamperNearJmpOpr(0x0040D227, reinterpret_cast<DWORD>(repl_read_constructor));
-    ::VirtualProtect(reinterpret_cast<LPVOID>(TEXT_SECTION_OFFSET), TEXT_SECTION_SIZE, dwOldProtect, &dwOldProtect);
+    ::VirtualProtect(reinterpret_cast<LPVOID>(0x007fb596), 5, PAGE_EXECUTE_WRITECOPY, &dwOldProtect);
+    TamperNearCall(0x007fb596, reinterpret_cast<DWORD>(_LoadTamper));
+    ::VirtualProtect(reinterpret_cast<LPVOID>(0x007fb596), 5, dwOldProtect, &dwOldProtect);
 }
 
 void UnloadTamper() {
     package.clear();
 
     DWORD dwOldProtect;
-    ::VirtualProtect(reinterpret_cast<LPVOID>(TEXT_SECTION_OFFSET), TEXT_SECTION_SIZE, PAGE_EXECUTE_WRITECOPY, &dwOldProtect);
+    ::VirtualProtect(reinterpret_cast<LPVOID>(0x0040D227), 5, PAGE_EXECUTE_WRITECOPY, &dwOldProtect);
     TamperNearJmpOpr(0x0040D227, reinterpret_cast<DWORD>(orig_read_constructor));
-    ::VirtualProtect(reinterpret_cast<LPVOID>(TEXT_SECTION_OFFSET), TEXT_SECTION_SIZE, dwOldProtect, &dwOldProtect);
+    ::VirtualProtect(reinterpret_cast<LPVOID>(0x0040D227), 5, dwOldProtect, &dwOldProtect);
 }
 
 void FileLoaderCallback(SokuData::FileLoaderData& data) {

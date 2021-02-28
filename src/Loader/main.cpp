@@ -36,10 +36,10 @@ extern "C" __declspec(dllexport) bool Initialize(HMODULE hMyModule, HMODULE hPar
 	loadLock.lock();
 	hasSokuEngine = GetModuleHandle(TEXT("SokuEngine")) != NULL && GetModuleHandle(TEXT("SokuEngine")) != INVALID_HANDLE_VALUE;
 	if (hasSokuEngine) fileLoaderEvent = Soku::SubscribeEvent(SokuEvent::FileLoader, {FileLoaderCallback});
+	else LoadTamper(); // late loaded
 
 	GetModulePath(hMyModule, ModPackage::basePath);
 	LoadSettings();
-	if (!hasSokuEngine) LoadTamper();
 
 	if (!iniUseLoadLock) loadLock.unlock();
 	curl_global_init(CURL_GLOBAL_DEFAULT);
