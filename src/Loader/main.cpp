@@ -10,7 +10,7 @@ namespace {
 }
 bool iniAutoUpdate;
 bool iniUseLoadLock;
-std::mutex loadLock;
+std::shared_mutex loadLock;
 bool hasSokuEngine;
 
 static bool GetModulePath(HMODULE handle, std::filesystem::path& result) {
@@ -32,7 +32,12 @@ extern "C" __declspec(dllexport) bool CheckVersion(const BYTE hash[16]) {
 	return ::memcmp(TARGET_HASH, hash, sizeof TARGET_HASH) == 0;
 }
 
+// TODO allow to recognize the engine existence in this case
+namespace {bool _initialized = false;}
 extern "C" __declspec(dllexport) bool Initialize(HMODULE hMyModule, HMODULE hParentModule) {
+	if (!_initialized) _initialized = true;
+	else return FALSE;
+
 	loadLock.lock();
 	hasSokuEngine = GetModuleHandle(TEXT("SokuEngine")) != NULL && GetModuleHandle(TEXT("SokuEngine")) != INVALID_HANDLE_VALUE;
 	if (hasSokuEngine) fileLoaderEvent = Soku::SubscribeEvent(SokuEvent::FileLoader, {FileLoaderCallback});

@@ -64,6 +64,7 @@ static int WINAPI repl_read_constructor(const char *filename, unsigned int *size
 		if (filenameB[i] == '.') extension = &filenameB[i];
 	} filenameB[len] = 0;
 
+    loadLock.lock_shared();
     auto iter = package.findFile(filenameB);
     if (iter == package.end()) {
         auto type = ShadyCore::FileType::getSimple(filenameB);
@@ -96,6 +97,7 @@ static int WINAPI repl_read_constructor(const char *filename, unsigned int *size
         __asm mov esi, esi_value
 		result = orig_read_constructor(filename, size, offset);
     }
+    loadLock.unlock_shared();
 
     delete[] filenameB;
     return result;
@@ -127,9 +129,8 @@ void UnloadTamper() {
 
 void FileLoaderCallback(SokuData::FileLoaderData& data) {
     const char* ext = std::strrchr(data.fileName, '.');
-	if (!ext || strcmp(ext, ".lua") != 0)
-        {std::lock_guard<std::mutex> lock(loadLock);}
 
+    loadLock.lock_shared();
     auto iter = package.findFile(data.fileName);
     if (iter == package.end()) {
         auto type = ShadyCore::FileType::getSimple(data.fileName);
@@ -166,6 +167,7 @@ void FileLoaderCallback(SokuData::FileLoaderData& data) {
             setup_stream_reader(data, buffer, size);
         }
     }
+    loadLock.unlock_shared();
 }
 
 namespace {

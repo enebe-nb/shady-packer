@@ -2,14 +2,14 @@
 
 #include <fstream>
 #include <windows.h>
-#include <mutex>
+#include <shared_mutex>
 #include <Sokulib.h>
 #include "decodehtml.hpp"
 #include <filesystem>
 
 extern bool iniAutoUpdate;
 extern bool iniUseLoadLock;
-extern std::mutex loadLock;
+extern std::shared_mutex loadLock;
 extern bool hasSokuEngine;
 
 void LoadSettings();

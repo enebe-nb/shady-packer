@@ -215,7 +215,10 @@ namespace{
 					if ((*i)->downloadTask && (*i)->downloadTask->isDone()) {
 						ModPackage* package = (*i);
 						bool wasEnabled = package->enabled;
-						if (wasEnabled) setPackageEnabled(package, false);
+						if (wasEnabled) {
+							if (iniUseLoadLock) loadLock.lock();
+							setPackageEnabled(package, false);
+						}
 						std::filesystem::path filename(ModPackage::basePath / package->name);
 						filename += package->ext; filename += L".part";
 						if (std::filesystem::exists(filename)) {
@@ -231,7 +234,10 @@ namespace{
 						} //helpTimeout = 240;
 						delete package->downloadTask;
 						package->downloadTask = 0;
-						if (wasEnabled) setPackageEnabled(package, true);
+						if (wasEnabled) {
+							setPackageEnabled(package, true);
+							if (iniUseLoadLock) loadLock.lock();
+						}
 						SaveSettings();
 						i = downloads.erase(i);
 					} else ++i;
@@ -270,22 +276,24 @@ void LoadEngineMenu() {
 	if (hasSokuEngine) {
 		//EngineMenuID = Soku::AddItem(SokuComponent::EngineMenu, "Package Load", {EngineMenuCallback});
 		//RenderEvtID = Soku::SubscribeEvent(SokuEvent::Render, {RenderCallback});
-		if (iniAutoUpdate) {
-			remoteConfig.start();
-			updateController.start();
-		}
+	}
+	if (iniAutoUpdate) {
+		remoteConfig.start();
+		updateController.start();
 	}
 }
 
 void UnloadEngineMenu() {
 	if (hasSokuEngine) {
 		//Soku::RemoveItem(EngineMenuID);
-		Soku::UnsubscribeEvent(RenderEvtID);
+		//Soku::UnsubscribeEvent(RenderEvtID);
 	}
 
+	loadLock.lock();
 	for (auto& package : ModPackage::packageList) {
 		setPackageEnabled(package, false);
 		delete package;
 	}
+	loadLock.lock();
 	ModPackage::packageList.clear();
 }
