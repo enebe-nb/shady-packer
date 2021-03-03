@@ -1,5 +1,13 @@
 cmake_minimum_required(VERSION 3.16)
-project(shady-packer)
+cmake_policy(SET CMP0048 NEW)
+
+string(TIMESTAMP SHADY_VER_DAY "%m%d" UTC)
+string(TIMESTAMP SHADY_VER_YEAR "%Y" UTC)
+project(shady-packer
+	VERSION 1.3.${SHADY_VER_YEAR}.${SHADY_VER_DAY}
+	DESCRIPTION "Tools for a specific fighting game.")
+set(SHADY_VERSION ${PROJECT_VERSION})
+string(REPLACE . , SHADY_VERSION_COMMA ${SHADY_VERSION})
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)

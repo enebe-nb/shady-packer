@@ -1,7 +1,5 @@
 #include "main.hpp"
 
-#include <shlwapi.h>
-#include <SokuLib.h>
 #include <string>
 #include <filesystem>
 #include <fstream>
@@ -17,17 +15,9 @@
 #define TEXT_SECTION_SIZE    0x00445000
 
 namespace {
-    typedef FileID (*AddFile_t)(const std::wstring& path);
-    AddFile_t tramp_AddFile;
-    typedef bool (*RemoveFileByPath_t)(const std::wstring& path);
-    RemoveFileByPath_t tramp_RemoveFileByPath;
-    typedef bool (*RemoveFile_t)(FileID);
-    RemoveFile_t tramp_RemoveFile;
-    typedef bool (*RemoveAllFiles_t)();
-    RemoveAllFiles_t tramp_RemoveAllFiles;
     ShadyCore::Package package;
 
-	typedef int (WINAPI* read_constructor_t)(const char *filename, unsigned int *size, unsigned int *offset);
+	typedef void* (__stdcall* read_constructor_t)(const char *filename, unsigned int *size, unsigned int *offset);
 	read_constructor_t orig_read_constructor = (read_constructor_t)0x41c080;
 }
 
@@ -51,39 +41,43 @@ static void applyGameFilters(int id = -1) {
         ), id);
 }
 
-static int WINAPI repl_read_constructor(const char *filename, unsigned int *size, unsigned int *offset) {
+static void* __stdcall repl_read_constructor(const char *filename, unsigned int *size, unsigned int *offset) {
+#ifdef _MSC_VER
     int esi_value;
 	__asm mov esi_value, esi
+#else
+    register int esi_value asm("esi");
+#endif
 
     size_t len = strlen(filename);
 	char* filenameB = new char[len + 1];
-	char* extension = 0;
 	for (int i = 0; i < len; ++i) {
 		if (filename[i] == '/') filenameB[i] = '_';
 		else filenameB[i] = tolower(filename[i]);
-		if (filenameB[i] == '.') extension = &filenameB[i];
 	} filenameB[len] = 0;
 
     loadLock.lock_shared();
     auto iter = package.findFile(filenameB);
     if (iter == package.end()) {
         auto type = ShadyCore::FileType::getSimple(filenameB);
-        if (type.type != ShadyCore::FileType::TYPE_UNKNOWN) {
-            char* filename = new char[len + 1];
-            strcpy(filename, filenameB);
-            strcpy(filename + len - 4, type.inverseExt);
-            iter = package.findFile(filename);
-            delete[] filename;
+        if (type.type != ShadyCore::FileType::TYPE_UNKNOWN
+            && type.type != ShadyCore::FileType::TYPE_PACKAGE) {
+            char* filenameC = new char[len + 1];
+            strcpy(filenameC, filenameB);
+            strcpy(filenameC + len - 4, type.inverseExt);
+            iter = package.findFile(filenameC);
+            delete[] filenameC;
         }
     }
 
-    int result;
+    void* result;
     if (iter != package.end()) {
         auto type = ShadyCore::FileType::get(*iter);
-        *offset = 0;
+        *offset = 0x40000000; // just to hold a value
         if (type.isEncrypted || type == ShadyCore::FileType::TYPE_UNKNOWN) {
             *size = iter->getSize();
-            result = setup_entry_reader(esi_value, *iter);
+            *(int*)esi_value = ShadyCore::entry_reader_vtbl;
+            result = new ShadyCore::EntryReader(*iter, loadLock);
         } else {
             std::istream& input = iter->open();
             std::stringstream* buffer = new std::stringstream(std::ios::in|std::ios::out|std::ios::binary);
@@ -91,10 +85,16 @@ static int WINAPI repl_read_constructor(const char *filename, unsigned int *size
             *size = buffer->tellp();
             iter->close();
 
-            result = setup_stream_reader(esi_value, buffer, *size);
+            *(int*)esi_value = ShadyCore::stream_reader_vtbl;
+            result = buffer;
         }
     } else {
-        __asm mov esi, esi_value
+#ifdef _MSC_VER
+        // Required for th123e
+	    __asm mov esi, esi_value
+#else
+        asm("mov %0, %%esi" :: "rmi"(esi_value));
+#endif
 		result = orig_read_constructor(filename, size, offset);
     }
     loadLock.unlock_shared();
@@ -111,11 +111,14 @@ int _LoadTamper() {
     return *(int*)0x008943b8;
 }
 
-void LoadTamper() {
-    DWORD dwOldProtect;
-    ::VirtualProtect(reinterpret_cast<LPVOID>(0x007fb596), 5, PAGE_EXECUTE_WRITECOPY, &dwOldProtect);
-    TamperNearCall(0x007fb596, reinterpret_cast<DWORD>(_LoadTamper));
-    ::VirtualProtect(reinterpret_cast<LPVOID>(0x007fb596), 5, dwOldProtect, &dwOldProtect);
+void LoadTamper(const std::filesystem::path& caller) {
+    if (caller == L"SokuEngine.dll") _LoadTamper();
+    else {
+        DWORD dwOldProtect;
+        ::VirtualProtect(reinterpret_cast<LPVOID>(0x007fb596), 5, PAGE_EXECUTE_WRITECOPY, &dwOldProtect);
+        TamperNearCall(0x007fb596, reinterpret_cast<DWORD>(_LoadTamper));
+        ::VirtualProtect(reinterpret_cast<LPVOID>(0x007fb596), 5, dwOldProtect, &dwOldProtect);
+    }
 }
 
 void UnloadTamper() {
@@ -125,49 +128,6 @@ void UnloadTamper() {
     ::VirtualProtect(reinterpret_cast<LPVOID>(0x0040D227), 5, PAGE_EXECUTE_WRITECOPY, &dwOldProtect);
     TamperNearJmpOpr(0x0040D227, reinterpret_cast<DWORD>(orig_read_constructor));
     ::VirtualProtect(reinterpret_cast<LPVOID>(0x0040D227), 5, dwOldProtect, &dwOldProtect);
-}
-
-void FileLoaderCallback(SokuData::FileLoaderData& data) {
-    const char* ext = std::strrchr(data.fileName, '.');
-
-    loadLock.lock_shared();
-    auto iter = package.findFile(data.fileName);
-    if (iter == package.end()) {
-        auto type = ShadyCore::FileType::getSimple(data.fileName);
-        if (type.type != ShadyCore::FileType::TYPE_UNKNOWN) {
-            size_t size = strlen(data.fileName);
-            char* filename = new char[size + 1];
-            strcpy(filename, data.fileName);
-            strcpy(filename + size - 4, type.inverseExt);
-            iter = package.findFile(filename);
-            delete[] filename;
-        }
-    }
-
-    if (iter != package.end()) {
-        auto type = ShadyCore::FileType::get(*iter);
-        if (type.isEncrypted || type == ShadyCore::FileType::TYPE_UNKNOWN) {
-            data.inputFormat = DataFormat::RAW;
-            setup_entry_reader(data, *iter);
-        } else if (type == ShadyCore::FileType::TYPE_IMAGE) {
-            data.inputFormat = DataFormat::PNG;
-            std::istream& input = iter->open();
-            data.size = iter->getSize();
-            data.data = new char[data.size];
-            input.read((char*)data.data, data.size);
-            iter->close();
-        } else {
-            std::istream& input = iter->open();
-            std::stringstream* buffer = new std::stringstream(std::ios::in|std::ios::out|std::ios::binary);
-            ShadyCore::convertResource(type, input, *buffer);
-            size_t size = buffer->tellp();
-            iter->close();
-
-            data.inputFormat = DataFormat::RAW;
-            setup_stream_reader(data, buffer, size);
-        }
-    }
-    loadLock.unlock_shared();
 }
 
 namespace {

@@ -1,9 +1,24 @@
 #pragma once
 
-#include <SokuLib.h>
 #include "../Core/baseentry.hpp"
+#include <shared_mutex>
 
-void setup_entry_reader(SokuData::FileLoaderData& data, ShadyCore::BasePackageEntry& entry);
-int setup_entry_reader(int esi, ShadyCore::BasePackageEntry& entry);
-void setup_stream_reader(SokuData::FileLoaderData& data, std::istream* stream, size_t size);
-int setup_stream_reader(int esi, std::istream* stream, size_t size);
+namespace ShadyCore {
+    //typedef std::pair<ShadyCore::BasePackageEntry*, std::istream*> entry_pair;
+    typedef struct EntryReader{
+        BasePackageEntry& entry;
+        std::istream& data;
+        std::shared_mutex& mutex;
+        inline EntryReader(BasePackageEntry& entry, std::shared_mutex& mutex)
+            : entry(entry), data(entry.open()), mutex(mutex) {
+            mutex.lock_shared();
+        }
+
+        inline ~EntryReader() {
+            entry.close();
+            mutex.unlock_shared();
+        }
+    } EntryReader;
+    extern const int entry_reader_vtbl;
+    extern const int stream_reader_vtbl;
+}

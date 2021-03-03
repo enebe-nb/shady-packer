@@ -33,6 +33,8 @@ endmacro()
 
 option(BUILD_SHARED_LIBS "Build shared libraries" OFF)
 set(SKIP_INSTALL_ALL TRUE)
+set(ENABLE_BZIP2 OFF)
+set(ENABLE_LZMA OFF)
 
 # rapidxml Library
 add_download_module(rapidxml "-1.13" https://downloads.sourceforge.net/project/rapidxml/rapidxml/rapidxml%201.13/rapidxml-1.13.zip)
@@ -65,14 +67,10 @@ add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/libzip EXCLUDE_FROM_ALL)
 #target_compile_definitions(zip INTERFACE ZIP_STATIC)
 
 if(SHADY_ENABLE_MODULE)
-    # SokuEngine Library
-    add_library(SokuEngine UNKNOWN IMPORTED GLOBAL)
-    target_include_directories(SokuEngine INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/SokuLib)
-    set_target_properties(SokuEngine PROPERTIES IMPORTED_LOCATION ${CMAKE_CURRENT_SOURCE_DIR}/SokuLib/SokuEngineLib.lib)
-
     # libcurl Library
     add_download_module(curl "-7.75.0" https://curl.haxx.se/download/curl-7.75.0.zip)
     set(CMAKE_USE_SCHANNEL ON)
+    set(CMAKE_USE_LIBSSH2 OFF)
     add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/curl EXCLUDE_FROM_ALL)
 
     # nlohmann JSON Library

@@ -1,192 +1,117 @@
 #include "reader.hpp"
+#include "main.hpp"
+#include <fstream>
 
 namespace {
     typedef struct {
+        int vtable;
         void* data;
-        int offset;
+        int lastRead;
         int size;
-        int read;
+        int begin;
+        int offset;
+        int decryptKey;
     } reader_data_t;
 
-    typedef std::pair<ShadyCore::BasePackageEntry*, std::istream*> entry_pair;
-    typedef void (WINAPI* orig_dealloc_t)(int);
+    typedef struct {
+        reader_data_t* (__fastcall *destruct)(reader_data_t*, void*, int);
+        bool (__fastcall *read)(reader_data_t*, void*, char*, int);
+        int (__fastcall *getRead)(reader_data_t*);
+        int (__fastcall *seek)(reader_data_t*, void*, int, int);
+        int (__fastcall *getSize)(reader_data_t*);
+    } reader_vtbl_t;
+
+    typedef void (__cdecl* orig_dealloc_t)(reader_data_t*);
     orig_dealloc_t orig_dealloc = (orig_dealloc_t)0x81f6fa;
 }
 
-static int WINAPI entry_reader_getSize() {
-    int ecx_value;
-    __asm mov ecx_value, ecx
-    if (ecx_value == 0) return 0;
-
-    reader_data_t *data = (reader_data_t *)(ecx_value + 4);
-    if (data->data == (void*)data->offset) data->offset = 0;
-    int size = ((entry_pair*)data->data)->first->getSize();
-    __asm mov ecx, ecx_value
-    return size;
+static int __fastcall reader_getSize(reader_data_t* ecx) {
+    return ecx->size;
 }
 
-static int WINAPI entry_reader_getRead() {
-    int ecx_value;
-    __asm mov ecx_value, ecx
-    if (ecx_value == 0) return 0;
-
-    reader_data_t *data = (reader_data_t *)(ecx_value + 4);
-    int read = ((entry_pair*)data->data)->second->gcount();
-    __asm mov ecx, ecx_value
-    return read;
+static int __fastcall reader_getRead(reader_data_t* ecx) {
+    return ecx->lastRead;
 }
 
-static int WINAPI entry_reader_destruct(int a) {
-    int ecx_value;
-    __asm mov ecx_value, ecx
-    if (!ecx_value) return 0;
-
-    reader_data_t *data = (reader_data_t *)(ecx_value+4);
-    ((entry_pair*)data->data)->first->close();
-    //delete (entry_pair*) data->data; // crash?????
-    if (a & 1) orig_dealloc(ecx_value);
-    __asm mov ecx, ecx_value
-    return ecx_value;
+static reader_data_t* __fastcall entry_reader_destruct(reader_data_t* ecx, void* edx, int a) {
+    delete (ShadyCore::EntryReader*)ecx->data;
+    if (a & 1) orig_dealloc(ecx);
+    return ecx;
 }
 
-static int WINAPI entry_reader_read(char *dest, int size) {
-    int ecx_value;
-    __asm mov ecx_value, ecx
-    if (!ecx_value) return 0;
-
-    reader_data_t *data = (reader_data_t *)(ecx_value + 4);
-    ((entry_pair*)data->data)->second->read(dest, size);
-    __asm mov ecx, ecx_value
-    return !((entry_pair*)data->data)->second->eof();
+static bool __fastcall entry_reader_read(reader_data_t* ecx, void* edx, char *dest, int size) {
+    ecx->lastRead = ((ShadyCore::EntryReader*)ecx->data)->data.read(dest, size).gcount();
+    ecx->offset += ecx->lastRead;
+    return ecx->lastRead > 0;
 }
 
-static void WINAPI entry_reader_seek(int offset, int whence) {
-    int ecx_value;
-    __asm mov ecx_value, ecx
-    if (ecx_value == 0) return;
-
-    reader_data_t *data = (reader_data_t *)(ecx_value + 4);
+static int __fastcall entry_reader_seek(reader_data_t* ecx, void* edx, int offset, int whence) {
+    if (((ShadyCore::EntryReader*)ecx->data)->data.eof()) {
+        ((ShadyCore::EntryReader*)ecx->data)->data.clear();
+    }
     switch(whence) {
     case SEEK_SET:
-        ((entry_pair*)data->data)->second->seekg(offset, std::ios::beg);
+        ((ShadyCore::EntryReader*)ecx->data)->data.seekg(offset, std::ios::beg);
         break;
     case SEEK_CUR:
-        ((entry_pair*)data->data)->second->seekg(offset, std::ios::cur);
+        ((ShadyCore::EntryReader*)ecx->data)->data.seekg(offset, std::ios::cur);
         break;
     case SEEK_END:
-        ((entry_pair*)data->data)->second->seekg(-offset, std::ios::end);
+        ((ShadyCore::EntryReader*)ecx->data)->data.seekg(-offset, std::ios::end);
         break;
+    default: return 0;
     }
-    if (((entry_pair*)data->data)->second->fail()) ((entry_pair*)data->data)->second->clear();
-    __asm mov ecx, ecx_value
+    return ecx->offset = ((ShadyCore::EntryReader*)ecx->data)->data.tellg();
 }
 
-static int WINAPI stream_reader_getSize() {
-    int ecx_value;
-    __asm mov ecx_value, ecx
-    if (ecx_value == 0) return 0;
-
-    reader_data_t *data = (reader_data_t *)(ecx_value + 4);
-    __asm mov ecx, ecx_value
-    return data->size;
+static reader_data_t* __fastcall stream_reader_destruct(reader_data_t* ecx, void* edx, int a) {
+    delete (std::istream*)ecx->data;
+    if (a & 1) orig_dealloc(ecx);
+    return ecx;
 }
 
-static int WINAPI stream_reader_getRead() {
-    int ecx_value;
-    __asm mov ecx_value, ecx
-    if (ecx_value == 0) return 0;
-
-    reader_data_t *data = (reader_data_t *)(ecx_value + 4);
-    __asm mov ecx, ecx_value
-    return data->read;
+static bool __fastcall stream_reader_read(reader_data_t* ecx, void* edx, char *dest, int size) {
+    ecx->lastRead = ((std::istream*)ecx->data)->read(dest, size).gcount();
+    ecx->offset += ecx->lastRead;
+    return ecx->lastRead > 0;
 }
 
-static int WINAPI stream_reader_destruct(int a) {
-    int ecx_value;
-    __asm mov ecx_value, ecx
-    if (!ecx_value) return 0;
-
-    reader_data_t *data = (reader_data_t *)(ecx_value+4);
-    delete (std::istream*)data->data;
-    if (a & 1) orig_dealloc(ecx_value);
-    __asm mov ecx, ecx_value
-    return ecx_value;
-}
-
-static int WINAPI stream_reader_read(char *dest, int size) {
-    int ecx_value;
-    __asm mov ecx_value, ecx
-    if (!ecx_value) return 0;
-
-    reader_data_t *data = (reader_data_t *)(ecx_value + 4);
-    ((std::istream*)data->data)->read(dest, size);
-    data->read = ((std::istream*)data->data)->gcount();
-    data->offset += data->read;
-    __asm mov ecx, ecx_value
-    return data->read > 0;
-}
-
-static void WINAPI stream_reader_seek(int offset, int whence) {
-    int ecx_value;
-    __asm mov ecx_value, ecx
-    if (ecx_value == 0) return;
-
-    reader_data_t *data = (reader_data_t *)(ecx_value + 4);
+static int __fastcall stream_reader_seek(reader_data_t* ecx, void* edx, int offset, int whence) {
+    if (((std::istream*)ecx->data)->eof()) {
+        ((std::istream*)ecx->data)->clear();
+    }
     switch(whence) {
     case SEEK_SET:
-        ((std::istream*)data->data)->seekg(offset, std::ios::beg);
+        ((std::istream*)ecx->data)->seekg(offset, std::ios::beg);
         break;
     case SEEK_CUR:
-        ((std::istream*)data->data)->seekg(offset, std::ios::cur);
+        ((std::istream*)ecx->data)->seekg(offset, std::ios::cur);
         break;
     case SEEK_END:
-        ((std::istream*)data->data)->seekg(-offset, std::ios::end);
+        ((std::istream*)ecx->data)->seekg(-offset, std::ios::end);
         break;
+    default: return 0;
     }
-    data->offset = ((std::istream*)data->data)->tellg();
-    __asm mov ecx, ecx_value
+    return ecx->offset = ((std::istream*)ecx->data)->tellg();
 }
 
-functable entry_reader_table = {
-    entry_reader_destruct,
-    entry_reader_read,
-    entry_reader_getRead,
-    entry_reader_seek,
-    entry_reader_getSize
-};
+namespace {
+    reader_vtbl_t entry_reader_table = {
+        entry_reader_destruct,
+        entry_reader_read,
+        reader_getRead,
+        entry_reader_seek,
+        reader_getSize,
+    };
 
-functable stream_reader_table = {
-    stream_reader_destruct,
-    stream_reader_read,
-    stream_reader_getRead,
-    stream_reader_seek,
-    stream_reader_getSize
-};
-
-void setup_entry_reader(SokuData::FileLoaderData& data, ShadyCore::BasePackageEntry& entry) {
-    data.data = new entry_pair(&entry, &entry.open());
-    data.size = entry.getSize();
-    data.reader = &entry_reader_table;
+    reader_vtbl_t stream_reader_table = {
+        stream_reader_destruct,
+        stream_reader_read,
+        reader_getRead,
+        stream_reader_seek,
+        reader_getSize,
+    };
 }
 
-int setup_entry_reader(int esi, ShadyCore::BasePackageEntry& entry) {
-    int *filedata = (int *)(esi+4);
-    filedata[0] = (int)new entry_pair(&entry, &entry.open());
-    filedata[1] = entry.getSize();
-    *(int*)esi = (int)&entry_reader_table;
-    return filedata[0];
-}
-
-void setup_stream_reader(SokuData::FileLoaderData& data, std::istream* stream, size_t size) {
-    data.data = stream;
-    data.size = size;
-    data.reader = &stream_reader_table;
-}
-
-int setup_stream_reader(int esi, std::istream* stream, size_t size) {
-    int *filedata = (int *)(esi+4);
-    filedata[0] = (int)stream;
-    filedata[1] = size;
-    *(int*)esi = (int) &stream_reader_table;
-    return filedata[0];
-}
+const int ShadyCore::entry_reader_vtbl = (int)&entry_reader_table;
+const int ShadyCore::stream_reader_vtbl = (int)&stream_reader_table;

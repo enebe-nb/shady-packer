@@ -1,17 +1,14 @@
+#include <curl/curl.h>
+
 #include "main.hpp"
 #include "modpackage.hpp"
 
-#include <curl/curl.h>
-#include <fstream>
-
 namespace {
 	const BYTE TARGET_HASH[16] = { 0xdf, 0x35, 0xd1, 0xfb, 0xc7, 0xb5, 0x83, 0x31, 0x7a, 0xda, 0xbe, 0x8c, 0xd9, 0xf5, 0x3b, 0x2e };
-	EventID fileLoaderEvent;
 }
 bool iniAutoUpdate;
 bool iniUseLoadLock;
 std::shared_mutex loadLock;
-bool hasSokuEngine;
 
 static bool GetModulePath(HMODULE handle, std::filesystem::path& result) {
 	// use wchar for better path handling
@@ -22,9 +19,20 @@ static bool GetModulePath(HMODULE handle, std::filesystem::path& result) {
 		len = GetModuleFileNameW(handle, buffer.data(), buffer.size());
 	} while(len > buffer.size());
 
-	if (len) {
-		result = std::filesystem::path(buffer).parent_path();
-	}
+	if (len) result = std::filesystem::path(buffer.begin(), buffer.begin()+len).parent_path();
+	return len;
+}
+
+static bool GetModuleName(HMODULE handle, std::filesystem::path& result) {
+	// use wchar for better path handling
+	std::wstring buffer;
+	int len = MAX_PATH + 1;
+	do {
+		buffer.resize(len);
+		len = GetModuleFileNameW(handle, buffer.data(), buffer.size());
+	} while(len > buffer.size());
+
+	if (len) result = std::filesystem::path(buffer.begin(), buffer.begin()+len).filename();
 	return len;
 }
 
@@ -38,33 +46,31 @@ extern "C" __declspec(dllexport) bool Initialize(HMODULE hMyModule, HMODULE hPar
 	if (!_initialized) _initialized = true;
 	else return FALSE;
 
-	loadLock.lock();
-	hasSokuEngine = GetModuleHandle(TEXT("SokuEngine")) != NULL && GetModuleHandle(TEXT("SokuEngine")) != INVALID_HANDLE_VALUE;
-	if (hasSokuEngine) fileLoaderEvent = Soku::SubscribeEvent(SokuEvent::FileLoader, {FileLoaderCallback});
-	else LoadTamper(); // late loaded
-
 	GetModulePath(hMyModule, ModPackage::basePath);
 	LoadSettings();
 
-	if (!iniUseLoadLock) loadLock.unlock();
-	curl_global_init(CURL_GLOBAL_DEFAULT);
-	LoadEngineMenu();
+	if (iniUseLoadLock) loadLock.lock();
+	std::filesystem::path callerName;
+	GetModuleName(hParentModule, callerName);
+	LoadTamper(callerName);
 
+	curl_global_init(CURL_GLOBAL_DEFAULT);
+	LoadPackage();
 	if (iniUseLoadLock) loadLock.unlock();
+
 	return TRUE;
 }
 
-extern "C" __declspec(dllexport) void AtExit() {
-	UnloadEngineMenu();
-	if (hasSokuEngine) {
-		Soku::UnsubscribeEvent(fileLoaderEvent);
-	} else {
-		UnloadTamper();
-	}
-	curl_global_cleanup();
-}
+extern "C" __declspec(dllexport) void AtExit() {}
 
 BOOL WINAPI DllMain(HMODULE hModule, DWORD fdwReason, LPVOID lpReserved) {
+	if (DLL_PROCESS_DETACH) {
+		UnloadTamper();
+		UnloadPackage();
+
+		curl_global_cleanup();
+	}
+
 	return TRUE;
 }
 
