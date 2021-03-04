@@ -140,6 +140,16 @@ const ShadyCore::FileType& ShadyCore::FileType::get(BasePackageEntry& entry) {
 	return type;
 }
 
+const ShadyCore::FileType& ShadyCore::FileType::getByName(const char* name) {
+    // TODO remaining
+    if (strcmp(name, "lbl") == 0
+        || strcmp(name, "label") == 0) return typeDLabel;
+    if (strcmp(name, "png") == 0) return typeDImage;
+    if (strcmp(name, "act") == 0) return typeDPalette;
+    if (strcmp(name, "wav") == 0) return typeDSfx;
+    return typeUnknown;
+}
+
 ShadyCore::Resource* ShadyCore::createResource(const FileType& type) {
     switch(type.type) {
 	case FileType::TYPE_TEXT: return new TextResource();

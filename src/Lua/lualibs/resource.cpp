@@ -4,12 +4,10 @@
 #include "../../Core/resource/readerwriter.hpp"
 #include <LuaBridge/LuaBridge.h>
 #include <LuaBridge/RefCountedPtr.h>
-#include <unordered_map>
 #include <sstream>
-#include <fstream>
+#include <cmath>
 
 using namespace luabridge;
-extern std::unordered_map<lua_State*, ShadyLua::LuaScript*> scriptMap;
 
 namespace {
     struct StringInputBuf : public std::streambuf {
@@ -21,7 +19,7 @@ namespace {
 
 /** Creates a resource from a file in script space */
 static RefCountedPtr<ShadyCore::Resource> resource_createfromfile(const char* filename, lua_State* L) {
-    ShadyLua::LuaScript* script = scriptMap.at(L);
+    ShadyLua::LuaScript* script = ShadyLua::ScriptMap.at(L);
 
     std::stringstream data;
     char buffer[4096]; size_t size;
@@ -35,10 +33,10 @@ static RefCountedPtr<ShadyCore::Resource> resource_createfromfile(const char* fi
 }
 
 /** Saves a resource into filesystem */
-static void resource_export(RefCountedPtr<ShadyCore::Resource> resource, const char* filename, bool encripted, lua_State* L) {
-    std::fstream out(filename, std::ios::out|std::ios::binary);
-    ShadyCore::writeResource(resource.get(), out, encripted);
-}
+// static void resource_export(RefCountedPtr<ShadyCore::Resource> resource, const char* filename, bool encripted, lua_State* L) {
+//     std::fstream out(filename, std::ios::out|std::ios::binary);
+//     ShadyCore::writeResource(resource.get(), out, encripted);
+// }
 
 static int resource_Text_getData(lua_State* L) {
     ShadyCore::TextResource* resource = Stack<ShadyCore::TextResource*>::get(L, 1);
@@ -80,7 +78,7 @@ static int resource_Palette_setData(lua_State* L) {
 namespace {
     class ImageProxy : public ShadyCore::Image {
     public: inline ImageProxy(uint32_t w, uint32_t h, uint8_t bpp) {
-        initialize(w, h, ceil(w / 4.f) * 4, bpp);
+        initialize(w, h, std::ceil(w / 4.f) * 4, bpp);
     } };
 }
 
@@ -119,7 +117,7 @@ void ShadyLua::LualibResource(lua_State* L) {
     getGlobalNamespace(L)
         .beginNamespace("resource")
             .addFunction("createfromfile", resource_createfromfile)
-            .addFunction("export", resource_export)
+            //.addFunction("export", resource_export)
             .beginClass<ShadyCore::Resource>("Resource").endClass()
             .deriveClass<ShadyCore::TextResource, ShadyCore::Resource>("Text")
                 .addConstructor<void(*)(), RefCountedPtr<ShadyCore::TextResource>>()

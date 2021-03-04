@@ -45,3 +45,6 @@ public:
     void downloadPreview();
     void merge(const nlohmann::json::value_type& remote);
 };
+
+void EnablePackage(ModPackage* package);
+void DisablePackage(ModPackage* package);

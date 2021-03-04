@@ -2,13 +2,13 @@
 #include "logger.hpp"
 #include "lualibs.hpp"
 
-#include <shlwapi.h>
 #include <fstream>
 #include <sstream>
 #include <unordered_map>
 #include <zip.h>
 
-std::unordered_map<lua_State*, ShadyLua::LuaScript*> scriptMap;
+std::unordered_map<lua_State*, ShadyLua::LuaScript*> ShadyLua::ScriptMap;
+
 namespace {
     struct Reader {
         ShadyLua::fnRead_t fnRead;
@@ -32,17 +32,17 @@ int ShadyLua::LuaScript::run() {
 	return true;
 }
 
-ShadyLua::LuaScript::LuaScript(void* userdata, fnOpen_t open, fnRead_t read)
-    : L(luaL_newstate()), userdata(userdata), fnOpen(open), fnRead(read) {
-    scriptMap[L] = this;
-    LualibAll(L);
+ShadyLua::LuaScript::LuaScript(void* userdata, fnOpen_t open, fnRead_t read, fnDestroy_t destroy)
+    : L(luaL_newstate()), userdata(userdata), fnOpen(open), fnRead(read), fnDestroy(destroy) {
+    ScriptMap[L] = this;
 }
 
 ShadyLua::LuaScript::~LuaScript() {
     if (lua_getglobal(L, "AtExit") == LUA_TFUNCTION) {
         if (lua_pcall(L, 0, 0, 0)) Logger::Error(lua_tostring(L, -1));
     }
-    scriptMap.erase(L);
+    ScriptMap.erase(L);
+    if (fnDestroy) fnDestroy(userdata);
     lua_close(L);
 }
 
@@ -56,6 +56,7 @@ int ShadyLua::LuaScript::load(const char* filename, const char* mode) {
     return result;
 }
 
+/*
 void* ShadyLua::LuaScriptFS::fnOpen(void* userdata, const char* filename) {
     LuaScriptFS* script = reinterpret_cast<LuaScriptFS*>(userdata);
     char filepath[MAX_PATH];
@@ -132,3 +133,4 @@ size_t ShadyLua::LuaScriptZip::fnRead(void* userdata, void* file, char* buffer, 
         return 0;
     } return size;
 }
+*/

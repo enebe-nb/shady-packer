@@ -18,9 +18,9 @@ static void setPackageEnabled(ModPackage* package, bool value) {
 	if (package->enabled == value) return;
 	package->enabled = value;
 	if (package->enabled) {
-		package->packageId = EnablePackage(package->name, package->ext);
+		EnablePackage(package);
 	} else {
-		DisablePackage(package->packageId, package->script);
+		DisablePackage(package);
 	}
 }
 

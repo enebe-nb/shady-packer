@@ -1,21 +1,24 @@
 #pragma once
 
 #include <lua.hpp>
-#include <string>
+#include <unordered_map>
 
 namespace ShadyLua {
     typedef void* (*fnOpen_t)(void* userdata, const char* filename);
     typedef size_t (*fnRead_t)(void* userdata, void* file, char* buffer, size_t size);
+    typedef void (*fnDestroy_t)(void* userdata);
 
     class LuaScript {
-    protected:
+    public:
         lua_State* L;
+    protected:
         void* userdata;
         fnOpen_t fnOpen;
         fnRead_t fnRead;
+        fnDestroy_t fnDestroy;
 
     public:
-        LuaScript(void* userdata, fnOpen_t open, fnRead_t read);
+        LuaScript(void* userdata, fnOpen_t open, fnRead_t read, fnDestroy_t destroy = nullptr);
         LuaScript(const LuaScript&) = delete;
         LuaScript(LuaScript&&) = delete;
         virtual ~LuaScript();
@@ -28,6 +31,7 @@ namespace ShadyLua {
         int run();
     };
 
+/*
     class LuaScriptFS : public LuaScript {
     private:
         std::string root;
@@ -51,4 +55,6 @@ namespace ShadyLua {
         inline LuaScriptZip(const std::string& zipFile)
             : LuaScript(this, fnOpen, fnRead), zipFile(zipFile) {}
     };
+*/
+    extern std::unordered_map<lua_State*, ShadyLua::LuaScript*> ScriptMap;
 }

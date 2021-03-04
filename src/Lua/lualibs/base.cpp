@@ -4,14 +4,6 @@
 #include <unordered_map>
 #include <LuaBridge/LuaBridge.h>
 
-extern std::unordered_map<lua_State*, ShadyLua::LuaScript*> scriptMap;
-extern std::string modulePath;
-
-//lua_Debug info;
-//lua_getstack(state, 1, &info);
-//lua_getinfo(state, "Sl", &info);
-//char lineNumber[33]; itoa(info.currentline, lineNumber, 10);
-//Logger::Debug(info.source, ":", lineNumber);
 static int _print(lua_State* L) {
     std::string line; size_t size;
     int nargs = lua_gettop(L);
@@ -26,8 +18,8 @@ static int _print(lua_State* L) {
 }
 
 static int _loadfile(lua_State* L) {
-    ShadyLua::LuaScript* script = scriptMap.at(L);
-    const char *filename = lua_tostring(L, 1);
+    ShadyLua::LuaScript* script = ShadyLua::ScriptMap.at(L);
+    const char *filename = luaL_checkstring(L, 1);
     const char *mode = luaL_optstring(L, 2, NULL);
     int env = (!lua_isnone(L, 3) ? 3 : 0);
 
@@ -42,8 +34,8 @@ static int _loadfile(lua_State* L) {
 }
 
 static int _readfile(lua_State* L) {
-    ShadyLua::LuaScript* script = scriptMap.at(L);
-    const char *filename = lua_tostring(L, 1);
+    ShadyLua::LuaScript* script = ShadyLua::ScriptMap.at(L);
+    const char *filename = luaL_checkstring(L, 1);
     void* file = script->open(filename);
 
     luaL_Buffer buffer; luaL_buffinit(L, &buffer);
@@ -59,24 +51,24 @@ static int _readfile(lua_State* L) {
 }
 
 static int _dofile(lua_State* L) {
-    ShadyLua::LuaScript* script = scriptMap.at(L);
-    const char *filename = lua_tostring(L, 1);
+    ShadyLua::LuaScript* script = ShadyLua::ScriptMap.at(L);
+    const char *filename = luaL_checkstring(L, 1);
     lua_settop(L, 1);
     if (script->load(filename)) return lua_error(L);
-    lua_call(L, 0, LUA_MULTRET, 0);
+    lua_call(L, 0, LUA_MULTRET);
     return lua_gettop(L) - 1;
 }
 
-void ShadyLua::LualibBase(lua_State* L) {
+void ShadyLua::LualibBase(lua_State* L, std::filesystem::path& basePath) {
     luaL_openlibs(L);
     auto package = luabridge::getGlobal(L, "package");
     package["cpath"] = package["cpath"].tostring()
-        + ";" + modulePath + "\\?.dll";
+        + ";" + basePath.u8string() + "\\?.dll";
     package["path"] = package["path"].tostring()
-        + ";" + modulePath + "\\?.lua"
-        + ";" + modulePath + "\\?\\init.lua"
-        + ";" + modulePath + "\\lua\\?.lua"
-        + ";" + modulePath + "\\lua\\?\\init.lua";
+        + ";" + basePath.u8string() + "\\?.lua"
+        + ";" + basePath.u8string() + "\\?\\init.lua"
+        + ";" + basePath.u8string() + "\\lua\\?.lua"
+        + ";" + basePath.u8string() + "\\lua\\?\\init.lua";
     lua_register(L, "print", _print);
     lua_register(L, "loadfile", _loadfile);
     lua_register(L, "readfile", _readfile);

@@ -18,6 +18,7 @@ namespace ShadyCore {
         static const FileType& getSimple(const char*);
         static const FileType& get(const char*, std::istream&);
         static const FileType& get(BasePackageEntry& entry);
+		static const FileType& getByName(const char* name);
 
         inline bool operator==(Type t) const { return type == t; }
 		inline bool operator!=(Type t) const { return type != t; }

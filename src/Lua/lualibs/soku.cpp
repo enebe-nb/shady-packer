@@ -3,31 +3,26 @@
 #include "../strconv.hpp"
 #include "../../Core/resource/readerwriter.hpp"
 #include "../../Loader/reader.hpp"
-#include <SokuLib.h>
 #include <LuaBridge/LuaBridge.h>
 #include <LuaBridge/RefCountedPtr.h>
 #include <sstream>
-#include <algorithm>
+#include <shared_mutex>
 #include <unordered_map>
 
 using namespace luabridge;
 
 namespace {
-    std::unordered_map<int, EventID> subscribeMap;
+    typedef struct {
+        lua_State* L;
+        int eventType;
+    } SokuEvent;
+    std::unordered_map<int, SokuEvent> eventMap;
+    std::shared_mutex eventMapLock;
     template <int value> static inline int* enumMap()
         {static const int valueHolder = value; return (int*)&valueHolder;}
 }
 
-static bool soku_Module(const char* name) {
-    std::wstring wname(s2ws(name));
-    for (auto& m : Soku::GetModuleList()) {
-        if (m.Name() == wname) {
-            if (!m.IsInjected()) m.Inject();
-            return true;
-        }
-    } return false;
-}
-
+/*
 static int soku_Player_Character(const Soku::CPlayer* player) {
     return (int)player->CharID();
 }
@@ -44,190 +39,242 @@ static void soku_ReloadSE(int id) {
     __asm mov ecx, 0x0089f9f8;
     reinterpret_cast<void(WINAPI*)(int*, char*)>(0x00401af0)((int*)(0x00899D60 + id*4), buffer);
 }
+*/
+
+const int soku_EventRender = 0;
+const int soku_EventBattleEvent = 3;
+const int soku_EventGameEvent = 4;
+const int soku_EventStageSelect = 5;
+const int soku_EventFileLoader = 6;
 
 static int soku_SubscribeRender(lua_State* L) {
     if (lua_gettop(L) < 1 || !lua_isfunction(L, 1)) return luaL_error(L, "Must pass a callback");
     int callback = luaL_ref(L, LUA_REGISTRYINDEX);
-    subscribeMap[callback] = Soku::SubscribeEvent(SokuEvent::Render, [L, callback](SokuData::RenderData& data) {
-        lua_rawgeti(L, LUA_REGISTRYINDEX, callback);
-        lua_pushinteger(L, (int)data.scene);
-        lua_pushinteger(L, (int)data.mode);
-        lua_pushinteger(L, (int)data.menu);
-        if (lua_pcall(L, 3, 0, 0)) {
-            Logger::Error(lua_tostring(L, -1));
-            lua_pop(L, 1);
-        }
-    });
+    // iterators valid on insertion
+    eventMap[callback] = SokuEvent{L, soku_EventRender};
     lua_pushnumber(L, callback);
     return 1;
 }
 
-static int soku_SubscribeWindowProc(lua_State* L) {
-    if (lua_gettop(L) < 1 || !lua_isfunction(L, 1)) return luaL_error(L, "Must pass a callback");
-    int callback = luaL_ref(L, LUA_REGISTRYINDEX);
-    subscribeMap[callback] = Soku::SubscribeEvent(SokuEvent::WindowProc, [L, callback](SokuData::WindowProcData& data) {
-        lua_rawgeti(L, LUA_REGISTRYINDEX, callback);
-        lua_pushinteger(L, data.uMsg);
-        lua_pushinteger(L, data.wParam);
-        lua_pushinteger(L, data.lParam);
-        if (lua_pcall(L, 3, 0, 0)) {
-            Logger::Error(lua_tostring(L, -1));
-            lua_pop(L, 1);
-        }
-    });
-    lua_pushnumber(L, callback);
-    return 1;
-}
+void ShadyLua::EmitSokuEventRender() {
+    eventMapLock.lock_shared();
+    for(auto iter = eventMap.begin(); iter != eventMap.end(); ++iter) {
+        if (iter->second.eventType != soku_EventRender) continue;
 
-static int soku_SubscribeKeyboard(lua_State* L) {
-    if (lua_gettop(L) < 1 || !lua_isfunction(L, 1)) return luaL_error(L, "Must pass a callback");
-    int callback = luaL_ref(L, LUA_REGISTRYINDEX);
-    subscribeMap[callback] = Soku::SubscribeEvent(SokuEvent::Keyboard, [L, callback](SokuData::KeyboardData& data) {
-        lua_rawgeti(L, LUA_REGISTRYINDEX, callback);
-        lua_pushinteger(L, data.key);
-        lua_pushinteger(L, data.lParam);
-        if (lua_pcall(L, 2, 0, 0)) {
+        lua_State* L = iter->second.L;
+        lua_rawgeti(L, LUA_REGISTRYINDEX, iter->first);
+    //     lua_pushinteger(L, (int)data.scene);
+    //     lua_pushinteger(L, (int)data.mode);
+    //     lua_pushinteger(L, (int)data.menu);
+        if (lua_pcall(L, 0, 0, 0)) {
             Logger::Error(lua_tostring(L, -1));
             lua_pop(L, 1);
         }
-    });
-    lua_pushnumber(L, callback);
-    return 1;
+    }
+    eventMapLock.unlock_shared();
 }
 
 static int soku_SubscribeBattleEvent(lua_State* L) {
     if (lua_gettop(L) < 1 || !lua_isfunction(L, 1)) return luaL_error(L, "Must pass a callback");
     int callback = luaL_ref(L, LUA_REGISTRYINDEX);
-    subscribeMap[callback] = Soku::SubscribeEvent(SokuEvent::BattleEvent, [L, callback](SokuData::BattleEventData& data) {
-        lua_rawgeti(L, LUA_REGISTRYINDEX, callback);
-        lua_pushinteger(L, (int)data.event);
-        if (lua_pcall(L, 1, 0, 0)) {
+    // iterators valid on insertion
+    eventMap[callback] = SokuEvent{L, soku_EventBattleEvent};
+    lua_pushnumber(L, callback);
+    return 1;
+}
+
+void ShadyLua::EmitSokuEventBattleEvent() {
+    eventMapLock.lock_shared();
+    for(auto iter = eventMap.begin(); iter != eventMap.end(); ++iter) {
+        if (iter->second.eventType != soku_EventBattleEvent) continue;
+
+        lua_State* L = iter->second.L;
+        lua_rawgeti(L, LUA_REGISTRYINDEX, iter->first);
+    //     lua_pushinteger(L, (int)data.event);
+        if (lua_pcall(L, 0, 0, 0)) {
             Logger::Error(lua_tostring(L, -1));
             lua_pop(L, 1);
         }
-    });
-    lua_pushnumber(L, callback);
-    return 1;
+    }
+    eventMapLock.unlock_shared();
 }
 
 static int soku_SubscribeGameEvent(lua_State* L) {
     if (lua_gettop(L) < 1 || !lua_isfunction(L, 1)) return luaL_error(L, "Must pass a callback");
     int callback = luaL_ref(L, LUA_REGISTRYINDEX);
-    subscribeMap[callback] = Soku::SubscribeEvent(SokuEvent::GameEvent, [L, callback](SokuData::GameEventData& data) {
-        lua_rawgeti(L, LUA_REGISTRYINDEX, callback);
-        lua_pushinteger(L, (int)data.event);
-        lua_pushinteger(L, (int)data.ptr);
-        if (lua_pcall(L, 2, 0, 0)) {
+    // iterators valid on insertion
+    eventMap[callback] = SokuEvent{L, soku_EventGameEvent};
+    lua_pushnumber(L, callback);
+    return 1;
+}
+
+void ShadyLua::EmitSokuEventGameEvent() {
+    eventMapLock.lock_shared();
+    for(auto iter = eventMap.begin(); iter != eventMap.end(); ++iter) {
+        if (iter->second.eventType != soku_EventGameEvent) continue;
+
+        lua_State* L = iter->second.L;
+        lua_rawgeti(L, LUA_REGISTRYINDEX, iter->first);
+    //     lua_pushinteger(L, (int)data.event);
+    //     lua_pushinteger(L, (int)data.ptr);
+        if (lua_pcall(L, 0, 0, 0)) {
             Logger::Error(lua_tostring(L, -1));
             lua_pop(L, 1);
         }
-    });
-    lua_pushnumber(L, callback);
-    return 1;
+    }
+    eventMapLock.unlock_shared();
 }
 
 static int soku_SubscribeStageSelect(lua_State* L) {
     if (lua_gettop(L) < 1 || !lua_isfunction(L, 1)) return luaL_error(L, "Must pass a callback");
     int callback = luaL_ref(L, LUA_REGISTRYINDEX);
-    subscribeMap[callback] = Soku::SubscribeEvent(SokuEvent::StageSelect, [L, callback](SokuData::StageData& data) {
-        lua_rawgeti(L, LUA_REGISTRYINDEX, callback);
-        lua_pushinteger(L, (int)data.stage);
-        if (lua_pcall(L, 1, 1, 0)) {
-            Logger::Error(lua_tostring(L, -1));
-        } else {
-            if (lua_isnumber(L, -1)) data.stage = (Stage)lua_tointeger(L, -1);
-        } lua_pop(L, 1);
-    });
+    // iterators valid on insertion
+    eventMap[callback] = SokuEvent{L, soku_EventStageSelect};
     lua_pushnumber(L, callback);
     return 1;
+}
+
+void ShadyLua::EmitSokuEventStageSelect() {
+    eventMapLock.lock_shared();
+    for(auto iter = eventMap.begin(); iter != eventMap.end(); ++iter) {
+        if (iter->second.eventType != soku_EventStageSelect) continue;
+
+        lua_State* L = iter->second.L;
+        lua_rawgeti(L, LUA_REGISTRYINDEX, iter->first);
+    //     lua_pushinteger(L, (int)data.stage);
+        if (lua_pcall(L, 0, 0, 0)) {
+            Logger::Error(lua_tostring(L, -1));
+            lua_pop(L, 1);
+        }
+    }
+    eventMapLock.unlock_shared();
 }
 
 static int soku_SubscribeFileLoader(lua_State* L) {
     if (lua_gettop(L) < 1 || !lua_isfunction(L, 1)) return luaL_error(L, "Must pass a callback");
     int callback = luaL_ref(L, LUA_REGISTRYINDEX);
-    subscribeMap[callback] = Soku::SubscribeEvent(SokuEvent::FileLoader, [L, callback](SokuData::FileLoaderData& data) {
-        lua_rawgeti(L, LUA_REGISTRYINDEX, callback);
-        lua_pushstring(L, data.fileName);
+    // iterators valid on insertion
+    eventMap[callback] = SokuEvent{L, soku_EventFileLoader};
+    lua_pushnumber(L, callback);
+    return 1;
+}
+
+namespace {
+    struct charbuf : std::streambuf {
+        charbuf(const char* begin, const char* end) {
+            this->setg((char*)begin, (char*)begin, (char*)end);
+        }
+    };
+}
+
+void ShadyLua::EmitSokuEventFileLoader(const char* filename, std::istream** input, int* size) {
+    eventMapLock.lock_shared();
+    for(auto iter = eventMap.begin(); iter != eventMap.end(); ++iter) {
+        if (iter->second.eventType != soku_EventFileLoader) continue;
+
+        lua_State* L = iter->second.L;
+        lua_rawgeti(L, LUA_REGISTRYINDEX, iter->first);
+        lua_pushstring(L, filename);
         if (lua_pcall(L, 1, 2, 0)) {
             Logger::Error(lua_tostring(L, -1));
             lua_pop(L, 1);
-            return;
-        } switch (lua_type(L, 1)) {
+            continue;
+        } switch(lua_type(L, 1)) {
             case LUA_TSTRING: {
+                size_t dataSize = 0;
+                const char* data = lua_tolstring(L, 1, &dataSize);
+                if (!data || !dataSize) break;
                 const char* format = lua_tostring(L, 2);
-                if (format && strcmp(format, "png") == 0)
-                    data.inputFormat = DataFormat::PNG;
-                else data.inputFormat = DataFormat::RAW;
-                const char* stream = lua_tolstring(L, 1, (size_t*)&data.size);
-                if (!stream || !data.size) break;
-                data.data = new char[data.size];
-                memcpy(data.data, stream, data.size);
+                if (format) {
+                    auto& type = ShadyCore::FileType::getByName(format);
+                    if (!type.isEncrypted && type != ShadyCore::FileType::TYPE_UNKNOWN) {
+                        charbuf decBuf(data, data + dataSize);
+                        std::istream decStream(&decBuf);
+                        std::stringstream* encStream = 
+                            new std::stringstream(std::ios::in|std::ios::out|std::ios::binary);
+                        ShadyCore::convertResource(type, decStream, *encStream);
+                        *size = encStream->tellp();
+                        *input = encStream;
+                        break;
+                    }
+                }
+                *size = dataSize;
+                *input = new std::stringstream(std::string(data, dataSize),
+                    std::ios::in|std::ios::out|std::ios::binary);
             } break;
             case LUA_TUSERDATA: {
-                std::stringstream* buffer = new std::stringstream();
                 RefCountedPtr<ShadyCore::Resource> resource = Stack<ShadyCore::Resource*>::get(L, 1);
+                std::stringstream* buffer = new std::stringstream(std::ios::in|std::ios::out|std::ios::binary);
                 ShadyCore::writeResource(resource.get(), *buffer, true);
-                data.inputFormat = DataFormat::RAW;
-                setup_stream_reader(data, buffer, buffer->tellp());
+                *size = buffer->tellp();
+                *input = buffer;
             } break;
         }
         lua_pop(L, 2);
-    });
-    lua_pushnumber(L, callback);
-    return 1;
-}
-
-static int soku_SubscribeInput(lua_State* L) {
-    if (lua_gettop(L) < 1 || !lua_isfunction(L, 1)) return luaL_error(L, "Must pass a callback");
-    int callback = luaL_ref(L, LUA_REGISTRYINDEX);
-    subscribeMap[callback] = Soku::SubscribeEvent(SokuEvent::Input, [L, callback](SokuData::InputData& data) {
-        lua_rawgeti(L, LUA_REGISTRYINDEX, callback);
-        // TODO
-        if (lua_pcall(L, 0, 0, 0)) {
-            Logger::Error(lua_tostring(L, -1));
-            lua_pop(L, 1);
-        }
-    });
-    lua_pushnumber(L, callback);
-    return 1;
+    }
+    eventMapLock.unlock_shared();
 }
 
 static int soku_SubscribeEvent(lua_State* L) {
-    SokuEvent evt = (SokuEvent)luaL_checkinteger(L, 1);
+    int evt = luaL_checkinteger(L, 1);
     lua_remove(L, 1);
 
     switch(evt) {
-        case SokuEvent::Render: return soku_SubscribeRender(L);
-        case SokuEvent::WindowProc: return soku_SubscribeWindowProc(L);
-        case SokuEvent::Keyboard: return soku_SubscribeKeyboard(L);
-        case SokuEvent::BattleEvent: return soku_SubscribeBattleEvent(L);
-        case SokuEvent::GameEvent: return soku_SubscribeGameEvent(L);
-        case SokuEvent::StageSelect: return soku_SubscribeStageSelect(L);
-        case SokuEvent::FileLoader: return soku_SubscribeFileLoader(L);
-        case SokuEvent::Input: return soku_SubscribeInput(L);
+        case soku_EventRender: return soku_SubscribeRender(L);
+        //case SokuEvent::WindowProc: return soku_SubscribeWindowProc(L);
+        //case SokuEvent::Keyboard: return soku_SubscribeKeyboard(L);
+        case soku_EventBattleEvent: return soku_SubscribeBattleEvent(L);
+        case soku_EventGameEvent: return soku_SubscribeGameEvent(L);
+        case soku_EventStageSelect: return soku_SubscribeStageSelect(L);
+        case soku_EventFileLoader: return soku_SubscribeFileLoader(L);
+        //case SokuEvent::Input: return soku_SubscribeInput(L);
         default: return luaL_error(L, "Event %d not found", evt);
     }
 }
 
 static void soku_UnsubscribeEvent(int id, lua_State* L) {
-    Soku::UnsubscribeEvent(subscribeMap.at(id));
+    std::lock_guard lock(eventMapLock);
     luaL_unref(L, LUA_REGISTRYINDEX, id);
-    subscribeMap.erase(id);
+    eventMap.erase(id);
 }
+
+const int soku_CharacterReimu     = 0;
+const int soku_CharacterMarisa    = 1;
+const int soku_CharacterSakuya    = 2;
+const int soku_CharacterAlice     = 3;
+const int soku_CharacterPatchouli = 4;
+const int soku_CharacterYoumu     = 5;
+const int soku_CharacterRemilia   = 6;
+const int soku_CharacterYuyuko    = 7;
+const int soku_CharacterYukari    = 8;
+const int soku_CharacterSuika     = 9;
+const int soku_CharacterReisen    = 10;
+const int soku_CharacterAya       = 11;
+const int soku_CharacterKomachi   = 12;
+const int soku_CharacterIku       = 13;
+const int soku_CharacterTenshi    = 14;
+const int soku_CharacterSanae     = 15;
+const int soku_CharacterCirno     = 16;
+const int soku_CharacterMeiling   = 17;
+const int soku_CharacterUtsuho    = 18;
+const int soku_CharacterSuwako    = 19;
+const int soku_CharacterRandom    = 20;
+const int soku_CharacterNamazu    = 21;
 
 void ShadyLua::LualibSoku(lua_State* L) {
     getGlobalNamespace(L)
         .beginNamespace("soku")
             .beginNamespace("Event")
-                .addVariable("Render", enumMap<(int)SokuEvent::Render>(), false)
-                .addVariable("WindowProc", enumMap<(int)SokuEvent::WindowProc>(), false)
-                .addVariable("Keyboard", enumMap<(int)SokuEvent::Keyboard>(), false)
-                .addVariable("BattleEvent", enumMap<(int)SokuEvent::BattleEvent>(), false)
-                .addVariable("GameEvent", enumMap<(int)SokuEvent::GameEvent>(), false)
-                .addVariable("StageSelect", enumMap<(int)SokuEvent::StageSelect>(), false)
-                .addVariable("FileLoader", enumMap<(int)SokuEvent::FileLoader>(), false)
-                .addVariable("Input", enumMap<(int)SokuEvent::Input>(), false)
+                .addVariable("Render", (int*)&soku_EventRender, false)
+                //.addVariable("WindowProc", enumMap<(int)SokuEvent::WindowProc>(), false)
+                //.addVariable("Keyboard", enumMap<(int)SokuEvent::Keyboard>(), false)
+                .addVariable("BattleEvent", (int*)&soku_EventBattleEvent, false)
+                .addVariable("GameEvent", (int*)&soku_EventGameEvent, false)
+                .addVariable("StageSelect", (int*)&soku_EventStageSelect, false)
+                .addVariable("FileLoader", (int*)&soku_EventFileLoader, false)
+                //.addVariable("Input", enumMap<(int)SokuEvent::Input>(), false)
             .endNamespace()
+            /*
             .beginNamespace("BattleEvent")
                 .addVariable("GameStart", enumMap<(int)BattleEvent::GameStart>(), false)
                 .addVariable("RoundPreStart", enumMap<(int)BattleEvent::RoundPreStart>(), false)
@@ -237,30 +284,32 @@ void ShadyLua::LualibSoku(lua_State* L) {
                 .addVariable("EndScreen", enumMap<(int)BattleEvent::EndScreen>(), false)
                 .addVariable("ResultScreen", enumMap<(int)BattleEvent::ResultScreen>(), false)
             .endNamespace()
+            */
             .beginNamespace("Character")
-                .addVariable("Reimu", enumMap<(int)Character::Reimu>(), false)
-                .addVariable("Marisa", enumMap<(int)Character::Marisa>(), false)
-                .addVariable("Sakuya", enumMap<(int)Character::Sakuya>(), false)
-                .addVariable("Alice", enumMap<(int)Character::Alice>(), false)
-                .addVariable("Patchouli", enumMap<(int)Character::Patchouli>(), false)
-                .addVariable("Youmu", enumMap<(int)Character::Youmu>(), false)
-                .addVariable("Remilia", enumMap<(int)Character::Remilia>(), false)
-                .addVariable("Yuyuko", enumMap<(int)Character::Yuyuko>(), false)
-                .addVariable("Yukari", enumMap<(int)Character::Yukari>(), false)
-                .addVariable("Suika", enumMap<(int)Character::Suika>(), false)
-                .addVariable("Reisen", enumMap<(int)Character::Reisen>(), false)
-                .addVariable("Aya", enumMap<(int)Character::Aya>(), false)
-                .addVariable("Komachi", enumMap<(int)Character::Komachi>(), false)
-                .addVariable("Iku", enumMap<(int)Character::Iku>(), false)
-                .addVariable("Tenshi", enumMap<(int)Character::Tenshi>(), false)
-                .addVariable("Sanae", enumMap<(int)Character::Sanae>(), false)
-                .addVariable("Cirno", enumMap<(int)Character::Cirno>(), false)
-                .addVariable("Meiling", enumMap<(int)Character::Meiling>(), false)
-                .addVariable("Utsuho", enumMap<(int)Character::Utsuho>(), false)
-                .addVariable("Suwako", enumMap<(int)Character::Suwako>(), false)
-                .addVariable("Random", enumMap<(int)Character::Random>(), false)
-                .addVariable("Namazu", enumMap<(int)Character::Namazu>(), false)
+                .addVariable("Reimu",     (int*)&soku_CharacterReimu,     false)
+                .addVariable("Marisa",    (int*)&soku_CharacterMarisa,    false)
+                .addVariable("Sakuya",    (int*)&soku_CharacterSakuya,    false)
+                .addVariable("Alice",     (int*)&soku_CharacterAlice,     false)
+                .addVariable("Patchouli", (int*)&soku_CharacterPatchouli, false)
+                .addVariable("Youmu",     (int*)&soku_CharacterYoumu,     false)
+                .addVariable("Remilia",   (int*)&soku_CharacterRemilia,   false)
+                .addVariable("Yuyuko",    (int*)&soku_CharacterYuyuko,    false)
+                .addVariable("Yukari",    (int*)&soku_CharacterYukari,    false)
+                .addVariable("Suika",     (int*)&soku_CharacterSuika,     false)
+                .addVariable("Reisen",    (int*)&soku_CharacterReisen,    false)
+                .addVariable("Aya",       (int*)&soku_CharacterAya,       false)
+                .addVariable("Komachi",   (int*)&soku_CharacterKomachi,   false)
+                .addVariable("Iku",       (int*)&soku_CharacterIku,       false)
+                .addVariable("Tenshi",    (int*)&soku_CharacterTenshi,    false)
+                .addVariable("Sanae",     (int*)&soku_CharacterSanae,     false)
+                .addVariable("Cirno",     (int*)&soku_CharacterCirno,     false)
+                .addVariable("Meiling",   (int*)&soku_CharacterMeiling,   false)
+                .addVariable("Utsuho",    (int*)&soku_CharacterUtsuho,    false)
+                .addVariable("Suwako",    (int*)&soku_CharacterSuwako,    false)
+                .addVariable("Random",    (int*)&soku_CharacterRandom,    false)
+                .addVariable("Namazu",    (int*)&soku_CharacterNamazu,    false)
             .endNamespace()
+            /*
             .beginNamespace("GameEvent")
                 .addVariable("ServerSetup", enumMap<(int)GameEvent::SERVER_SETUP>(), false)
                 .addVariable("ServerRelease", enumMap<(int)GameEvent::SERVER_RELEASE>(), false)
@@ -349,24 +398,24 @@ void ShadyLua::LualibSoku(lua_State* L) {
                 .addVariable("CatwalkInGeyser", enumMap<(int)Stage::CatwalkInGeyser>(), false)
                 .addVariable("FusionReactorCore", enumMap<(int)Stage::FusionReactorCore>(), false)
             .endNamespace()
-            .beginClass<Soku::CPlayer>("Player")
-                .addProperty("Character", soku_Player_Character)
-                .addFunction("PlaySE", soku_Player_PlaySE)
-            .endClass()
-            .addVariable("P1", &Soku::P1)
-            .addVariable("P2", &Soku::P2)
-            .addFunction("Module", soku_Module)
-            .addFunction("PlaySE", Soku::PlaySE)
-            .addFunction("ReloadSE", soku_ReloadSE)
+            */
+            //.beginClass<Soku::CPlayer>("Player")
+                //.addProperty("Character", soku_Player_Character)
+                //.addFunction("PlaySE", soku_Player_PlaySE)
+            //.endClass()
+            //.addVariable("P1", &Soku::P1)
+            //.addVariable("P2", &Soku::P2)
+            //.addFunction("PlaySE", Soku::PlaySE)
+            //.addFunction("ReloadSE", soku_ReloadSE)
             .addCFunction("SubscribeEvent", soku_SubscribeEvent)
             .addCFunction("SubscribeRender", soku_SubscribeRender)
-            .addCFunction("SubscribeWindowProc", soku_SubscribeWindowProc)
-            .addCFunction("SubscribeKeyboard", soku_SubscribeKeyboard)
+            //.addCFunction("SubscribeWindowProc", soku_SubscribeWindowProc)
+            //.addCFunction("SubscribeKeyboard", soku_SubscribeKeyboard)
             .addCFunction("SubscribeBattleEvent", soku_SubscribeBattleEvent)
             .addCFunction("SubscribeGameEvent", soku_SubscribeGameEvent)
             .addCFunction("SubscribeStageSelect", soku_SubscribeStageSelect)
             .addCFunction("SubscribeFileLoader", soku_SubscribeFileLoader)
-            .addCFunction("SubscribeInput", soku_SubscribeInput)
+            //.addCFunction("SubscribeInput", soku_SubscribeInput)
             .addFunction("UnsubscribeEvent", soku_UnsubscribeEvent)
         .endNamespace()
     ;

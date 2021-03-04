@@ -10,13 +10,13 @@
 #include "../Core/util/riffdocument.hpp"
 #include "reader.hpp"
 #include "ModPackage.hpp"
+#include "../Lua/lualibs.hpp"
 
 #define TEXT_SECTION_OFFSET  0x00401000
 #define TEXT_SECTION_SIZE    0x00445000
 
+ShadyCore::Package package;
 namespace {
-    ShadyCore::Package package;
-
 	typedef void* (__stdcall* read_constructor_t)(const char *filename, unsigned int *size, unsigned int *offset);
 	read_constructor_t orig_read_constructor = (read_constructor_t)0x41c080;
 }
@@ -30,15 +30,6 @@ inline DWORD TamperNearJmpOpr(DWORD addr, DWORD target) {
 inline void TamperNearCall(DWORD addr, DWORD target) {
     *reinterpret_cast<PBYTE>(addr + 0) = 0xE8;
     TamperNearJmpOpr(addr, target);
-}
-
-static void applyGameFilters(int id = -1) {
-    ShadyCore::PackageFilter::apply(package, 
-        (ShadyCore::PackageFilter::Filter)(
-            ShadyCore::PackageFilter::FILTER_FROM_ZIP_TEXT_EXTENSION |
-            ShadyCore::PackageFilter::FILTER_SLASH_TO_UNDERLINE |
-            ShadyCore::PackageFilter::FILTER_TO_LOWERCASE
-        ), id);
 }
 
 static void* __stdcall repl_read_constructor(const char *filename, unsigned int *size, unsigned int *offset) {
@@ -57,6 +48,18 @@ static void* __stdcall repl_read_constructor(const char *filename, unsigned int 
 	} filenameB[len] = 0;
 
     loadLock.lock_shared();
+    {
+        std::istream* input = 0; int s;
+        ShadyLua::EmitSokuEventFileLoader(filenameB, &input, &s);
+        if (input) {
+            *(int*)esi_value = ShadyCore::stream_reader_vtbl;
+            *size = s;
+            loadLock.unlock_shared();
+            delete[] filenameB;
+            return input;
+        }
+    }
+
     auto iter = package.findFile(filenameB);
     if (iter == package.end()) {
         auto type = ShadyCore::FileType::getSimple(filenameB);
@@ -128,57 +131,4 @@ void UnloadTamper() {
     ::VirtualProtect(reinterpret_cast<LPVOID>(0x0040D227), 5, PAGE_EXECUTE_WRITECOPY, &dwOldProtect);
     TamperNearJmpOpr(0x0040D227, reinterpret_cast<DWORD>(orig_read_constructor));
     ::VirtualProtect(reinterpret_cast<LPVOID>(0x0040D227), 5, dwOldProtect, &dwOldProtect);
-}
-
-namespace {
-    struct _lua_file {
-        ShadyCore::BasePackageEntry* entry;
-        std::istream* input;
-    };
-}
-
-void* _lua_open(void* userdata, const char* filename) {
-    ShadyCore::Package* package = reinterpret_cast<ShadyCore::Package*>(userdata);
-    auto iter = package->findFile(filename);
-    if (iter == package->end()) return 0;
-    return new _lua_file{&*iter, &iter->open()};
-}
-
-size_t _lua_read(void* userdata, void* file, char* buffer, size_t size) {
-    if (!file) return 0;
-    _lua_file* luaFile = reinterpret_cast<_lua_file*>(file);
-    luaFile->input->read(buffer, size);
-    size = luaFile->input->gcount();
-    if (size == 0) {
-        luaFile->entry->close();
-        delete luaFile;
-    } return size;
-}
-
-int EnablePackage(const std::filesystem::path& name, const std::filesystem::path& ext) {
-	std::filesystem::path path(name); path += ext;
-	if (path.is_relative()) path = ModPackage::basePath / path;
-    //void* script = 0;
-    //if (ShadyLua::isAvailable()) {
-        //auto iter = package.findFile("init.lua");
-        //if (iter != package.end() && iter->getId() == id) {
-            //script = ShadyLua::LoadFromGeneric(&package, _lua_open, _lua_read, "init.lua");
-        //}
-    //}
-
-    if (std::filesystem::is_directory(path)
-        || std::filesystem::is_regular_file(path)) {
-        
-        std::string pathu8 = ws2s(path);
-        int id = package.appendPackage(pathu8.c_str());
-        applyGameFilters(id);
-        return id;
-    }
-
-    return -1;
-}
-
-void DisablePackage(int id, void* script) {
-    //if (script && hasSokuEngine && ShadyLua::isAvailable()) ShadyLua::FreeScript(script);
-    if (id >= 0) package.detach(id);
 }
