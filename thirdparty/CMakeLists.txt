@@ -62,7 +62,7 @@ add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/libpng EXCLUDE_FROM_ALL)
 target_include_directories(png_static PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/libpng ${CMAKE_CURRENT_BINARY_DIR}/zlib ${CMAKE_CURRENT_BINARY_DIR}/libpng)
 
 # libzip Library
-add_git_module(libzip git://github.com/nih-at/libzip.git v1.7.3)
+add_git_module(libzip git://github.com/nih-at/libzip v1.7.3)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/libzip EXCLUDE_FROM_ALL)
 #target_compile_definitions(zip INTERFACE ZIP_STATIC)
 
@@ -74,19 +74,19 @@ if(SHADY_ENABLE_MODULE)
     add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/curl EXCLUDE_FROM_ALL)
 
     # nlohmann JSON Library
-    add_git_module(json https://github.com/nlohmann/json v3.9.1)
+    add_git_module(json git://github.com/nlohmann/json v3.9.1)
     add_library(json INTERFACE)
     target_include_directories(json INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/json/include)
 
     # Lua Library
-    add_git_module(lua https://github.com/lua/lua v5.4.2)
+    add_git_module(lua git://github.com/lua/lua v5.4.2)
     add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/lua EXCLUDE_FROM_ALL)
-    add_git_module(LuaBridge https://github.com/vinniefalco/LuaBridge 2.6)
+    add_git_module(LuaBridge git://github.com/vinniefalco/LuaBridge 2.6)
     set(LUABRIDGE_TESTING OFF)
     add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/LuaBridge EXCLUDE_FROM_ALL)
 
     # termcolor Library
-    add_git_module(termcolor https://github.com/ikalnytskyi/termcolor v1.0.1)
+    add_git_module(termcolor git://github.com/ikalnytskyi/termcolor v1.0.1)
     add_library(termcolor INTERFACE)
     target_include_directories(termcolor INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/termcolor/include)
 endif()
