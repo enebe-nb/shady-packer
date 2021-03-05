@@ -7,6 +7,7 @@ set(SRC_LUA
     lualibs/memory.cpp
     lualibs/resource.cpp
     lualibs/soku.cpp
+    lualibs/soku-hooks.cpp
     #../Loader/reader.cpp
 )
 

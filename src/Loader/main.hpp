@@ -4,7 +4,6 @@
 #include <windows.h>
 #include <shared_mutex>
 #include "decodehtml.hpp"
-#include <filesystem>
 
 extern bool iniAutoUpdate;
 extern bool iniUseLoadLock;
@@ -14,7 +13,7 @@ void LoadSettings();
 void SaveSettings();
 void LoadPackage();
 void UnloadPackage();
-void LoadTamper(const std::filesystem::path& caller);
+void LoadTamper(const std::wstring& caller);
 void UnloadTamper();
 
 inline std::string ws2s(const std::wstring& wstr) {

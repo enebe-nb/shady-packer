@@ -2,7 +2,8 @@
 #include "../logger.hpp"
 #include "../strconv.hpp"
 #include "../../Core/resource/readerwriter.hpp"
-#include "../../Loader/reader.hpp"
+#include "soku.hpp"
+#include "../script.hpp"
 #include <LuaBridge/LuaBridge.h>
 #include <LuaBridge/RefCountedPtr.h>
 #include <sstream>
@@ -12,11 +13,7 @@
 using namespace luabridge;
 
 namespace {
-    typedef struct {
-        lua_State* L;
-        int eventType;
-    } SokuEvent;
-    std::unordered_map<int, SokuEvent> eventMap;
+    std::unordered_map<int, std::unordered_map<int, ShadyLua::LuaScript*> > eventMap;
     std::shared_mutex eventMapLock;
     template <int value> static inline int* enumMap()
         {static const int valueHolder = value; return (int*)&valueHolder;}
@@ -47,21 +44,13 @@ const int soku_EventGameEvent = 4;
 const int soku_EventStageSelect = 5;
 const int soku_EventFileLoader = 6;
 
-static int soku_SubscribeRender(lua_State* L) {
-    if (lua_gettop(L) < 1 || !lua_isfunction(L, 1)) return luaL_error(L, "Must pass a callback");
-    int callback = luaL_ref(L, LUA_REGISTRYINDEX);
-    // iterators valid on insertion
-    eventMap[callback] = SokuEvent{L, soku_EventRender};
-    lua_pushnumber(L, callback);
-    return 1;
-}
-
 void ShadyLua::EmitSokuEventRender() {
-    eventMapLock.lock_shared();
-    for(auto iter = eventMap.begin(); iter != eventMap.end(); ++iter) {
-        if (iter->second.eventType != soku_EventRender) continue;
+    std::shared_lock guard(eventMapLock);
+    auto& listeners = eventMap[soku_EventRender];
+    for(auto iter = listeners.begin(); iter != listeners.end(); ++iter) {
+        std::lock_guard scriptGuard(iter->second->mutex);
 
-        lua_State* L = iter->second.L;
+        lua_State* L = iter->second->L;
         lua_rawgeti(L, LUA_REGISTRYINDEX, iter->first);
     //     lua_pushinteger(L, (int)data.scene);
     //     lua_pushinteger(L, (int)data.mode);
@@ -71,24 +60,15 @@ void ShadyLua::EmitSokuEventRender() {
             lua_pop(L, 1);
         }
     }
-    eventMapLock.unlock_shared();
-}
-
-static int soku_SubscribeBattleEvent(lua_State* L) {
-    if (lua_gettop(L) < 1 || !lua_isfunction(L, 1)) return luaL_error(L, "Must pass a callback");
-    int callback = luaL_ref(L, LUA_REGISTRYINDEX);
-    // iterators valid on insertion
-    eventMap[callback] = SokuEvent{L, soku_EventBattleEvent};
-    lua_pushnumber(L, callback);
-    return 1;
 }
 
 void ShadyLua::EmitSokuEventBattleEvent() {
-    eventMapLock.lock_shared();
-    for(auto iter = eventMap.begin(); iter != eventMap.end(); ++iter) {
-        if (iter->second.eventType != soku_EventBattleEvent) continue;
+    std::shared_lock guard(eventMapLock);
+    auto& listeners = eventMap[soku_EventBattleEvent];
+    for(auto iter = listeners.begin(); iter != listeners.end(); ++iter) {
+        std::lock_guard scriptGuard(iter->second->mutex);
 
-        lua_State* L = iter->second.L;
+        lua_State* L = iter->second->L;
         lua_rawgeti(L, LUA_REGISTRYINDEX, iter->first);
     //     lua_pushinteger(L, (int)data.event);
         if (lua_pcall(L, 0, 0, 0)) {
@@ -96,24 +76,15 @@ void ShadyLua::EmitSokuEventBattleEvent() {
             lua_pop(L, 1);
         }
     }
-    eventMapLock.unlock_shared();
-}
-
-static int soku_SubscribeGameEvent(lua_State* L) {
-    if (lua_gettop(L) < 1 || !lua_isfunction(L, 1)) return luaL_error(L, "Must pass a callback");
-    int callback = luaL_ref(L, LUA_REGISTRYINDEX);
-    // iterators valid on insertion
-    eventMap[callback] = SokuEvent{L, soku_EventGameEvent};
-    lua_pushnumber(L, callback);
-    return 1;
 }
 
 void ShadyLua::EmitSokuEventGameEvent() {
-    eventMapLock.lock_shared();
-    for(auto iter = eventMap.begin(); iter != eventMap.end(); ++iter) {
-        if (iter->second.eventType != soku_EventGameEvent) continue;
+    std::shared_lock guard(eventMapLock);
+    auto& listeners = eventMap[soku_EventGameEvent];
+    for(auto iter = listeners.begin(); iter != listeners.end(); ++iter) {
+        std::lock_guard scriptGuard(iter->second->mutex);
 
-        lua_State* L = iter->second.L;
+        lua_State* L = iter->second->L;
         lua_rawgeti(L, LUA_REGISTRYINDEX, iter->first);
     //     lua_pushinteger(L, (int)data.event);
     //     lua_pushinteger(L, (int)data.ptr);
@@ -122,41 +93,22 @@ void ShadyLua::EmitSokuEventGameEvent() {
             lua_pop(L, 1);
         }
     }
-    eventMapLock.unlock_shared();
 }
 
-static int soku_SubscribeStageSelect(lua_State* L) {
-    if (lua_gettop(L) < 1 || !lua_isfunction(L, 1)) return luaL_error(L, "Must pass a callback");
-    int callback = luaL_ref(L, LUA_REGISTRYINDEX);
-    // iterators valid on insertion
-    eventMap[callback] = SokuEvent{L, soku_EventStageSelect};
-    lua_pushnumber(L, callback);
-    return 1;
-}
+void ShadyLua::EmitSokuEventStageSelect(int stageId) {
+    std::shared_lock guard(eventMapLock);
+    auto& listeners = eventMap[soku_EventStageSelect];
+    for(auto iter = listeners.begin(); iter != listeners.end(); ++iter) {
+        std::lock_guard scriptGuard(iter->second->mutex);
 
-void ShadyLua::EmitSokuEventStageSelect() {
-    eventMapLock.lock_shared();
-    for(auto iter = eventMap.begin(); iter != eventMap.end(); ++iter) {
-        if (iter->second.eventType != soku_EventStageSelect) continue;
-
-        lua_State* L = iter->second.L;
+        lua_State* L = iter->second->L;
         lua_rawgeti(L, LUA_REGISTRYINDEX, iter->first);
-    //     lua_pushinteger(L, (int)data.stage);
-        if (lua_pcall(L, 0, 0, 0)) {
+        lua_pushinteger(L, stageId);
+        if (lua_pcall(L, 1, 0, 0)) {
             Logger::Error(lua_tostring(L, -1));
             lua_pop(L, 1);
         }
     }
-    eventMapLock.unlock_shared();
-}
-
-static int soku_SubscribeFileLoader(lua_State* L) {
-    if (lua_gettop(L) < 1 || !lua_isfunction(L, 1)) return luaL_error(L, "Must pass a callback");
-    int callback = luaL_ref(L, LUA_REGISTRYINDEX);
-    // iterators valid on insertion
-    eventMap[callback] = SokuEvent{L, soku_EventFileLoader};
-    lua_pushnumber(L, callback);
-    return 1;
 }
 
 namespace {
@@ -168,11 +120,12 @@ namespace {
 }
 
 void ShadyLua::EmitSokuEventFileLoader(const char* filename, std::istream** input, int* size) {
-    eventMapLock.lock_shared();
-    for(auto iter = eventMap.begin(); iter != eventMap.end(); ++iter) {
-        if (iter->second.eventType != soku_EventFileLoader) continue;
+    std::shared_lock guard(eventMapLock);
+    auto& listeners = eventMap[soku_EventFileLoader];
+    for(auto iter = listeners.begin(); iter != listeners.end(); ++iter) {
+        std::lock_guard scriptGuard(iter->second->mutex);
 
-        lua_State* L = iter->second.L;
+        lua_State* L = iter->second->L;
         lua_rawgeti(L, LUA_REGISTRYINDEX, iter->first);
         lua_pushstring(L, filename);
         if (lua_pcall(L, 1, 2, 0)) {
@@ -195,45 +148,49 @@ void ShadyLua::EmitSokuEventFileLoader(const char* filename, std::istream** inpu
                         ShadyCore::convertResource(type, decStream, *encStream);
                         *size = encStream->tellp();
                         *input = encStream;
-                        break;
+                        lua_pop(L, 2);
+                        return;
                     }
                 }
                 *size = dataSize;
                 *input = new std::stringstream(std::string(data, dataSize),
                     std::ios::in|std::ios::out|std::ios::binary);
-            } break;
+                lua_pop(L, 2);
+                return;
+            }
             case LUA_TUSERDATA: {
                 RefCountedPtr<ShadyCore::Resource> resource = Stack<ShadyCore::Resource*>::get(L, 1);
                 std::stringstream* buffer = new std::stringstream(std::ios::in|std::ios::out|std::ios::binary);
                 ShadyCore::writeResource(resource.get(), *buffer, true);
                 *size = buffer->tellp();
                 *input = buffer;
-            } break;
+                lua_pop(L, 2);
+                return;
+            }break;
         }
         lua_pop(L, 2);
     }
-    eventMapLock.unlock_shared();
 }
 
 static int soku_SubscribeEvent(lua_State* L) {
-    int evt = luaL_checkinteger(L, 1);
-    lua_remove(L, 1);
+    int eventType = luaL_checkinteger(L, 1);
+    if (lua_gettop(L) < 2 || !lua_isfunction(L, 2)) return luaL_error(L, "Must pass a callback");
+    int callback = luaL_ref(L, LUA_REGISTRYINDEX);
+    // iterators valid on insertion
+    eventMap[eventType][callback] = ShadyLua::ScriptMap[L];
+    lua_pushnumber(L, callback);
+    return 1;
+}
 
-    switch(evt) {
-        case soku_EventRender: return soku_SubscribeRender(L);
-        //case SokuEvent::WindowProc: return soku_SubscribeWindowProc(L);
-        //case SokuEvent::Keyboard: return soku_SubscribeKeyboard(L);
-        case soku_EventBattleEvent: return soku_SubscribeBattleEvent(L);
-        case soku_EventGameEvent: return soku_SubscribeGameEvent(L);
-        case soku_EventStageSelect: return soku_SubscribeStageSelect(L);
-        case soku_EventFileLoader: return soku_SubscribeFileLoader(L);
-        //case SokuEvent::Input: return soku_SubscribeInput(L);
-        default: return luaL_error(L, "Event %d not found", evt);
-    }
+template<int eventType>
+static int soku_SubscribeEventTyped(lua_State* L) {
+    lua_pushinteger(L, eventType);
+    lua_insert(L, 1);
+    return soku_SubscribeEvent(L);
 }
 
 static void soku_UnsubscribeEvent(int id, lua_State* L) {
-    std::lock_guard lock(eventMapLock);
+    std::unique_lock guard(eventMapLock);
     luaL_unref(L, LUA_REGISTRYINDEX, id);
     eventMap.erase(id);
 }
@@ -408,13 +365,13 @@ void ShadyLua::LualibSoku(lua_State* L) {
             //.addFunction("PlaySE", Soku::PlaySE)
             //.addFunction("ReloadSE", soku_ReloadSE)
             .addCFunction("SubscribeEvent", soku_SubscribeEvent)
-            .addCFunction("SubscribeRender", soku_SubscribeRender)
+            .addCFunction("SubscribeRender", soku_SubscribeEventTyped<soku_EventRender>)
             //.addCFunction("SubscribeWindowProc", soku_SubscribeWindowProc)
             //.addCFunction("SubscribeKeyboard", soku_SubscribeKeyboard)
-            .addCFunction("SubscribeBattleEvent", soku_SubscribeBattleEvent)
-            .addCFunction("SubscribeGameEvent", soku_SubscribeGameEvent)
-            .addCFunction("SubscribeStageSelect", soku_SubscribeStageSelect)
-            .addCFunction("SubscribeFileLoader", soku_SubscribeFileLoader)
+            .addCFunction("SubscribeBattleEvent", soku_SubscribeEventTyped<soku_EventBattleEvent>)
+            .addCFunction("SubscribeGameEvent", soku_SubscribeEventTyped<soku_EventGameEvent>)
+            .addCFunction("SubscribeStageSelect", soku_SubscribeEventTyped<soku_EventStageSelect>)
+            .addCFunction("SubscribeFileLoader", soku_SubscribeEventTyped<soku_EventFileLoader>)
             //.addCFunction("SubscribeInput", soku_SubscribeInput)
             .addFunction("UnsubscribeEvent", soku_UnsubscribeEvent)
         .endNamespace()

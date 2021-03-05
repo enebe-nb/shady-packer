@@ -2,6 +2,7 @@
 
 #include <lua.hpp>
 #include <unordered_map>
+#include <mutex>
 
 namespace ShadyLua {
     typedef void* (*fnOpen_t)(void* userdata, const char* filename);
@@ -11,6 +12,7 @@ namespace ShadyLua {
     class LuaScript {
     public:
         lua_State* L;
+        std::mutex mutex;
     protected:
         void* userdata;
         fnOpen_t fnOpen;

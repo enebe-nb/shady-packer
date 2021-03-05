@@ -141,6 +141,7 @@ const ShadyCore::FileType& ShadyCore::FileType::get(BasePackageEntry& entry) {
 }
 
 const ShadyCore::FileType& ShadyCore::FileType::getByName(const char* name) {
+    if (!name) return typeUnknown;
     // TODO remaining
     if (strcmp(name, "lbl") == 0
         || strcmp(name, "label") == 0) return typeDLabel;

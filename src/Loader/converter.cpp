@@ -1,7 +1,6 @@
 #include "main.hpp"
 
 #include <string>
-#include <filesystem>
 #include <fstream>
 #include <sstream>
 #include <stack>
@@ -10,7 +9,7 @@
 #include "../Core/util/riffdocument.hpp"
 #include "reader.hpp"
 #include "ModPackage.hpp"
-#include "../Lua/lualibs.hpp"
+#include "../Lua/lualibs/soku.hpp"
 
 #define TEXT_SECTION_OFFSET  0x00401000
 #define TEXT_SECTION_SIZE    0x00445000
@@ -19,6 +18,7 @@ ShadyCore::Package package;
 namespace {
 	typedef void* (__stdcall* read_constructor_t)(const char *filename, unsigned int *size, unsigned int *offset);
 	read_constructor_t orig_read_constructor = (read_constructor_t)0x41c080;
+    int (*th123eAfterLock)(void) = 0;
 }
 
 inline DWORD TamperNearJmpOpr(DWORD addr, DWORD target) {
@@ -27,10 +27,33 @@ inline DWORD TamperNearJmpOpr(DWORD addr, DWORD target) {
     return old;
 }
 
-inline void TamperNearCall(DWORD addr, DWORD target) {
+inline DWORD TamperNearCall(DWORD addr, DWORD target) {
     *reinterpret_cast<PBYTE>(addr + 0) = 0xE8;
-    TamperNearJmpOpr(addr, target);
+    return TamperNearJmpOpr(addr, target);
 }
+/*
+namespace {
+    typedef struct {
+        unsigned char lc = 0;
+        unsigned char operator()(unsigned char c) {
+            if (lc >= 0x80 && lc <= 0xa0 || lc >= 0xe0 && lc <= 0xff) {
+                lc = 0;
+                return c;
+            }
+            lc = c;
+            if (c >= 0x41 && c <= 0x5a) {
+                return c + 0x20;
+            }
+            return c;
+        }
+        void operator()(char* dst, const char* src) {
+            while(*src) {
+                *dst++ = this->operator()(*src++);
+            }
+        }
+    } sjis2lower;
+}
+*/
 
 static void* __stdcall repl_read_constructor(const char *filename, unsigned int *size, unsigned int *offset) {
 #ifdef _MSC_VER
@@ -43,23 +66,12 @@ static void* __stdcall repl_read_constructor(const char *filename, unsigned int 
     size_t len = strlen(filename);
 	char* filenameB = new char[len + 1];
 	for (int i = 0; i < len; ++i) {
+        //sjis2lower tolower;
 		if (filename[i] == '/') filenameB[i] = '_';
 		else filenameB[i] = tolower(filename[i]);
 	} filenameB[len] = 0;
 
     loadLock.lock_shared();
-    {
-        std::istream* input = 0; int s;
-        ShadyLua::EmitSokuEventFileLoader(filenameB, &input, &s);
-        if (input) {
-            *(int*)esi_value = ShadyCore::stream_reader_vtbl;
-            *size = s;
-            loadLock.unlock_shared();
-            delete[] filenameB;
-            return input;
-        }
-    }
-
     auto iter = package.findFile(filenameB);
     if (iter == package.end()) {
         auto type = ShadyCore::FileType::getSimple(filenameB);
@@ -72,6 +84,7 @@ static void* __stdcall repl_read_constructor(const char *filename, unsigned int 
             delete[] filenameC;
         }
     }
+    delete[] filenameB;
 
     void* result;
     if (iter != package.end()) {
@@ -102,11 +115,11 @@ static void* __stdcall repl_read_constructor(const char *filename, unsigned int 
     }
     loadLock.unlock_shared();
 
-    delete[] filenameB;
     return result;
 }
 
-int _LoadTamper() {
+static int _LoadTamper() {
+    if (th123eAfterLock) th123eAfterLock();
     DWORD dwOldProtect;
     ::VirtualProtect(reinterpret_cast<LPVOID>(0x0040D227), 5, PAGE_EXECUTE_WRITECOPY, &dwOldProtect);
     orig_read_constructor = (read_constructor_t) TamperNearJmpOpr(0x0040D227, reinterpret_cast<DWORD>(repl_read_constructor));
@@ -114,19 +127,21 @@ int _LoadTamper() {
     return *(int*)0x008943b8;
 }
 
-void LoadTamper(const std::filesystem::path& caller) {
+void LoadTamper(const std::wstring& caller) {
+    ShadyLua::LoadTamper(caller);
     if (caller == L"SokuEngine.dll") _LoadTamper();
     else {
         DWORD dwOldProtect;
         ::VirtualProtect(reinterpret_cast<LPVOID>(0x007fb596), 5, PAGE_EXECUTE_WRITECOPY, &dwOldProtect);
-        TamperNearCall(0x007fb596, reinterpret_cast<DWORD>(_LoadTamper));
+        bool hasCall = 0xE8 == *(unsigned char*)0x007fb596;
+        th123eAfterLock = (int(*)(void)) TamperNearCall(0x007fb596, reinterpret_cast<DWORD>(_LoadTamper));
+        if (!hasCall) th123eAfterLock = 0;
         ::VirtualProtect(reinterpret_cast<LPVOID>(0x007fb596), 5, dwOldProtect, &dwOldProtect);
     }
 }
 
 void UnloadTamper() {
-    package.clear();
-
+    ShadyLua::UnloadTamper();
     DWORD dwOldProtect;
     ::VirtualProtect(reinterpret_cast<LPVOID>(0x0040D227), 5, PAGE_EXECUTE_WRITECOPY, &dwOldProtect);
     TamperNearJmpOpr(0x0040D227, reinterpret_cast<DWORD>(orig_read_constructor));
