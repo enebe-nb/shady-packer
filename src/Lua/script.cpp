@@ -24,6 +24,7 @@ namespace {
 }
 
 int ShadyLua::LuaScript::run() {
+    std::lock_guard guard(mutex);
 	if (lua_pcall(L, 0, LUA_MULTRET, 0)) {
 		Logger::Error(lua_tostring(L, -1));
 		lua_pop(L, 1);

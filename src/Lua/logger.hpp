@@ -7,6 +7,7 @@ namespace Logger {
     constexpr int LOG_ERROR =   1 << 1;
     constexpr int LOG_INFO =    1 << 2;
     constexpr int LOG_WARNING = 1 << 3;
+    constexpr int LOG_ALL =     0x0f;
     void Initialize(int flags = LOG_ERROR);
     void Finalize();
 

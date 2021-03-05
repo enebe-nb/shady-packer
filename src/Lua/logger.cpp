@@ -7,7 +7,7 @@ namespace {
     //EventID renderEvent;
     //std::list<std::string> logContent;
     std::ofstream* outlog = 0;
-    int logFlags = Logger::LOG_ERROR;
+    int logFlags = Logger::LOG_ALL;
 }
 
 void Logger::Initialize(int flags) {
@@ -44,7 +44,9 @@ void Logger::Log(int type, const std::string& text) {
     if (!outlog) outlog = new std::ofstream("shady-lua.log");
     if ((type & logFlags) == 0) return;
     std::time_t t = std::time(0);
-    *outlog << std::ctime(&t) << " "
+    char datetime[20];
+    std::strftime(datetime, sizeof(datetime), "%F %T", std::localtime(&t));
+    *outlog << datetime << " "
         << getTypeName(type) << ": "
         << text.c_str() << std::endl;
     outlog->flush();

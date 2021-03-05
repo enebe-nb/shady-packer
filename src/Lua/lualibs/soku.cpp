@@ -40,10 +40,11 @@ static void soku_ReloadSE(int id) {
 
 const int soku_EventRender = 0;
 const int soku_EventBattleEvent = 3;
-const int soku_EventGameEvent = 4;
+//const int soku_EventGameEvent = 4;
 const int soku_EventStageSelect = 5;
 const int soku_EventFileLoader = 6;
 
+// TODO 
 void ShadyLua::EmitSokuEventRender() {
     std::shared_lock guard(eventMapLock);
     auto& listeners = eventMap[soku_EventRender];
@@ -62,7 +63,7 @@ void ShadyLua::EmitSokuEventRender() {
     }
 }
 
-void ShadyLua::EmitSokuEventBattleEvent() {
+void ShadyLua::EmitSokuEventBattleEvent(int eventId) {
     std::shared_lock guard(eventMapLock);
     auto& listeners = eventMap[soku_EventBattleEvent];
     for(auto iter = listeners.begin(); iter != listeners.end(); ++iter) {
@@ -70,32 +71,31 @@ void ShadyLua::EmitSokuEventBattleEvent() {
 
         lua_State* L = iter->second->L;
         lua_rawgeti(L, LUA_REGISTRYINDEX, iter->first);
-    //     lua_pushinteger(L, (int)data.event);
-        if (lua_pcall(L, 0, 0, 0)) {
+        lua_pushinteger(L, (int)eventId);
+        if (lua_pcall(L, 1, 0, 0)) {
             Logger::Error(lua_tostring(L, -1));
             lua_pop(L, 1);
         }
     }
 }
 
-void ShadyLua::EmitSokuEventGameEvent() {
-    std::shared_lock guard(eventMapLock);
-    auto& listeners = eventMap[soku_EventGameEvent];
-    for(auto iter = listeners.begin(); iter != listeners.end(); ++iter) {
-        std::lock_guard scriptGuard(iter->second->mutex);
+// void ShadyLua::EmitSokuEventGameEvent(int sceneId) {
+//     std::shared_lock guard(eventMapLock);
+//     auto& listeners = eventMap[soku_EventGameEvent];
+//     for(auto iter = listeners.begin(); iter != listeners.end(); ++iter) {
+//         std::lock_guard scriptGuard(iter->second->mutex);
 
-        lua_State* L = iter->second->L;
-        lua_rawgeti(L, LUA_REGISTRYINDEX, iter->first);
-    //     lua_pushinteger(L, (int)data.event);
-    //     lua_pushinteger(L, (int)data.ptr);
-        if (lua_pcall(L, 0, 0, 0)) {
-            Logger::Error(lua_tostring(L, -1));
-            lua_pop(L, 1);
-        }
-    }
-}
+//         lua_State* L = iter->second->L;
+//         lua_rawgeti(L, LUA_REGISTRYINDEX, iter->first);
+//         lua_pushinteger(L, sceneId);
+//         if (lua_pcall(L, 1, 0, 0)) {
+//             Logger::Error(lua_tostring(L, -1));
+//             lua_pop(L, 1);
+//         }
+//     }
+// }
 
-void ShadyLua::EmitSokuEventStageSelect(int stageId) {
+void ShadyLua::EmitSokuEventStageSelect(int* stageId) {
     std::shared_lock guard(eventMapLock);
     auto& listeners = eventMap[soku_EventStageSelect];
     for(auto iter = listeners.begin(); iter != listeners.end(); ++iter) {
@@ -103,11 +103,14 @@ void ShadyLua::EmitSokuEventStageSelect(int stageId) {
 
         lua_State* L = iter->second->L;
         lua_rawgeti(L, LUA_REGISTRYINDEX, iter->first);
-        lua_pushinteger(L, stageId);
-        if (lua_pcall(L, 1, 0, 0)) {
+        lua_pushinteger(L, *stageId);
+        if (lua_pcall(L, 1, 1, 0)) {
             Logger::Error(lua_tostring(L, -1));
             lua_pop(L, 1);
-        }
+        } switch(lua_type(L, 1)) {
+            case LUA_TNUMBER:
+                *stageId = lua_tonumber(L, 1);
+        } lua_pop(L, 1);
     }
 }
 
@@ -195,6 +198,10 @@ static void soku_UnsubscribeEvent(int id, lua_State* L) {
     eventMap.erase(id);
 }
 
+static void soku_PlaySE(int id) {
+    reinterpret_cast<void (*)(int id)>(0x0043E1E0)(id);
+}
+
 const int soku_CharacterReimu     = 0;
 const int soku_CharacterMarisa    = 1;
 const int soku_CharacterSakuya    = 2;
@@ -218,30 +225,72 @@ const int soku_CharacterSuwako    = 19;
 const int soku_CharacterRandom    = 20;
 const int soku_CharacterNamazu    = 21;
 
+const int soku_StageHakureiShrine           = 0;
+const int soku_StageForestOfMagic           = 1;
+const int soku_StageCreekOfGenbu            = 2;
+const int soku_StageYoukaiMountain          = 3;
+const int soku_StageMysteriousSeaOfClouds   = 4;
+const int soku_StageBhavaAgra               = 5;
+const int soku_StageRepairedHakureiShrine   = 10;
+const int soku_StageKirisameMagicShop       = 11;
+const int soku_StageSDMClockTower           = 12;
+const int soku_StageForestOfDolls           = 13;
+const int soku_StageSDMLibrary              = 14;
+const int soku_StageNetherworld             = 15;
+const int soku_StageSDMFoyer                = 16;
+const int soku_StageHakugyokurouSnowyGarden = 17;
+const int soku_StageBambooForestOfTheLost   = 18;
+const int soku_StageShoreOfMistyLake        = 30;
+const int soku_StageMoriyaShrine            = 31;
+const int soku_StageMouthOfGeyser           = 32;
+const int soku_StageCatwalkInGeyser         = 33;
+const int soku_StageFusionReactorCore       = 34;
+
+const int soku_SceneLogo            = 0;
+const int soku_SceneOpening         = 1;
+const int soku_SceneTitle           = 2;
+const int soku_SceneSelect          = 3;
+const int soku_SceneBattle          = 5;
+const int soku_SceneLoading         = 6;
+const int soku_SceneSelectSv        = 8;
+const int soku_SceneSelectCl        = 9;
+const int soku_SceneLoadingSv       = 10;
+const int soku_SceneLoadingCl       = 11;
+const int soku_SceneLoadingWatch    = 12;
+const int soku_SceneBattleSv        = 13;
+const int soku_SceneBattleCl        = 14;
+const int soku_SceneBattleWatch     = 15;
+const int soku_SceneSelectStage     = 16;
+const int soku_SceneEnding          = 20;
+const int soku_SceneSubmenu         = 21;
+
+const int soku_BattleGameStart      = 0;
+const int soku_BattleRoundPreStart  = 1;
+const int soku_BattleRoundStart     = 2;
+const int soku_BattleRoundEnd       = 3;
+const int soku_BattleGameEnd        = 5;
+const int soku_BattleEndScreen      = 6;
+const int soku_BattleResultScreen   = 7;
+
 void ShadyLua::LualibSoku(lua_State* L) {
     getGlobalNamespace(L)
         .beginNamespace("soku")
             .beginNamespace("Event")
                 .addVariable("Render", (int*)&soku_EventRender, false)
-                //.addVariable("WindowProc", enumMap<(int)SokuEvent::WindowProc>(), false)
-                //.addVariable("Keyboard", enumMap<(int)SokuEvent::Keyboard>(), false)
                 .addVariable("BattleEvent", (int*)&soku_EventBattleEvent, false)
-                .addVariable("GameEvent", (int*)&soku_EventGameEvent, false)
+                //.addVariable("GameEvent", (int*)&soku_EventGameEvent, false)
                 .addVariable("StageSelect", (int*)&soku_EventStageSelect, false)
                 .addVariable("FileLoader", (int*)&soku_EventFileLoader, false)
-                //.addVariable("Input", enumMap<(int)SokuEvent::Input>(), false)
             .endNamespace()
-            /*
             .beginNamespace("BattleEvent")
-                .addVariable("GameStart", enumMap<(int)BattleEvent::GameStart>(), false)
-                .addVariable("RoundPreStart", enumMap<(int)BattleEvent::RoundPreStart>(), false)
-                .addVariable("RoundStart", enumMap<(int)BattleEvent::RoundStart>(), false)
-                .addVariable("RoundEnd", enumMap<(int)BattleEvent::RoundEnd>(), false)
-                .addVariable("GameEnd", enumMap<(int)BattleEvent::GameEnd>(), false)
-                .addVariable("EndScreen", enumMap<(int)BattleEvent::EndScreen>(), false)
-                .addVariable("ResultScreen", enumMap<(int)BattleEvent::ResultScreen>(), false)
+                .addVariable("GameStart",       (int*)&soku_BattleGameStart,        false)
+                .addVariable("RoundPreStart",   (int*)&soku_BattleRoundPreStart,    false)
+                .addVariable("RoundStart",      (int*)&soku_BattleRoundStart,       false)
+                .addVariable("RoundEnd",        (int*)&soku_BattleRoundEnd,         false)
+                .addVariable("GameEnd",         (int*)&soku_BattleGameEnd,          false)
+                .addVariable("EndScreen",       (int*)&soku_BattleEndScreen,        false)
+                .addVariable("ResultScreen",    (int*)&soku_BattleResultScreen,     false)
             .endNamespace()
-            */
             .beginNamespace("Character")
                 .addVariable("Reimu",     (int*)&soku_CharacterReimu,     false)
                 .addVariable("Marisa",    (int*)&soku_CharacterMarisa,    false)
@@ -315,64 +364,61 @@ void ShadyLua::LualibSoku(lua_State* L) {
                 .addVariable("Replay", enumMap<(int)MODE::REPLAY>(), false)
                 .addVariable("None", enumMap<(int)MODE::NONE>(), false)
             .endNamespace()
+            */
             .beginNamespace("Scene")
-                .addVariable("Logo", enumMap<(int)SCENE::LOGO>(), false)
-                .addVariable("Opening", enumMap<(int)SCENE::OPENING>(), false)
-                .addVariable("Title", enumMap<(int)SCENE::TITLE>(), false)
-                .addVariable("Select", enumMap<(int)SCENE::SELECT>(), false)
-                .addVariable("Battle", enumMap<(int)SCENE::BATTLE>(), false)
-                .addVariable("SelectSV", enumMap<(int)SCENE::SELECTSV>(), false)
-                .addVariable("SelectCL", enumMap<(int)SCENE::SELECTCL>(), false)
-                .addVariable("LoadingSV", enumMap<(int)SCENE::LOADINGSV>(), false)
-                .addVariable("LoadingCL", enumMap<(int)SCENE::LOADINGCL>(), false)
-                .addVariable("LoadingWatch", enumMap<(int)SCENE::LOADINGWATCH>(), false)
-                .addVariable("BattleSV", enumMap<(int)SCENE::BATTLESV>(), false)
-                .addVariable("BattleCL", enumMap<(int)SCENE::BATTLECL>(), false)
-                .addVariable("BattleWatch", enumMap<(int)SCENE::BATTLEWATCH>(), false)
-                .addVariable("SelectScenario", enumMap<(int)SCENE::SELECTSENARIO>(), false)
-                .addVariable("Ending", enumMap<(int)SCENE::ENDING>(), false)
-                .addVariable("Submenu", enumMap<(int)SCENE::SUBMENU>(), false)
+                .addVariable("Logo",            (int*)&soku_SceneLogo,          false)
+                .addVariable("Opening",         (int*)&soku_SceneOpening,       false)
+                .addVariable("Title",           (int*)&soku_SceneTitle,         false)
+                .addVariable("Select",          (int*)&soku_SceneSelect,        false)
+                .addVariable("Battle",          (int*)&soku_SceneBattle,        false)
+                .addVariable("SelectSV",        (int*)&soku_SceneSelectSv,      false)
+                .addVariable("SelectCL",        (int*)&soku_SceneSelectCl,      false)
+                .addVariable("LoadingSV",       (int*)&soku_SceneLoadingSv,     false)
+                .addVariable("LoadingCL",       (int*)&soku_SceneLoadingCl,     false)
+                .addVariable("LoadingWatch",    (int*)&soku_SceneLoadingWatch,  false)
+                .addVariable("BattleSV",        (int*)&soku_SceneBattleSv,      false)
+                .addVariable("BattleCL",        (int*)&soku_SceneBattleCl,      false)
+                .addVariable("BattleWatch",     (int*)&soku_SceneBattleWatch,   false)
+                .addVariable("SelectStage",     (int*)&soku_SceneSelectStage,   false)
+                .addVariable("Ending",          (int*)&soku_SceneEnding,        false)
+                .addVariable("Submenu",         (int*)&soku_SceneSubmenu,       false)
             .endNamespace()
             .beginNamespace("Stage")
-                .addVariable("RepairedHakureiShrine", enumMap<(int)Stage::RepairedHakureiShrine>(), false)
-                .addVariable("ForestOfMagic", enumMap<(int)Stage::ForestOfMagic>(), false)
-                .addVariable("CreekOfGenbu", enumMap<(int)Stage::CreekOfGenbu>(), false)
-                .addVariable("YoukaiMountain", enumMap<(int)Stage::YoukaiMountain>(), false)
-                .addVariable("MysteriousSeaOfClouds", enumMap<(int)Stage::MysteriousSeaOfClouds>(), false)
-                .addVariable("BhavaAgra", enumMap<(int)Stage::BhavaAgra>(), false)
-                .addVariable("HakureiShrine", enumMap<(int)Stage::HakureiShrine>(), false)
-                .addVariable("KirisameMagicShop", enumMap<(int)Stage::KirisameMagicShop>(), false)
-                .addVariable("SDMClockTower", enumMap<(int)Stage::SDMClockTower>(), false)
-                .addVariable("ForestOfDolls", enumMap<(int)Stage::ForestOfDolls>(), false)
-                .addVariable("SDMLibrary", enumMap<(int)Stage::SDMLibrary>(), false)
-                .addVariable("Netherworld", enumMap<(int)Stage::Netherworld>(), false)
-                .addVariable("SDMFoyer", enumMap<(int)Stage::SDMFoyer>(), false)
-                .addVariable("HakugyokurouSnowyGarden", enumMap<(int)Stage::HakugyokurouSnowyGarden>(), false)
-                .addVariable("BambooForestOfTheLost", enumMap<(int)Stage::BambooForestOfTheLost>(), false)
-                .addVariable("ShoreOfMistyLake", enumMap<(int)Stage::ShoreOfMistyLake>(), false)
-                .addVariable("MoriyaShrine", enumMap<(int)Stage::MoriyaShrine>(), false)
-                .addVariable("MouthOfGeyser", enumMap<(int)Stage::MouthOfGeyser>(), false)
-                .addVariable("CatwalkInGeyser", enumMap<(int)Stage::CatwalkInGeyser>(), false)
-                .addVariable("FusionReactorCore", enumMap<(int)Stage::FusionReactorCore>(), false)
+                .addVariable("HakureiShrine",           (int*)&soku_StageHakureiShrine,           false)
+                .addVariable("ForestOfMagic",           (int*)&soku_StageForestOfMagic,           false)
+                .addVariable("CreekOfGenbu",            (int*)&soku_StageCreekOfGenbu,            false)
+                .addVariable("YoukaiMountain",          (int*)&soku_StageYoukaiMountain,          false)
+                .addVariable("MysteriousSeaOfClouds",   (int*)&soku_StageMysteriousSeaOfClouds,   false)
+                .addVariable("BhavaAgra",               (int*)&soku_StageBhavaAgra,               false)
+                .addVariable("RepairedHakureiShrine",   (int*)&soku_StageRepairedHakureiShrine,   false)
+                .addVariable("KirisameMagicShop",       (int*)&soku_StageKirisameMagicShop,       false)
+                .addVariable("SDMClockTower",           (int*)&soku_StageSDMClockTower,           false)
+                .addVariable("ForestOfDolls",           (int*)&soku_StageForestOfDolls,           false)
+                .addVariable("SDMLibrary",              (int*)&soku_StageSDMLibrary,              false)
+                .addVariable("Netherworld",             (int*)&soku_StageNetherworld,             false)
+                .addVariable("SDMFoyer",                (int*)&soku_StageSDMFoyer,                false)
+                .addVariable("HakugyokurouSnowyGarden", (int*)&soku_StageHakugyokurouSnowyGarden, false)
+                .addVariable("BambooForestOfTheLost",   (int*)&soku_StageBambooForestOfTheLost,   false)
+                .addVariable("ShoreOfMistyLake",        (int*)&soku_StageShoreOfMistyLake,        false)
+                .addVariable("MoriyaShrine",            (int*)&soku_StageMoriyaShrine,            false)
+                .addVariable("MouthOfGeyser",           (int*)&soku_StageMouthOfGeyser,           false)
+                .addVariable("CatwalkInGeyser",         (int*)&soku_StageCatwalkInGeyser,         false)
+                .addVariable("FusionReactorCore",       (int*)&soku_StageFusionReactorCore,       false)
             .endNamespace()
-            */
             //.beginClass<Soku::CPlayer>("Player")
                 //.addProperty("Character", soku_Player_Character)
                 //.addFunction("PlaySE", soku_Player_PlaySE)
             //.endClass()
             //.addVariable("P1", &Soku::P1)
             //.addVariable("P2", &Soku::P2)
-            //.addFunction("PlaySE", Soku::PlaySE)
+            .addFunction("PlaySE", soku_PlaySE)
             //.addFunction("ReloadSE", soku_ReloadSE)
             .addCFunction("SubscribeEvent", soku_SubscribeEvent)
             .addCFunction("SubscribeRender", soku_SubscribeEventTyped<soku_EventRender>)
-            //.addCFunction("SubscribeWindowProc", soku_SubscribeWindowProc)
-            //.addCFunction("SubscribeKeyboard", soku_SubscribeKeyboard)
             .addCFunction("SubscribeBattleEvent", soku_SubscribeEventTyped<soku_EventBattleEvent>)
-            .addCFunction("SubscribeGameEvent", soku_SubscribeEventTyped<soku_EventGameEvent>)
+            //.addCFunction("SubscribeGameEvent", soku_SubscribeEventTyped<soku_EventGameEvent>)
             .addCFunction("SubscribeStageSelect", soku_SubscribeEventTyped<soku_EventStageSelect>)
             .addCFunction("SubscribeFileLoader", soku_SubscribeEventTyped<soku_EventFileLoader>)
-            //.addCFunction("SubscribeInput", soku_SubscribeInput)
             .addFunction("UnsubscribeEvent", soku_UnsubscribeEvent)
         .endNamespace()
     ;
