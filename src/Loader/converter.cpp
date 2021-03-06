@@ -7,7 +7,7 @@
 
 #include "../Core/package.hpp"
 #include "../Core/util/riffdocument.hpp"
-#include "reader.hpp"
+#include "../Core/reader.hpp"
 #include "ModPackage.hpp"
 #include "../Lua/lualibs/soku.hpp"
 

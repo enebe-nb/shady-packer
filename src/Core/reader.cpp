@@ -1,5 +1,4 @@
 #include "reader.hpp"
-#include "main.hpp"
 #include <fstream>
 
 namespace {

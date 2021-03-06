@@ -27,6 +27,8 @@ set(SRC_CORE_Root
 	zipentry.cpp
 
 	resource.hpp
+	reader.hpp
+	reader.cpp
 	package.hpp
 	package.cpp
 	packagefilter.cpp)
