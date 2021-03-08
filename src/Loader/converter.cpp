@@ -118,6 +118,12 @@ static void* __stdcall repl_read_constructor(const char *filename, unsigned int 
     return result;
 }
 
+static void RenderEvent() {
+    Logger::Render();
+    ShadyLua::EmitSokuEventRender();
+    RenderGui();
+}
+
 static int _LoadTamper() {
     if (th123eAfterLock) th123eAfterLock();
     DWORD dwOldProtect;
@@ -128,7 +134,7 @@ static int _LoadTamper() {
 }
 
 void LoadTamper(const std::wstring& caller) {
-    ShadyLua::LoadTamper(caller);
+    ShadyLua::LoadTamper(caller, 0, RenderEvent);
     if (caller == L"SokuEngine.dll") _LoadTamper();
     else {
         DWORD dwOldProtect;

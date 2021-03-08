@@ -15,6 +15,7 @@ void LoadPackage();
 void UnloadPackage();
 void LoadTamper(const std::wstring& caller);
 void UnloadTamper();
+void RenderGui();
 
 inline std::string ws2s(const std::wstring& wstr) {
     int size_needed = WideCharToMultiByte(CP_UTF8, 0, &wstr[0], (int)wstr.size(), NULL, 0, NULL, NULL);
