@@ -3,6 +3,7 @@
 #include <lua.hpp>
 #include <unordered_map>
 #include <mutex>
+#include <filesystem>
 
 namespace ShadyLua {
     typedef void* (*fnOpen_t)(void* userdata, const char* filename);
@@ -25,7 +26,7 @@ namespace ShadyLua {
         LuaScript(LuaScript&&) = delete;
         virtual ~LuaScript();
 
-        int load(const char* filename, const char* mode = 0);
+        virtual int load(const char* filename, const char* mode = 0);
         inline void* open(const char* filename)
             {return fnOpen(userdata, filename);}
         inline size_t read(void* file, char* buffer, size_t size)
@@ -33,18 +34,18 @@ namespace ShadyLua {
         int run();
     };
 
-/*
     class LuaScriptFS : public LuaScript {
     private:
-        std::string root;
+        std::filesystem::path root;
 
         static void* fnOpen(void* userdata, const char* filename);
         static size_t fnRead(void* userdata, void* file, char* buffer, size_t size);
     public:
-        inline LuaScriptFS(const std::string& root)
-            : LuaScript(this, fnOpen, fnRead), root(root) {}
+        inline LuaScriptFS(const std::filesystem::path& root)
+            : LuaScript(this, LuaScriptFS::fnOpen, LuaScriptFS::fnRead), root(root) {}
     };
 
+/*
     class LuaScriptZip : public LuaScript {
     private:
         std::string zipFile;

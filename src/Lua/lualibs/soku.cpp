@@ -44,7 +44,6 @@ const int soku_EventBattleEvent = 3;
 const int soku_EventStageSelect = 5;
 const int soku_EventFileLoader = 6;
 
-// TODO 
 void ShadyLua::EmitSokuEventRender() {
     std::shared_lock guard(eventMapLock);
     auto& listeners = eventMap[soku_EventRender];

@@ -10,6 +10,8 @@ namespace Logger {
     constexpr int LOG_ALL =     0x0f;
     void Initialize(int flags = LOG_ERROR);
     void Finalize();
+    void Render();
+    void Clear();
 
     void Log(int type, const std::string&);
     template<typename ... S> inline void Log(int type, S const&... args) {

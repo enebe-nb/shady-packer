@@ -2,6 +2,7 @@
 
 #include "main.hpp"
 #include "modpackage.hpp"
+#include "../Lua/logger.hpp"
 
 namespace {
 	const BYTE TARGET_HASH[16] = { 0xdf, 0x35, 0xd1, 0xfb, 0xc7, 0xb5, 0x83, 0x31, 0x7a, 0xda, 0xbe, 0x8c, 0xd9, 0xf5, 0x3b, 0x2e };
@@ -46,6 +47,7 @@ extern "C" __declspec(dllexport) bool Initialize(HMODULE hMyModule, HMODULE hPar
 	if (!_initialized) _initialized = true;
 	else return FALSE;
 
+	Logger::Initialize(Logger::LOG_ERROR);
 	GetModulePath(hMyModule, ModPackage::basePath);
 	LoadSettings();
 
@@ -67,6 +69,7 @@ BOOL WINAPI DllMain(HMODULE hModule, DWORD fdwReason, LPVOID lpReserved) {
 	if (DLL_PROCESS_DETACH) {
 		UnloadTamper();
 		UnloadPackage();
+		Logger::Finalize();
 
 		curl_global_cleanup();
 	}

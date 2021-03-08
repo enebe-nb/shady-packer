@@ -89,6 +89,14 @@ if(SHADY_ENABLE_MODULE)
     add_git_module(termcolor git://github.com/ikalnytskyi/termcolor v1.0.1)
     add_library(termcolor INTERFACE)
     target_include_directories(termcolor INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/termcolor/include)
+
+    # ImGui Library
+    add_git_module(imgui git://github.com/ocornut/imgui v1.81)
+    add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/imgui EXCLUDE_FROM_ALL)
+
+    # SokuLib Library
+    add_git_module(SokuLib git://github.com/SokuDev/SokuLib dev)
+    add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/SokuLib EXCLUDE_FROM_ALL)
 endif()
 
 if(SHADY_ENABLE_CLI OR SHADY_ENABLE_MODULE)

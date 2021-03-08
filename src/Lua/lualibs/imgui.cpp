@@ -1,8 +1,10 @@
 #include "../lualibs.hpp"
+#include "../logger.hpp"
 #include <lua.hpp>
 #include <LuaBridge/LuaBridge.h>
-#define IMGUI_DISABLE_INCLUDE_IMCONFIG_H
+#define IMGUI_DISABLE_OBSOLETE_FUNCTIONS
 #include <imgui.h>
+#include <imgui_stdlib.h>
 
 using namespace luabridge;
 
@@ -32,21 +34,77 @@ static inline void imgui_LabelText(const char* l, const char* s){ImGui::LabelTex
 static inline void imgui_BulletText(const char* s){ImGui::BulletText(s);}
 static inline void imgui_SetTooltip(const char* s){ImGui::SetTooltip(s);}
 
-#define AV(type, name) type name = Stack<type>::get(L, i++);
-#define AO(type, name, default) type name = default; if (top >= i) name = Stack<type>::get(L, i++);
-#define AP(type, name) type* name = 0; if (top >= i) name = new type(Stack<type>::get(L, i++));
-#define R(type, name) Stack<type>::push(L, name);
-#define RP(type, name) if(name) {Stack<type>::push(L, *name); delete name;}
-#define FB(name) static inline int impl_##name(lua_State* L) { int i = 0; int top = lua_gettop(L);
-#define FE(ret) return ret; }
+#define Arg(type, name) type name = Stack<type>::get(L, i++);
+#define ArgCond(type, name, default, cond) type name = default; if (cond) name = Stack<type>::get(L, i++);
+#define ArgOpt(type, name, default) ArgCond(type, name, default, top >= i)
+#define ArgPtr(type, name) type* name = 0; if (top >= i) name = new type(Stack<type>::get(L, i++));
+#define Ret(type, name) Stack<type>::push(L, name);
+#define RetPtr(type, name) if(name) {Stack<type>::push(L, *name); delete name;}
+#define FnBegin(name) static inline int impl_##name(lua_State* L) { int i = 0; int top = lua_gettop(L);
+#define FnEnd(ret) return ret; }
 
-FB(Begin) AV(const char*, name) AP(bool, open) AO(ImGuiWindowFlags, flags, 0)
-    bool visible = ImGui::Begin(name, open, flags);
-R(bool, visible) RP(bool, open) FE(2)
+FnBegin(Begin) Arg(const char*, name) ArgPtr(bool, open) ArgOpt(ImGuiWindowFlags, flags, 0)
+    bool ret = ImGui::Begin(name, open, flags);
+Ret(bool, ret) RetPtr(bool, open) FnEnd(2)
 
-FB(BeginChild) AV(const char*, name) AO(ImVec2, size, ImVec2(0,0)) AO(bool, border, false) AO(ImGuiWindowFlags, flags, 0)
-    bool visible = ImGui::BeginChild(name, size, border, flags);
-R(bool, visible) FE(1)
+FnBegin(BeginChild) Arg(const char*, name) ArgOpt(ImVec2, size, ImVec2(0,0)) ArgOpt(bool, border, false) ArgOpt(ImGuiWindowFlags, flags, 0)
+    bool ret = ImGui::BeginChild(name, size, border, flags);
+Ret(bool, ret) FnEnd(1)
+
+FnBegin(SetWindowPos) ArgCond(const char*, name, NULL, lua_isstring(L, 1)) Arg(ImVec2, pos) ArgOpt(ImGuiCond, cond, 0)
+    if (name) ImGui::SetWindowPos(name, pos, cond);
+    else ImGui::SetWindowPos(pos, cond);
+FnEnd(0)
+
+FnBegin(SetWindowSize) ArgCond(const char*, name, NULL, lua_isstring(L, 1)) Arg(ImVec2, size) ArgOpt(ImGuiCond, cond, 0)
+    if (name) ImGui::SetWindowSize(name, size, cond);
+    else ImGui::SetWindowSize(size, cond);
+FnEnd(0)
+
+FnBegin(SetWindowCollapsed) ArgCond(const char*, name, NULL, lua_isstring(L, 1)) Arg(bool, collapsed) ArgOpt(ImGuiCond, cond, 0)
+    if (name) ImGui::SetWindowCollapsed(name, collapsed, cond);
+    else ImGui::SetWindowCollapsed(collapsed, cond);
+FnEnd(0)
+
+FnBegin(SetWindowFocus) ArgCond(const char*, name, NULL, lua_isstring(L, 1))
+    if (name) ImGui::SetWindowFocus(name);
+    else ImGui::SetWindowFocus();
+FnEnd(0)
+
+FnBegin(PushStyleColor) Arg(int, idx) ArgCond(int, valI, 0, lua_isnumber(L, 2)) ArgCond(ImVec4, valV, ImVec4(), !lua_isnumber(L, 2))
+    if (lua_isnumber(L, 2)) ImGui::PushStyleColor(idx, valI);
+    else ImGui::PushStyleColor(idx, valV);
+FnEnd(0)
+
+FnBegin(PushStyleVar) Arg(int, idx) ArgCond(float, valF, 0, lua_isnumber(L, 2)) ArgCond(ImVec2, valV, ImVec2(), !lua_isnumber(L, 2))
+    if (lua_isnumber(L, 2)) ImGui::PushStyleVar(idx, valF);
+    else ImGui::PushStyleVar(idx, valV);
+FnEnd(0)
+
+FnBegin(Checkbox) Arg(const char*, label) ArgPtr(bool, v)
+    bool ret = ImGui::Checkbox(label, v);
+Ret(bool, ret) RetPtr(bool, v) FnEnd(2)
+
+FnBegin(CheckboxFlags) Arg(const char*, label) ArgPtr(unsigned int, flags) Arg(unsigned int, flags_value)
+    Logger::Warning("imgui.CheckboxFlags may not well because the way lua handle integers");
+    bool ret = ImGui::CheckboxFlags(label, flags, flags_value);
+Ret(bool, ret) RetPtr(unsigned int, flags) FnEnd(2)
+
+FnBegin(InputText) Arg(const char*, label) Arg(std::string, buffer) ArgOpt(int, flags, 0) // TODO callback
+    bool ret = ImGui::InputText(label, &buffer, flags);
+Ret(bool, ret) Ret(std::string, buffer) FnEnd(2)
+
+FnBegin(InputTextMultiline) Arg(const char*, label) Arg(std::string, buffer) ArgOpt(ImVec2, size, ImVec2(0, 0)) ArgOpt(int, flags, 0) // TODO callback
+    bool ret = ImGui::InputTextMultiline(label, &buffer, size, flags);
+Ret(bool, ret) Ret(std::string, buffer) FnEnd(2)
+
+FnBegin(InputTextWithHint) Arg(const char*, label) Arg(const char*, hint) Arg(std::string, buffer) ArgOpt(int, flags, 0) // TODO callback
+    bool ret = ImGui::InputTextWithHint(label, hint, &buffer, flags);
+Ret(bool, ret) Ret(std::string, buffer) FnEnd(2)
+
+FnBegin(CalcTextSize) Arg(std::string, text) ArgOpt(bool, hide_text, false) ArgOpt(float, wrap_width, -1.f)
+    ImVec2 size = ImGui::CalcTextSize(text.data(), text.data()+text.size(), hide_text, wrap_width);
+Ret(ImVec2, size) FnEnd(1)
 
 void ShadyLua::LualibImGui(lua_State* L) {
     getGlobalNamespace(L)
@@ -69,9 +127,9 @@ void ShadyLua::LualibImGui(lua_State* L) {
             .endClass()
 
             // Windows
-            .addFunction("Begin", impl_Begin)
+            .addCFunction("Begin", impl_Begin)
             .addFunction("End", ImGui::End)
-            .addFunction("BeginChild", impl_BeginChild)
+            .addCFunction("BeginChild", impl_BeginChild)
             .addFunction("EndChild", ImGui::EndChild)
 
             // Windows Utilities
@@ -84,6 +142,7 @@ void ShadyLua::LualibImGui(lua_State* L) {
             .addFunction("GetWindowSize", ImGui::GetWindowSize)
             .addFunction("GetWindowWidth", ImGui::GetWindowWidth)
             .addFunction("GetWindowHeight", ImGui::GetWindowHeight)
+            
             .addFunction("SetNextWindowPos", ImGui::SetNextWindowPos)
             .addFunction("SetNextWindowSize", ImGui::SetNextWindowSize)
             //.addFunction("SetNextWindowSizeConstraints", ImGui::SetNextWindowSizeConstraints)
@@ -91,15 +150,11 @@ void ShadyLua::LualibImGui(lua_State* L) {
             .addFunction("SetNextWindowCollapsed", ImGui::SetNextWindowCollapsed)
             .addFunction("SetNextWindowFocus", ImGui::SetNextWindowFocus)
             .addFunction("SetNextWindowBgAlpha", ImGui::SetNextWindowBgAlpha)
-            .addFunction("SetWindowPos", static_cast<void(*)(const ImVec2&, ImGuiCond)>(ImGui::SetWindowPos))
-            .addFunction("SetWindowSize", static_cast<void(*)(const ImVec2&, ImGuiCond)>(ImGui::SetWindowSize))
-            .addFunction("SetWindowCollapsed", static_cast<void(*)(bool, ImGuiCond)>(ImGui::SetWindowCollapsed))
-            .addFunction("SetWindowFocus", static_cast<void(*)()>(ImGui::SetWindowFocus))
+            .addCFunction("SetWindowPos", impl_SetWindowPos)
+            .addCFunction("SetWindowSize", impl_SetWindowSize)
+            .addCFunction("SetWindowCollapsed", impl_SetWindowCollapsed)
+            .addCFunction("SetWindowFocus", impl_SetWindowFocus)
             .addFunction("SetWindowFontScale", ImGui::SetWindowFontScale)
-            //.addFunction("SetWindowPos", ImGui::SetWindowPos)
-            //.addFunction("SetWindowSize", ImGui::SetWindowSize)
-            //.addFunction("SetWindowCollapsed", ImGui::SetWindowCollapsed)
-            //.addFunction("SetWindowFocus", ImGui::SetWindowFocus)
 
             // Content region
             .addFunction("GetContentRegionMax", ImGui::GetContentRegionMax)
@@ -123,14 +178,14 @@ void ShadyLua::LualibImGui(lua_State* L) {
             // Parameters stacks (shared)
             //.addFunction("PushFont", ImGui::PushFont)
             //.addFunction("PopFont", ImGui::PopFont)
-            .addFunction("PushStyleColor", static_cast<void(*)(ImGuiCol, const ImVec4&)>(ImGui::PushStyleColor))
+            .addCFunction("PushStyleColor", impl_PushStyleColor)
             .addFunction("PopStyleColor", ImGui::PopStyleColor)
-            //.addFunction("PushStyleVar", ImGui::PushStyleVar)
-            //.addFunction("PopStyleVar", ImGui::PopStyleVar)
-            .addFunction("GetStyleColor", ImGui::GetStyleColorVec4)
-            //.addFunction("GetFont", ImGui::GetFont)
-            .addFunction("GetFontSize", ImGui::GetFontSize)
-            .addFunction("GetFontTexUvWhitePixel", ImGui::GetFontTexUvWhitePixel)
+            .addCFunction("PushStyleVar", impl_PushStyleVar)
+            .addFunction("PopStyleVar", ImGui::PopStyleVar)
+            .addFunction("PushAllowKeyboardFocus", ImGui::PushAllowKeyboardFocus)
+            .addFunction("PopAllowKeyboardFocus", ImGui::PopAllowKeyboardFocus)
+            .addFunction("PushButtonRepeat", ImGui::PushButtonRepeat)
+            .addFunction("PopButtonRepeat", ImGui::PopButtonRepeat)
 
             // Parameters stacks (current window)
             .addFunction("PushItemWidth", ImGui::PushItemWidth)
@@ -139,10 +194,12 @@ void ShadyLua::LualibImGui(lua_State* L) {
             .addFunction("CalcItemWidth", ImGui::CalcItemWidth)
             .addFunction("PushTextWrapPos", ImGui::PushTextWrapPos)
             .addFunction("PopTextWrapPos", ImGui::PopTextWrapPos)
-            .addFunction("PushAllowKeyboardFocus", ImGui::PushAllowKeyboardFocus)
-            .addFunction("PopAllowKeyboardFocus", ImGui::PopAllowKeyboardFocus)
-            .addFunction("PushButtonRepeat", ImGui::PushButtonRepeat)
-            .addFunction("PopButtonRepeat", ImGui::PopButtonRepeat)
+
+            //.addFunction("GetFont", ImGui::GetFont)
+            .addFunction("GetFontSize", ImGui::GetFontSize)
+            .addFunction("GetFontTexUvWhitePixel", ImGui::GetFontTexUvWhitePixel)
+            //.addFunction("GetColor", ImGui::GetColor))
+            .addFunction("GetStyleColor", ImGui::GetStyleColorVec4)
 
             // Cursor / Layout
             .addFunction("Separator", ImGui::Separator)
@@ -172,8 +229,10 @@ void ShadyLua::LualibImGui(lua_State* L) {
             .addFunction("GetFrameHeightWithSpacing", ImGui::GetFrameHeightWithSpacing)
 
             // ID stack/scopes
+            // TODO implement variable arguments
             .addFunction("PushID", static_cast<void(*)(const char*)>(ImGui::PushID))
             .addFunction("PopID", ImGui::PopID)
+            .addFunction("GetID", static_cast<ImGuiID(*)(const char*)>(ImGui::GetID))
 
             // Widgets: Text
             .addFunction("Text", imgui_Text)
@@ -190,13 +249,14 @@ void ShadyLua::LualibImGui(lua_State* L) {
             .addFunction("ArrowButton", ImGui::ArrowButton)
             //.addFunction("Image", ImGui::Image)
             //.addFunction("ImageButton", ImGui::ImageButton)
-            //.addFunction("Checkbox", ImGui::Checkbox)
-            //.addFunction("CheckboxFlags", ImGui::CheckboxFlags)
+            .addFunction("Checkbox", impl_Checkbox)
+            //.addFunction("CheckboxFlags", impl_CheckboxFlags)
             .addFunction("RadioButton", static_cast<bool(*)(const char*, bool)>(ImGui::RadioButton))
             .addFunction("ProgressBar", ImGui::ProgressBar)
             .addFunction("Bullet", ImGui::Bullet)
 
             // Widgets: Combo Box
+            // TODO analyze this to know how to work better in lua
             //.addFunction("BeginCombo", ImGui::BeginCombo)
             //.addFunction("EndCombo", ImGui::EndCombo)
             //.addFunction("Combo", ImGui::Combo)
@@ -220,9 +280,9 @@ void ShadyLua::LualibImGui(lua_State* L) {
             //.addFunction("VSliderScalar", ImGui::SliderScalar)
 
             // Widgets: Input with Keyboard
-            //.addFunction("InputText", ImGui::InputText)
-            //.addFunction("InputTextMultiline", ImGui::InputTextMultiline)
-            //.addFunction("InputTextWithHint", ImGui::InputTextWithHint)
+            .addFunction("InputText", impl_InputText)
+            .addFunction("InputTextMultiline", impl_InputTextMultiline)
+            .addFunction("InputTextWithHint", impl_InputTextWithHint)
             //.addFunction("InputFloat", static_cast<bool(*)(const char*, float*, float, float, const char*, ImGuiInputTextFlags)>(ImGui::InputFloat))
             //.addFunction("InputInt", ImGui::InputInt)
             //.addFunction("InputDouble", ImGui::InputDouble)
@@ -238,26 +298,32 @@ void ShadyLua::LualibImGui(lua_State* L) {
             .addFunction("SetColorEditOptions", ImGui::SetColorEditOptions)
 
             // Widgets: Trees
+            // TODO handle variadics
             .addFunction("TreeNode", static_cast<bool(*)(const char*)>(ImGui::TreeNode))
             .addFunction("TreeNodeEx", static_cast<bool(*)(const char*, ImGuiTreeNodeFlags)>(ImGui::TreeNodeEx))
             .addFunction("TreePush", static_cast<void(*)(const char*)>(ImGui::TreePush))
             .addFunction("TreePop", ImGui::TreePop)
             .addFunction("GetTreeNodeToLabelSpacing", ImGui::GetTreeNodeToLabelSpacing)
+            // TODO ArgPtr
             .addFunction("CollapsingHeader", static_cast<bool(*)(const char*, ImGuiTreeNodeFlags)>(ImGui::CollapsingHeader))
             .addFunction("SetNextItemOpen", ImGui::SetNextItemOpen)
 
             // Widgets: Selectables
+            // TODO ArgPtr
             .addFunction("Selectable", static_cast<bool(*)(const char*, bool, ImGuiSelectableFlags, const ImVec2&)>(ImGui::Selectable))
 
             // Widgets: List Boxes
             //.addFunction("ListBox", static_cast<bool(*)(const char*, int*, const char* const[], int, int)>(ImGui::ListBox))
-            .addFunction("ListBoxHeader", static_cast<bool(*)(const char*, const ImVec2&)>(ImGui::ListBoxHeader))
-            .addFunction("ListBoxFooter", ImGui::ListBoxFooter)
+            //.addFunction("ListBoxHeader", static_cast<bool(*)(const char*, const ImVec2&)>(ImGui::ListBoxHeader))
+            //.addFunction("ListBoxFooter", ImGui::ListBoxFooter)
 
             // Widgets: Data Plotting
+            //.addFunction("PlotLines", ImGui::PlotLines)
+            //.addFunction("PlotHistogram", ImGui::PlotHistogram)
 
             // Widgets: Value() Helpers.
             .addFunction("Value", static_cast<void(*)(const char*, int)>(ImGui::Value))
+            // for format option just use imgui.Text(string.format(...))
 
             // Widgets: Menus
             .addFunction("BeginMainMenuBar", ImGui::BeginMainMenuBar)
@@ -266,6 +332,7 @@ void ShadyLua::LualibImGui(lua_State* L) {
             .addFunction("EndMenuBar", ImGui::EndMenuBar)
             .addFunction("BeginMenu", ImGui::BeginMenu)
             .addFunction("EndMenu", ImGui::EndMenu)
+            // TODO ArgPtr
             .addFunction("MenuItem", static_cast<bool(*)(const char*, const char*, bool, bool)>(ImGui::MenuItem))
 
             // Tooltips
@@ -274,16 +341,21 @@ void ShadyLua::LualibImGui(lua_State* L) {
             .addFunction("SetTooltip", imgui_SetTooltip)
 
             // Popups, Modals
-            .addFunction("OpenPopup", ImGui::OpenPopup)
             .addFunction("BeginPopup", ImGui::BeginPopup)
+            // TODO ArgPtr
+            //.addFunction("BeginPopupModal", ImGui::BeginPopupModal)
+            .addFunction("EndPopup", ImGui::EndPopup)
+
+            .addFunction("OpenPopup", ImGui::OpenPopup)
+            .addFunction("OpenPopupOnItemClick", ImGui::OpenPopupOnItemClick)
+            .addFunction("CloseCurrentPopup", ImGui::CloseCurrentPopup)
+
             .addFunction("BeginPopupContextItem", ImGui::BeginPopupContextItem)
             .addFunction("BeginPopupContextWindow", ImGui::BeginPopupContextWindow)
             .addFunction("BeginPopupContextVoid", ImGui::BeginPopupContextVoid)
-            //.addFunction("BeginPopupModal", ImGui::BeginPopupModal)
-            .addFunction("EndPopup", ImGui::EndPopup)
-            .addFunction("OpenPopupOnItemClick", ImGui::OpenPopupOnItemClick)
             .addFunction("IsPopupOpen", ImGui::IsPopupOpen)
-            .addFunction("CloseCurrentPopup", ImGui::CloseCurrentPopup)
+
+            // Table TODO (is Beta)
 
             // Columns
             .addFunction("Columns", ImGui::Columns)
@@ -298,9 +370,13 @@ void ShadyLua::LualibImGui(lua_State* L) {
             // Tab Bars, Tabs
             .addFunction("BeginTabBar", ImGui::BeginTabBar)
             .addFunction("EndTabBar", ImGui::EndTabBar)
+            // TODO ArgPtr
             //.addFunction("BeginTabItem", ImGui::BeginTabItem)
             .addFunction("EndTabItem", ImGui::EndTabItem)
+            .addFunction("TabItemButton", ImGui::TabItemButton)
             .addFunction("SetTabItemClosed", ImGui::SetTabItemClosed)
+
+            // Drag and Drop TODO
 
             // Clipping
             .addFunction("PushClipRect", ImGui::PushClipRect)
@@ -320,7 +396,7 @@ void ShadyLua::LualibImGui(lua_State* L) {
             .addFunction("IsItemActivated", ImGui::IsItemActivated)
             .addFunction("IsItemDeactivated", ImGui::IsItemDeactivated)
             .addFunction("IsItemDeactivatedAfterEdit", ImGui::IsItemDeactivatedAfterEdit)
-
+            .addFunction("IsItemToggledOpen", ImGui::IsItemToggledOpen)
             .addFunction("IsAnyItemHovered", ImGui::IsAnyItemHovered)
             .addFunction("IsAnyItemActive", ImGui::IsAnyItemActive)
             .addFunction("IsAnyItemFocused", ImGui::IsAnyItemFocused)
@@ -333,13 +409,16 @@ void ShadyLua::LualibImGui(lua_State* L) {
             .addFunction("IsRectVisible", static_cast<bool(*)(const ImVec2&, const ImVec2&)>(ImGui::IsRectVisible))
             .addFunction("GetTime", ImGui::GetTime)
             .addFunction("GetFrameCount", ImGui::GetFrameCount)
+            // drawlists wont work well
             .addFunction("GetStyleColorName", ImGui::GetStyleColorName)
-            //.addFunction("CalcTextSize", ImGui::CalcTextSize)
+            // state storage also wont
+            //.addFunction("CalcListClipping", ImGui::CalcListClipping)
             //.addFunction("CalcListClipping", ImGui::CalcListClipping)
             .addFunction("BeginChildFrame", ImGui::BeginChildFrame)
             .addFunction("EndChildFrame", ImGui::EndChildFrame)
+            .addCFunction("CalcTextSize", impl_CalcTextSize)
 
-            // Color Utilities
+            // Color Utilities TODO
             .addFunction("ColorConvertU32ToFloat4", ImGui::ColorConvertU32ToFloat4)
             .addFunction("ColorConvertFloat4ToU32", ImGui::ColorConvertFloat4ToU32)
             //.addFunction("ColorConvertRGBtoHSV", ImGui::ColorConvertRGBtoHSV)
@@ -351,26 +430,29 @@ void ShadyLua::LualibImGui(lua_State* L) {
             .addFunction("IsKeyPressed", ImGui::IsKeyPressed)
             .addFunction("IsKeyReleased", ImGui::IsKeyReleased)
             .addFunction("GetKeyPressedAmount", ImGui::GetKeyPressedAmount)
+            .addFunction("CaptureKeyboardFromApp", ImGui::CaptureKeyboardFromApp)
+            
             .addFunction("IsMouseDown", ImGui::IsMouseDown)
-            .addFunction("IsAnyMouseDown", ImGui::IsAnyMouseDown)
             .addFunction("IsMouseClicked", ImGui::IsMouseClicked)
-            .addFunction("IsMouseDoubleClicked", ImGui::IsMouseDoubleClicked)
             .addFunction("IsMouseReleased", ImGui::IsMouseReleased)
-            .addFunction("IsMouseDragging", ImGui::IsMouseDragging)
+            .addFunction("IsMouseDoubleClicked", ImGui::IsMouseDoubleClicked)
             .addFunction("IsMouseHoveringRect", ImGui::IsMouseHoveringRect)
             .addFunction("IsMousePosValid", ImGui::IsMousePosValid)
+            .addFunction("IsAnyMouseDown", ImGui::IsAnyMouseDown)
             .addFunction("GetMousePos", ImGui::GetMousePos)
             .addFunction("GetMousePosOnOpeningCurrentPopup", ImGui::GetMousePosOnOpeningCurrentPopup)
+            .addFunction("IsMouseDragging", ImGui::IsMouseDragging)
             .addFunction("GetMouseDragDelta", ImGui::GetMouseDragDelta)
             .addFunction("ResetMouseDragDelta", ImGui::ResetMouseDragDelta)
             .addFunction("GetMouseCursor", ImGui::GetMouseCursor)
             .addFunction("SetMouseCursor", ImGui::SetMouseCursor)
-            .addFunction("CaptureKeyboardFromApp", ImGui::CaptureKeyboardFromApp)
             .addFunction("CaptureMouseFromApp", ImGui::CaptureMouseFromApp)
 
             // Clipboard Utilities (also see the LogToClipboard() function to capture or output text data to the clipboard)
             .addFunction("GetClipboardText", ImGui::GetClipboardText)
             .addFunction("SetClipboardText", ImGui::SetClipboardText)
+
+            // TODO Flags and Constants
         .endNamespace()
     ;
 }

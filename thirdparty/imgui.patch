@@ -1,0 +1,40 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+new file mode 100644
+index 0000000..bb83e82
+--- /dev/null
++++ b/CMakeLists.txt
+@@ -0,0 +1,33 @@
++project ( imgui CXX )
++
++set(SRC_ImGui
++	imgui.cpp
++    imgui_draw.cpp
++    imgui_tables.cpp
++    imgui_widgets.cpp
++
++    backends/imgui_impl_dx9.cpp
++    backends/imgui_impl_win32.cpp
++    
++    misc/cpp/imgui_stdlib.cpp
++)
++source_group("Source Files" FILES ${SRC_ImGui})
++
++set(HDR_ImGui
++	imconfig.h
++	imgui.h
++    imgui_internal.h
++
++    backends/imgui_impl_dx9.h
++    backends/imgui_impl_win32.h
++    
++    misc/cpp/imgui_stdlib.h
++)
++source_group("Header Files" FILES ${HDR_ImGui})
++
++add_library(imgui STATIC ${SRC_ImGui} ${HDR_ImGui})
++target_include_directories(imgui PUBLIC
++    ${CMAKE_CURRENT_SOURCE_DIR}
++    ${CMAKE_CURRENT_SOURCE_DIR}/backends
++    ${CMAKE_CURRENT_SOURCE_DIR}/misc/cpp
++)
+\ No newline at end of file

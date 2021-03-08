@@ -3,6 +3,7 @@ boost/
 curl/
 cxxopts/
 cxxtest/
+imgui/
 json/
 libpng/
 libzip/
@@ -11,5 +12,6 @@ Lua-cURLv3/
 LuaBridge/
 rapidxml/
 rtaudio/
+SokuLib/
 termcolor/
 zlib/

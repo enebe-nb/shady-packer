@@ -57,22 +57,11 @@ int ShadyLua::LuaScript::load(const char* filename, const char* mode) {
     return result;
 }
 
-/*
 void* ShadyLua::LuaScriptFS::fnOpen(void* userdata, const char* filename) {
     LuaScriptFS* script = reinterpret_cast<LuaScriptFS*>(userdata);
-    char filepath[MAX_PATH];
-    if (!PathCanonicalize(filepath, filename)) {
-        Logger::Error("Invalid path: ", filename);
-        return 0;
-    } if (!PathIsRelative(filepath) || !filepath[0]) {
-        Logger::Error("Can't load path: ", filename);
-        return 0;
-    } if (!PathFileExists((script->root + filepath).c_str())) {
-        Logger::Error("File \"", filename, "\" doesn't exist.");
-        return 0;
-    }
+    std::filesystem::path path(script->root / std::filesystem::u8path(filename));
 
-    std::ifstream* input = new std::ifstream(script->root + filepath, std::ios::in | std::ios::binary);
+    std::ifstream* input = new std::ifstream(path, std::ios::in | std::ios::binary);
     if (input->fail()) {
         Logger::Error("Can't open file: ", filename);
         delete input;
@@ -89,6 +78,7 @@ size_t ShadyLua::LuaScriptFS::fnRead(void* userdata, void* file, char* buffer, s
     return size;
 }
 
+/*
 void* ShadyLua::LuaScriptZip::fnOpen(void* userdata, const char* filename) {
     LuaScriptZip* script = reinterpret_cast<LuaScriptZip*>(userdata);
     char filepath[MAX_PATH];

@@ -1,7 +1,9 @@
-#include "soku.hpp"
 #include "../lualibs.hpp"
-#include "../../Loader/reader.hpp"
+#include "../../Core/reader.hpp"
 #include <windows.h>
+
+#define IMGUIMAN_IMPL
+#include "soku.hpp"
 
 namespace {
 	typedef void* (__stdcall* read_constructor_t)(const char *filename, unsigned int *size, unsigned int *offset);
@@ -120,7 +122,7 @@ static int _LoadTamper() {
     return *(int*)0x008943b8;
 }
 
-void ShadyLua::LoadTamper(const std::wstring& caller) {
+void ShadyLua::LoadTamper(const std::wstring& caller, ImGuiMan::PassedFun load, ImGuiMan::PassedFun render) {
     DWORD dwOldProtect;
     if (caller == L"SokuEngine.dll") _LoadTamper();
     else {
@@ -137,14 +139,13 @@ void ShadyLua::LoadTamper(const std::wstring& caller) {
     ::VirtualProtect(reinterpret_cast<LPVOID>(0x0047157e), 5, dwOldProtect, &dwOldProtect);
 
     // game event
-    // ::VirtualProtect(reinterpret_cast<LPVOID>(0x0041e420), 5, PAGE_EXECUTE_WRITECOPY, &dwOldProtect);
     // orig_scene_constructor = (scene_constructor_t) TrampolineCreate(0x0041e420, reinterpret_cast<DWORD>(repl_scene_constructor), 7);
-    // ::VirtualProtect(reinterpret_cast<LPVOID>(0x0041e420), 5, dwOldProtect, &dwOldProtect);
 
     // battle event
-    ::VirtualProtect(reinterpret_cast<LPVOID>(0x00481eb0), 5, PAGE_EXECUTE_WRITECOPY, &dwOldProtect);
     orig_battle_event = (battle_event_t) TrampolineCreate(0x00481eb0, reinterpret_cast<DWORD>(repl_battle_event), 7);
-    ::VirtualProtect(reinterpret_cast<LPVOID>(0x00481eb0), 5, dwOldProtect, &dwOldProtect);
+
+    // Render
+    new std::thread(ImGuiMan::HookThread, load, render);
 }
 
 void ShadyLua::UnloadTamper() {
