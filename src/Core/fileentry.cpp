@@ -79,7 +79,7 @@ void ShadyCore::Package::saveDirectory(const char* directory, Callback* callback
 		if (!std::filesystem::exists(filename.parent_path()))
 			std::filesystem::create_directories(filename.parent_path());
 
-		if (callback) callback(userData, entry.first, ++index, fileCount);
+		if (callback) callback(userData, entry.second->getName(), ++index, fileCount);
 		std::filesystem::path tempFile = ShadyUtil::TempFile();
 		std::ofstream output(tempFile.string(), std::ios::binary);
 		std::istream& input = entry.second->open();

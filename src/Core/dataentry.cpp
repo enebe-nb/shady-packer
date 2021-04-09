@@ -214,7 +214,7 @@ void ShadyCore::Package::saveData(std::ostream& output, Callback* callback, void
 	unsigned short fileCount = entries.size();
 	unsigned int listSize = 0;
 	for (auto entry : entries) {
-		listSize += 9 + strlen(entry.first);
+		listSize += 9 + entry.first.size();
 	}
 
 	output.write((char*)&fileCount, 2);
@@ -222,7 +222,7 @@ void ShadyCore::Package::saveData(std::ostream& output, Callback* callback, void
 	std::ostream headerOutput(new DataListFilter(output.rdbuf(), listSize + 6, listSize));
 	unsigned int curOffset = listSize + 6;
 	for (auto entry : entries) {
-		unsigned char len = strlen(entry.first);
+		unsigned char len = entry.first.size();
 		headerOutput.write((char*)&curOffset, 4);
 		headerOutput.write((char*)&entry.second->getSize(), 4);
 		headerOutput.put(len);
@@ -235,7 +235,7 @@ void ShadyCore::Package::saveData(std::ostream& output, Callback* callback, void
 	unsigned int index = 0;
 	curOffset = listSize + 6;
 	for (auto entry : entries) {
-		if (callback) callback(userData, entry.first, ++index, fileCount);
+		if (callback) callback(userData, entry.second->getName(), ++index, fileCount);
 		std::ostream fileOutput(new DataFileFilter(output.rdbuf(), curOffset, entry.second->getSize()));
 		std::istream& input = entry.second->open();
 

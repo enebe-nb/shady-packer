@@ -227,7 +227,7 @@ void ShadyCore::Package::saveZip(std::ostream& output, Callback* callback, void*
 
 	for (auto entry : entries) {
 		zip_source_t* inputSource = zip_source_function_create(zipInputFunc, createZipEntry(entry.second), 0);
-		zip_file_add(file, entry.first, inputSource, ZIP_FL_OVERWRITE);
+		zip_file_add(file, entry.second->getName(), inputSource, ZIP_FL_OVERWRITE);
 	}
 
 	zipProgressDelegate = callback;

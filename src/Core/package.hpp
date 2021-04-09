@@ -38,13 +38,7 @@ namespace ShadyCore {
 	class Package : public ShadyUtil::StrAllocator, public std::mutex {
     private:
         typedef void (Callback)(void*, const char*, unsigned int, unsigned int);
-        struct entryHash { inline bool operator() (const char* name) const { 
-			unsigned long hash = 5381; char c;
-			while (c = *name++) hash = ((hash << 5) + hash) + c;
-			return hash;
-		} };
-        struct entryEqual { inline bool operator() (const char* left, const char* right) const { return strcmp(left, right) == 0; } };
-		typedef std::unordered_map<const char*, BasePackageEntry*, entryHash, entryEqual> MapType;
+		typedef std::unordered_map<std::string, BasePackageEntry*> MapType;
         MapType entries;
 		int nextId = 0;
 
