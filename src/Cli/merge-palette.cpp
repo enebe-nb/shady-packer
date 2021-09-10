@@ -3,27 +3,27 @@
 #include <fstream>
 
 static void pngRead(png_structp pngData, png_bytep buffer, png_size_t length) {
-	std::istream* input = (std::istream*) png_get_io_ptr(pngData);
-	input->read((char*)buffer, length);
+    std::istream* input = (std::istream*) png_get_io_ptr(pngData);
+    input->read((char*)buffer, length);
 }
 
 static void pngWrite(png_structp pngData, png_bytep buffer, png_size_t length) {
-	std::ostream* output = (std::ostream*) png_get_io_ptr(pngData);
-	output->write((char*)buffer, length);
+    std::ostream* output = (std::ostream*) png_get_io_ptr(pngData);
+    output->write((char*)buffer, length);
 }
 
 static void pngFlush(png_structp pngData) {
-	std::ostream* output = (std::ostream*) png_get_io_ptr(pngData);
-	output->flush();
+    std::ostream* output = (std::ostream*) png_get_io_ptr(pngData);
+    output->flush();
 }
 
 static void pngError(png_structp pngData, png_const_charp message) {
-	printf("%s\n", message);
-	throw;
+    printf("%s\n", message);
+    throw;
 }
 
 static void pngWarning(png_structp pngData, png_const_charp message) {
-	printf("%s\n", message);
+    printf("%s\n", message);
 }
 
 static inline bool isPNG(std::istream& input) {
@@ -54,10 +54,10 @@ void ShadyCli::MergeCommand::processPalette(ShadyCore::Palette* palette, std::fi
     std::fstream file(filename.string(), std::ios::in | std::ios::out | std::ios::binary);
     if (!isPNG(file)) return;
 
-	png_structp pngData = png_create_read_struct(PNG_LIBPNG_VER_STRING, 0, pngError, pngWarning);
-	png_infop pngInfo = png_create_info_struct(pngData);
-	png_set_read_fn(pngData, &file, pngRead);
-	png_read_info(pngData, pngInfo);
+    png_structp pngData = png_create_read_struct(PNG_LIBPNG_VER_STRING, 0, pngError, pngWarning);
+    png_infop pngInfo = png_create_info_struct(pngData);
+    png_set_read_fn(pngData, &file, pngRead);
+    png_read_info(pngData, pngInfo);
 
     uint32_t rowSize = png_get_rowbytes(pngData, pngInfo);
     uint32_t height = png_get_image_height(pngData, pngInfo);
@@ -71,7 +71,7 @@ void ShadyCli::MergeCommand::processPalette(ShadyCore::Palette* palette, std::fi
     }
 
     png_read_image(pngData, rows);
-	png_read_end(pngData, 0);
+    png_read_end(pngData, 0);
     png_destroy_read_struct(&pngData, 0, 0);
     file.seekp(0);
 
@@ -98,6 +98,6 @@ void ShadyCli::MergeCommand::processPalette(ShadyCore::Palette* palette, std::fi
     png_write_info(pngData, pngInfo);
 
     png_write_image(pngData, rows);
-	png_write_end(pngData, 0);
+    png_write_end(pngData, 0);
     png_destroy_write_struct(&pngData, &pngInfo);
 }

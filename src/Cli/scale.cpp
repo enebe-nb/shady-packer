@@ -5,7 +5,7 @@
 
 namespace {
     typedef void (*funcPtr) (ShadyCore::Image*, uint8_t* source);
-    
+
     static void nearestAlgorithm (ShadyCore::Image* image, uint8_t* source) {
         size_t sourceSize = image->getWidth() * image->getHeight();
         image->initialize(image->getWidth() * 2, image->getHeight() * 2, ceil(image->getWidth() / 2.f) * 4, image->getBitsPerPixel());
@@ -91,9 +91,9 @@ void ShadyCli::ScaleCommand::process(std::filesystem::path filename, std::filesy
             scalingAlgorithm(image, imageData);
             delete[] imageData;
 
-	        std::filesystem::path targetName = targetPath / prefix; targetName += filename.filename();
+            std::filesystem::path targetName = targetPath / prefix; targetName += filename.filename();
             std::filesystem::create_directories(targetPath);
-	        std::ofstream output(targetName.string(), std::fstream::binary);
+            std::ofstream output(targetName.string(), std::fstream::binary);
             ShadyCore::writeResource(image, output, type.isEncrypted);
         } delete image;
     } else if (type == ShadyCore::FileType::TYPE_PATTERN) {
@@ -127,40 +127,42 @@ void ShadyCli::ScaleCommand::process(ShadyCore::Pattern* pattern) {
     }
 }
 
-void ShadyCli::ScaleCommand::buildOptions(cxxopts::Options& options) {
-	options.add_options()
-		("o,output", "Target directory to save", cxxopts::value<std::string>()->default_value(std::filesystem::current_path().string()))
-		("p,prefix", "Prefix to append to image filenames", cxxopts::value<std::string>()->default_value("scaled-"))
-		("a,algorithm", "Scaling algorithm to apply to the images. Available options: nearest, epx or eagle.", cxxopts::value<std::string>()->default_value("nearest"))
-		("files", "Source directories or files", cxxopts::value<std::vector<std::string> >())
+void ShadyCli::ScaleCommand::buildOptions() {
+    options.add_options()
+        ("o,output", "Target directory to save", cxxopts::value<std::string>()->default_value(std::filesystem::current_path().string()))
+        ("p,prefix", "Prefix to append to image filenames", cxxopts::value<std::string>()->default_value("scaled-"))
+        ("a,algorithm", "Scaling algorithm to apply to the images. Available options: nearest, epx or eagle.", cxxopts::value<std::string>()->default_value("nearest"))
+        ("files", "Source directories or files", cxxopts::value<std::vector<std::string> >())
         ;
 
     options.parse_positional("files");
     options.positional_help("<files>...");
 }
 
-void ShadyCli::ScaleCommand::run(const cxxopts::Options& options) {
-    auto& files = options["files"].as<std::vector<std::string> >();
-	std::filesystem::path outputPath(options["output"].as<std::string>());
-    prefix = options["prefix"].as<std::string>();
+bool ShadyCli::ScaleCommand::run(const cxxopts::ParseResult& result) {
+    auto& files = result["files"].as<std::vector<std::string> >();
+    std::filesystem::path outputPath(result["output"].as<std::string>());
+    prefix = result["prefix"].as<std::string>();
     
-    scalingAlgorithm = getScalingAlgorithm(options["algorithm"].as<std::string>());
+    scalingAlgorithm = getScalingAlgorithm(result["algorithm"].as<std::string>());
     if (!scalingAlgorithm) {
-        printf("Algorithm %s not found.\n", options["algorithm"].as<std::string>().c_str());
-        return;
+        printf("Algorithm %s not found.\n", result["algorithm"].as<std::string>().c_str());
+        return false;
     }
 
-	size_t size = files.size();
-	for (size_t i = 0; i < size; ++i) {
-		std::filesystem::path path(files[i]);
-		if (std::filesystem::is_directory(path)) {
+    size_t size = files.size();
+    for (size_t i = 0; i < size; ++i) {
+        std::filesystem::path path(files[i]);
+        if (std::filesystem::is_directory(path)) {
             for (std::filesystem::recursive_directory_iterator iter(path), end; iter != end; ++iter) {
                 if (!std::filesystem::is_directory(iter->path())) {
                     process(iter->path(), outputPath / std::filesystem::relative(iter->path().parent_path(), path));
                 }
             }
-		} else if (std::filesystem::exists(path)) {
-			process(path, outputPath);
-		}
-	}
+        } else if (std::filesystem::exists(path)) {
+            process(path, outputPath);
+        }
+    }
+
+    return true;
 }

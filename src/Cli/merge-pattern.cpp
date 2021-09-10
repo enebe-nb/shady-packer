@@ -6,29 +6,29 @@
 
 namespace {
     class XmlReaderData {
-	private:
-		rapidxml::xml_document<> document;
-		char* data;
-	public:
-		rapidxml::xml_node<>* current;
-		inline XmlReaderData(std::istream& input) {
-			input.seekg(0, std::ios::end);
-			size_t len = input.tellg();
-			input.seekg(0);
+    private:
+        rapidxml::xml_document<> document;
+        char* data;
+    public:
+        rapidxml::xml_node<>* current;
+        inline XmlReaderData(std::istream& input) {
+            input.seekg(0, std::ios::end);
+            size_t len = input.tellg();
+            input.seekg(0);
 
-			data = new char[len + 1];
-			data[len] = '\0';
-			input.read(data, len);
+            data = new char[len + 1];
+            data[len] = '\0';
+            input.read(data, len);
 
-			document.parse<0>(data);
-			current = document.first_node();
-		}
-		inline ~XmlReaderData() { delete[] data; }
-	};
+            document.parse<0>(data);
+            current = document.first_node();
+        }
+        inline ~XmlReaderData() { delete[] data; }
+    };
 }
 
 static inline void eraseExcept(ShadyCore::Pattern* root, uint32_t id, const ShadyCore::Sequence* except) {
-	uint32_t count, beg, end, i = 0;
+    uint32_t count, beg, end, i = 0;
     while(i < (count = root->getSequenceCount())) {
         ShadyCore::Sequence* seq = &root->getSequence(beg = end = i);
         while(seq->getId() == id && seq != except && ++end < count) {
@@ -104,28 +104,28 @@ static void processTraits(XmlReaderData* data, ShadyCore::Frame::Move* frame) {
     if (current->first_attribute("clearall") || current->first_attribute("clearframeflags")) frame->getTraits().setFrameFlags(0);
     if (current->first_attribute("clearall") || current->first_attribute("clearattackflags")) frame->getTraits().setAttackFlags(0);
 
-	for (rapidxml::xml_node<>* iter = current->first_node(); iter; iter = iter->next_sibling()) {
-		for (int i = 0; i < 32; ++i) {
-			if (i < 8 && strcmp(iter->name(), ShadyCore::MoveTraits::comboModifierNames[i]) == 0) {
+    for (rapidxml::xml_node<>* iter = current->first_node(); iter; iter = iter->next_sibling()) {
+        for (int i = 0; i < 32; ++i) {
+            if (i < 8 && strcmp(iter->name(), ShadyCore::MoveTraits::comboModifierNames[i]) == 0) {
                 if (iter->first_attribute("remove"))
                     frame->getTraits().setComboModifier(frame->getTraits().getComboModifier() & ~(1 << i));
                 else frame->getTraits().setComboModifier(frame->getTraits().getComboModifier() | 1 << i);
-				break;
-			}
-			if (strcmp(iter->name(), ShadyCore::MoveTraits::frameFlagNames[i]) == 0) {
+                break;
+            }
+            if (strcmp(iter->name(), ShadyCore::MoveTraits::frameFlagNames[i]) == 0) {
                 if (iter->first_attribute("remove"))
                     frame->getTraits().setFrameFlags(frame->getTraits().getFrameFlags() & ~(1 << i));
                 else frame->getTraits().setFrameFlags(frame->getTraits().getFrameFlags() | 1 << i);
-				break;
-			}
-			if (strcmp(iter->name(), ShadyCore::MoveTraits::attackFlagNames[i]) == 0) {
+                break;
+            }
+            if (strcmp(iter->name(), ShadyCore::MoveTraits::attackFlagNames[i]) == 0) {
                 if (iter->first_attribute("remove"))
                     frame->getTraits().setAttackFlags(frame->getTraits().getAttackFlags() & ~(1 << i));
                 else frame->getTraits().setAttackFlags(frame->getTraits().getAttackFlags() | 1 << i);
-				break;
-			}
-		}
-	}
+                break;
+            }
+        }
+    }
 }
 
 static void processBoxes(XmlReaderData* data, ShadyCore::BBoxList* boxes) {
@@ -334,6 +334,6 @@ void ShadyCli::MergeCommand::processPattern(ShadyCore::Pattern* pattern, std::fi
         || !pattern->isAnimationOnly() && strcmp(data->current->name(), "movepattern")) return;
 
     for (rapidxml::xml_node<>* iter = data->current = data->current->first_node(); iter; iter = data->current = iter->next_sibling()) {
-		processSequence(data, pattern);
-	}
+        processSequence(data, pattern);
+    }
 }
