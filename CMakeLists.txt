@@ -14,7 +14,6 @@ set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-set(SHADY_ENABLE_CLI TRUE CACHE BOOL "Enable command-line building")
 set(SHADY_ENABLE_TEST FALSE CACHE BOOL "Enable test building")
 set(SHADY_ENABLE_MODULE TRUE CACHE BOOL "Enable module building")
 
@@ -23,16 +22,13 @@ add_subdirectory(${CMAKE_SOURCE_DIR}/thirdparty)
 
 # Shady *Core*
 add_subdirectory(${CMAKE_SOURCE_DIR}/src/Core)
+# Shady *Cli*
+add_subdirectory(${CMAKE_SOURCE_DIR}/src/Cli)
 
 # Shady *Loader*
 if(SHADY_ENABLE_MODULE)
 	add_subdirectory(${CMAKE_SOURCE_DIR}/src/Loader)
 	add_subdirectory(${CMAKE_SOURCE_DIR}/src/Lua)
-endif()
-
-# Shady *Cli*
-if(SHADY_ENABLE_CLI)
-    add_subdirectory(${CMAKE_SOURCE_DIR}/src/Cli)
 endif()
 
 # Shady *Test*

@@ -1,7 +1,6 @@
 #pragma once
 
 #include <string>
-#include "../ImGuiMan.hpp"
 #include "../logger.hpp"
 
 namespace ShadyLua {
@@ -17,6 +16,6 @@ namespace ShadyLua {
         EmitSokuEventRender();
     }
 
-    void LoadTamper(const std::wstring& caller, ImGuiMan::PassedFun load = 0, ImGuiMan::PassedFun = DefaultRenderHook);
+    void LoadTamper(const std::wstring& caller);
     void UnloadTamper();
 }

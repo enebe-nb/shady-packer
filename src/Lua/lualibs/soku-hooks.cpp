@@ -1,32 +1,28 @@
 #include "../lualibs.hpp"
 #include "../../Core/reader.hpp"
 #include <windows.h>
+#include <SokuLib.hpp>
 
 #define IMGUIMAN_IMPL
 #include "soku.hpp"
 
 namespace {
-	typedef void* (__stdcall* read_constructor_t)(const char *filename, unsigned int *size, unsigned int *offset);
-	read_constructor_t orig_read_constructor = (read_constructor_t)0x41c080;
+    auto __readerCreate = reinterpret_cast<void* (__stdcall *)(const char *filename, unsigned int *size, unsigned int *offset)>(0x0041c080);
+    auto __loader = reinterpret_cast<int(*)()>(0);
+    bool _initialized = false;
+
     typedef void (__fastcall* stage_load_t)(int, int, int, int);
     stage_load_t orig_stage_load = (stage_load_t)0x470e40;
     // typedef void* (__stdcall* scene_constructor_t)(int);
     // scene_constructor_t orig_scene_constructor = (scene_constructor_t)0x41e420;
     typedef void* (__fastcall* battle_event_t)(int, int, int);
     battle_event_t orig_battle_event = (battle_event_t)0x481eb0;
+    typedef void* (__fastcall* render_event_t)(int);
+    render_event_t orig_render_event = (render_event_t)0x401040;
+    typedef void* (__fastcall* renderer_unk_t)(int, int, int);
+    renderer_unk_t renderer_unk = (renderer_unk_t)0x404af0;
 
     int (*th123eAfterLock)(void) = 0;
-}
-
-static inline DWORD TamperNearJmpOpr(DWORD addr, DWORD target) {
-    DWORD old = *reinterpret_cast<PDWORD>(addr + 1) + (addr + 5);
-    *reinterpret_cast<PDWORD>(addr + 1) = target - (addr + 5);
-    return old;
-}
-
-static inline DWORD TamperNearCall(DWORD addr, DWORD target) {
-    *reinterpret_cast<PBYTE>(addr + 0) = 0xE8;
-    return TamperNearJmpOpr(addr, target);
 }
 
 static DWORD TrampolineCreate(DWORD addr, DWORD target, int offset) {
@@ -63,18 +59,19 @@ static void TrampolineDestroy(DWORD addr, DWORD tramp, int offset) {
     delete[] lpTramp;
 }
 
-static void* __stdcall repl_read_constructor(const char *filename, unsigned int *size, unsigned int *offset) {
-#ifdef _MSC_VER
+static void* __stdcall readerCreate(const char *filename, unsigned int *_size, unsigned int *_offset) {
     int esi_value;
 	__asm mov esi_value, esi
-#else
-    register int esi_value asm("esi");
-#endif
+
     size_t len = strlen(filename);
 	char* filenameB = new char[len + 1];
 	for (int i = 0; i < len; ++i) {
-		if (filename[i] == '/') filenameB[i] = '_';
-		else filenameB[i] = tolower(filename[i]);
+        if (filename[i] >= 0x80 && filename[i] <= 0xa0 || filename[i] >= 0xe0 && filename[i] <= 0xff) {
+            // sjis character (those stand pictures)
+            filenameB[i] = filename[i];
+            ++i; filenameB[i] = filename[i];
+        } else if (filename[i] == '/') filenameB[i] = '_';
+		else filenameB[i] = std::tolower(filename[i]);
 	} filenameB[len] = 0;
 
     std::istream* input = 0; int s;
@@ -82,17 +79,20 @@ static void* __stdcall repl_read_constructor(const char *filename, unsigned int 
     delete[] filenameB;
 
     if (input) {
-        *offset = 0x40000000; // just to hold a value
+        *_offset = 0x40000000; // just to hold a value
         *(int*)esi_value = ShadyCore::stream_reader_vtbl;
-        *size = s;
+        *_size = s;
         return input;
     } else {
-#ifdef _MSC_VER
-	    __asm mov esi, esi_value
-#else
-        asm("mov %0, %%esi" :: "rmi"(esi_value));
-#endif
-		return orig_read_constructor(filename, size, offset);
+        // return __readerCreate(filename, _size, _offset);
+        __asm {
+            push _offset;
+            push _size;
+            push filename;
+	        mov esi, esi_value;
+            call __readerCreate;
+            mov esi_value, eax;
+        } return (void*)esi_value;
     }
 }
 
@@ -111,31 +111,39 @@ static void* __fastcall repl_battle_event(int ecx, int edx, int eventId) {
     return orig_battle_event(ecx, edx, eventId);
 }
 
-static int _LoadTamper() {
-    if (th123eAfterLock) th123eAfterLock();
-    DWORD dwOldProtect;
+static void* __fastcall repl_render_event(int ecx) {
+    ShadyLua::EmitSokuEventRender();
+    Logger::Render();
+    return orig_render_event(ecx);
+}
 
-    // file loader
-    ::VirtualProtect(reinterpret_cast<LPVOID>(0x0040d227), 5, PAGE_EXECUTE_WRITECOPY, &dwOldProtect);
-    orig_read_constructor = (read_constructor_t) TamperNearJmpOpr(0x0040d227, reinterpret_cast<DWORD>(repl_read_constructor));
-    ::VirtualProtect(reinterpret_cast<LPVOID>(0x0040d227), 5, dwOldProtect, &dwOldProtect);
+static int _HookLoader() {
+    if (__loader) __loader();
+    DWORD dwOldProtect;
+    VirtualProtect((PVOID)TEXT_SECTION_OFFSET, TEXT_SECTION_SIZE, PAGE_EXECUTE_WRITECOPY, &dwOldProtect);
+    __readerCreate = SokuLib::TamperNearJmpOpr(0x0040D227, readerCreate);
+    VirtualProtect((PVOID)TEXT_SECTION_OFFSET, TEXT_SECTION_SIZE, dwOldProtect, &dwOldProtect);
+
+    _initialized = true;
+    // set EAX to restore hooked instruction
     return *(int*)0x008943b8;
 }
 
-void ShadyLua::LoadTamper(const std::wstring& caller, ImGuiMan::PassedFun load, ImGuiMan::PassedFun render) {
+void ShadyLua::LoadTamper(const std::wstring& caller) {
     DWORD dwOldProtect;
-    if (caller == L"SokuEngine.dll") _LoadTamper();
+    if (caller == L"SokuEngine.dll") _HookLoader();
     else {
+        DWORD dwOldProtect;
         ::VirtualProtect(reinterpret_cast<LPVOID>(0x007fb596), 5, PAGE_EXECUTE_WRITECOPY, &dwOldProtect);
         bool hasCall = 0xE8 == *(unsigned char*)0x007fb596;
-        th123eAfterLock = (int(*)(void)) TamperNearCall(0x007fb596, reinterpret_cast<DWORD>(_LoadTamper));
-        if (!hasCall) th123eAfterLock = 0;
+        __loader = SokuLib::TamperNearCall(0x007fb596, _HookLoader);
+        if (!hasCall) __loader = 0;
         ::VirtualProtect(reinterpret_cast<LPVOID>(0x007fb596), 5, dwOldProtect, &dwOldProtect);
     }
 
     // stage select
     ::VirtualProtect(reinterpret_cast<LPVOID>(0x0047157e), 5, PAGE_EXECUTE_WRITECOPY, &dwOldProtect);
-    orig_stage_load = (stage_load_t) TamperNearJmpOpr(0x0047157e, reinterpret_cast<DWORD>(repl_stage_load));
+    orig_stage_load = (stage_load_t) SokuLib::TamperNearJmpOpr(0x0047157e, reinterpret_cast<DWORD>(repl_stage_load));
     ::VirtualProtect(reinterpret_cast<LPVOID>(0x0047157e), 5, dwOldProtect, &dwOldProtect);
 
     // game event
@@ -145,24 +153,27 @@ void ShadyLua::LoadTamper(const std::wstring& caller, ImGuiMan::PassedFun load, 
     orig_battle_event = (battle_event_t) TrampolineCreate(0x00481eb0, reinterpret_cast<DWORD>(repl_battle_event), 7);
 
     // Render
-    new std::thread(ImGuiMan::HookThread, load, render);
+    orig_render_event = (render_event_t) TrampolineCreate(0x00401040, reinterpret_cast<DWORD>(repl_render_event), 5);
+    //new std::thread(ImGuiMan::HookThread, load, render);
 }
 
 void ShadyLua::UnloadTamper() {
     DWORD dwOldProtect;
-    ::VirtualProtect(reinterpret_cast<LPVOID>(0x0040D227), 5, PAGE_EXECUTE_WRITECOPY, &dwOldProtect);
-    TamperNearJmpOpr(0x0040D227, reinterpret_cast<DWORD>(orig_read_constructor));
-    ::VirtualProtect(reinterpret_cast<LPVOID>(0x0040D227), 5, dwOldProtect, &dwOldProtect);
 
     ::VirtualProtect(reinterpret_cast<LPVOID>(0x0047157e), 5, PAGE_EXECUTE_WRITECOPY, &dwOldProtect);
-    TamperNearJmpOpr(0x0047157e, reinterpret_cast<DWORD>(orig_read_constructor));
+    SokuLib::TamperNearJmpOpr(0x0047157e, reinterpret_cast<DWORD>(orig_stage_load));
     ::VirtualProtect(reinterpret_cast<LPVOID>(0x0047157e), 5, dwOldProtect, &dwOldProtect);
 
     // ::VirtualProtect(reinterpret_cast<LPVOID>(0x0041e420), 5, PAGE_EXECUTE_WRITECOPY, &dwOldProtect);
     // TrampolineDestroy(0x0041e420, reinterpret_cast<DWORD>(orig_scene_constructor), 7);
     // ::VirtualProtect(reinterpret_cast<LPVOID>(0x0041e420), 5, dwOldProtect, &dwOldProtect);
 
-    ::VirtualProtect(reinterpret_cast<LPVOID>(0x00481eb0), 5, PAGE_EXECUTE_WRITECOPY, &dwOldProtect);
     TrampolineDestroy(0x00481eb0, reinterpret_cast<DWORD>(orig_battle_event), 7);
-    ::VirtualProtect(reinterpret_cast<LPVOID>(0x00481eb0), 5, dwOldProtect, &dwOldProtect);
+
+    TrampolineDestroy(0x00401040, reinterpret_cast<DWORD>(orig_render_event), 5);
+
+    if (!_initialized) return;
+    ::VirtualProtect(reinterpret_cast<LPVOID>(0x0040D227), 5, PAGE_EXECUTE_WRITECOPY, &dwOldProtect);
+    SokuLib::TamperNearJmpOpr(0x0040D227, reinterpret_cast<DWORD>(__readerCreate));
+    ::VirtualProtect(reinterpret_cast<LPVOID>(0x0040D227), 5, dwOldProtect, &dwOldProtect);
 }

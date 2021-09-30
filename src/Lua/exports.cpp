@@ -4,7 +4,6 @@
 #include "logger.hpp"
 #include "lualibs/soku.hpp"
 #include "lualibs.hpp"
-#include <imgui_stdlib.h>
 
 extern const BYTE TARGET_HASH[16];
 const BYTE TARGET_HASH[16] = { 0xdf, 0x35, 0xd1, 0xfb, 0xc7, 0xb5, 0x83, 0x31, 0x7a, 0xda, 0xbe, 0x8c, 0xd9, 0xf5, 0x3b, 0x2e };
@@ -57,7 +56,7 @@ static void LoadSettings() {
         ShadyLua::LualibBase(script->L, modulePath);
         ShadyLua::LualibMemory(script->L);
         ShadyLua::LualibResource(script->L);
-        ShadyLua::LualibImGui(script->L);
+        //ShadyLua::LualibImGui(script->L);
         ShadyLua::LualibSoku(script->L);
         if (script->load(scriptPath.filename().u8string().c_str()) == LUA_OK) script->run();
         line += len + 1;
@@ -70,6 +69,7 @@ static void RenderConsole() {
     static std::string input;
     bool didEnter = false;
 
+/*
     if (showConsole) { if (ImGui::Begin("Console", &showConsole, ImGuiWindowFlags_NoFocusOnAppearing)) {
         ImVec2 content = ImGui::GetContentRegionAvail();
         ImVec2 inputSize = ImGui::CalcTextSize(input.data(), input.data() + input.size(), false, content.x - 16);
@@ -85,6 +85,7 @@ static void RenderConsole() {
             if (didEnter) ImGui::SetKeyboardFocusHere(-1);
         } ImGui::EndChild();
     } ImGui::End(); }
+*/
 
     if (didEnter) {
         lua_State* L = consoleScript->L;
@@ -112,7 +113,7 @@ static void ResetConsole() {
     ShadyLua::LualibMemory(consoleScript->L);
     ShadyLua::LualibResource(consoleScript->L);
     ShadyLua::LualibSoku(consoleScript->L);
-    ShadyLua::LualibImGui(consoleScript->L);
+    //ShadyLua::LualibImGui(consoleScript->L);
 }
 
 extern "C" __declspec(dllexport) bool CheckVersion(const BYTE hash[16]) {
@@ -126,7 +127,7 @@ extern "C" __declspec(dllexport) bool Initialize(HMODULE hMyModule, HMODULE hPar
 	GetModuleName(hParentModule, callerName);
 
     ResetConsole();
-    ShadyLua::LoadTamper(callerName, 0, RenderConsole);
+    ShadyLua::LoadTamper(callerName);
     LoadSettings();
 
 	return TRUE;

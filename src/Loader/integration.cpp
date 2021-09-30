@@ -48,8 +48,9 @@ void EnablePackage(ModPackage* p) {
     if (std::filesystem::is_directory(path)
         || std::filesystem::is_regular_file(path)) {
         
-        std::string pathu8 = ws2s(path);
-        p->packageId = package.appendPackage(pathu8.c_str());
+        //std::string pathu8 = ws2s(path);
+        //p->packageId = package.appendPackage(pathu8.c_str());
+        p->packageId = package.appendPackage(std::filesystem::relative(path).string().c_str());
         applyGameFilters(p->packageId);
     }
 

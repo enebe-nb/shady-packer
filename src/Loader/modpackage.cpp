@@ -87,6 +87,7 @@ void ModPackage::LoadFromFilesystem() {
         bool isDir = std::filesystem::is_directory(iter->path());
         auto ext = iter->path().extension();
         if (isDir || ext == ".zip" || ext == ".dat") {
+			if (iter->path().stem() == "shady-loader") continue;
 			if (!findPackage(iter->path().stem().string())) packageList.push_back(new ModPackage(iter->path().filename()));
 		}
 	}

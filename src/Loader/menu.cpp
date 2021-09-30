@@ -8,12 +8,11 @@
 #include <cctype>
 #include <thread>
 #include <mutex>
-#include <imgui.h>
 
 namespace {
 	ModPackage* selectedPackage = 0;
 	std::list<ModPackage*> downloads;
-	FetchJson remoteConfig("1EpxozKDE86N3Vb8b4YIwx798J_YfR_rt");
+	FetchJson remoteConfig;
 }
 
 static void setPackageEnabled(ModPackage* package, bool value) {
@@ -31,24 +30,8 @@ namespace{
 	protected:
 		void run() {
 			using namespace std::chrono_literals;
-			// Wait for module database
-			while (true) {
-				if (remoteConfig.isDone()) {
-					// We are sync here
-					if (!remoteConfig.data.is_object()) return;
-					ModPackage::LoadFromRemote(remoteConfig.data);
-					if (iniAutoUpdate) for (auto& package : ModPackage::packageList) {
-						if (!package->isLocal() && package->requireUpdate) {
-							package->downloadFile();
-							downloads.push_back(package);
-						}
-					}
-					break;
-				}
-				std::this_thread::sleep_for(100ms);
-			}
 
-			while (true) {
+			while (!downloads.empty()) {
 				for (auto i = downloads.begin(); i != downloads.end();) {
 					if ((*i)->downloadTask && (*i)->downloadTask->isDone()) {
 						ModPackage* package = (*i);
@@ -84,154 +67,235 @@ namespace{
 				std::this_thread::sleep_for(1000ms);
 			}
 		}
+	} downloadController;
+
+	class : public AsyncTask {
+	protected:
+		void run() {
+			using namespace std::chrono_literals;
+			// Wait for module database
+			while (true) {
+				if (remoteConfig.isDone()) {
+					// We are sync here
+					if (!remoteConfig.data.is_object()) return;
+					ModPackage::LoadFromRemote(remoteConfig.data);
+					if (iniAutoUpdate) for (auto& package : ModPackage::packageList) {
+						if (!package->isLocal() && package->requireUpdate) {
+							package->downloadFile();
+							downloads.push_back(package);
+						}
+					}
+					break;
+				}
+				std::this_thread::sleep_for(100ms);
+			}
+
+			downloadController.start();
+		}
 	} updateController;
+
 }
 
-namespace {
-	bool PackageSelectable(const char* label, ImU32 color) {
-		float width = ImGui::GetContentRegionAvail().x;
-		ImVec2 labelSize = ImGui::CalcTextSize(label, 0, false, width - 12);
-		ImVec2 frameSize(width, labelSize.y + 8);
-		ImVec2 pos = ImGui::GetCursorScreenPos();
-		bool clicked = ImGui::InvisibleButton(label, frameSize);
-		bool hovered = ImGui::IsItemHovered();
-		auto drawList = ImGui::GetWindowDrawList();
-		drawList->AddRectFilled(pos,
-			ImVec2(pos.x + frameSize.x, pos.y + frameSize.y), color);
-		if (hovered) drawList->AddRectFilled(pos,
-			ImVec2(pos.x + frameSize.x, pos.y + frameSize.y), IM_COL32(255, 255, 255, 64));
-		ImGui::SetCursorScreenPos(ImVec2(pos.x + 6, pos.y + 4));
-		ImGui::PushTextWrapPos(width - 6);
-		ImGui::Text(label);
-		ImGui::PopTextWrapPos();
-		ImGui::SetCursorScreenPos(ImVec2(pos.x, pos.y + frameSize.y));
-		return clicked;
+ModList::ModList() : CFileList() {
+	this->maxLength = 26;
+	this->extLength = 0;
+}
+
+void ModList::renderScroll(float x, float y, int offset, int size, int view) {
+	// just set values, render is done on CDesign
+	this->scrollLen = size < view ? 286 : view*286/size;
+	this->scrollBar->y1 = 286*offset/size + this->scrollLen - 286;
+
+	for (int i = 0; i < view && i < size - offset; ++i) {
+		this->renderLine(x, y + i*16, i + offset);
 	}
 }
 
-void RenderGui() {
-    static bool tLoader = false;
-    if ((*(int *)0x008A0044) != 2) return;
+void ModList::updateList() {
+	this->names.clear();
+	this->types.clear();
+	for (auto& package : ModPackage::packageList) {
+		auto& name = package->name.string();
+		SokuLib::String str; str.assign(name.c_str(), name.length());
+		this->names.push_back(str);
+		this->types.push_back(package->enabled);
+	}
+	this->updateResources();
+}
 
-    if (tLoader) { if (ImGui::Begin("shady-loader", &tLoader)) {
-        ImVec2 windowPos = ImGui::GetWindowPos();
-        float height = ImGui::GetContentRegionAvail().y;
-        if (ImGui::BeginChild("Package List", ImVec2(140, height), true)) {
-            for (auto package : ModPackage::packageList) {
-                ImU32 color = selectedPackage == package ? IM_COL32(0, 0, 92, 255)
-                    : package->enabled ? IM_COL32(0, 92, 0, 255)
-                    : package->requireUpdate ? IM_COL32(64, 64, 0, 255)
-                    : IM_COL32(0, 0, 0, 0);
-                if (PackageSelectable(package->name.string().c_str(), color)) {
-                    selectedPackage = package;
-                    //if (!package->previewTask) package->downloadPreview();
-                }
-            }
-            /*
-            if (!remoteConfig.isDone()) {
-                ImGui::SetCursorPosX(ImGui::GetContentRegionAvail().x / 2);
-                ImGui::Text("%c", "|/-\\"[(int)(0.009f*GetTickCount()) & 3]);
-            }
-            */
-        } ImGui::EndChild();
-        if (selectedPackage) {
-            ImGui::SameLine();
-            if (ImGui::BeginChild("Package Info", ImGui::GetContentRegionAvail())) {
-                ImGui::Columns(3, 0, false);
-                ImGui::SetColumnWidth(-1, 6);
-                ImGui::NextColumn();
-                ImGui::SetColumnWidth(-1, 100);
-                ImGui::Text("Name: ");
-                ImGui::Text("Version: ");
-                ImGui::Text("Creator: ");
-                ImGui::Text("Description: ");
-                ImGui::NextColumn();
-                ImGui::PushTextWrapPos(ImGui::GetWindowWidth());
-                ImGui::Text("%s", selectedPackage->name.string().c_str());
-                ImGui::Text("%s", selectedPackage->version().c_str());
-                ImGui::Text("%s", selectedPackage->creator().c_str());
-                ImGui::Text("%s", selectedPackage->description().c_str());
-                ImGui::PopTextWrapPos();
-                ImGui::NextColumn(); ImGui::NextColumn();
-                ImGui::Text("Tags:");
-                ImGui::NextColumn();
-                ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 12);
-                ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(4, 2));
-                ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(4, 2));
-                ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.0f, 0.0f, 0.0f, 1.00f));
-                float maxWidth = ImGui::GetCursorScreenPos().x + ImGui::GetContentRegionAvailWidth();
-                bool first = true;
-                for (auto& tag : selectedPackage->tags) {
-                    float tagWidth = ImGui::CalcTextSize(tag.c_str()).x + 12;
-                    if (!first && ImGui::GetItemRectMax().x + tagWidth < maxWidth) ImGui::SameLine();
-                    ImGui::SmallButton(tag.c_str());
-                    first = false;
-                }
-                ImGui::PopStyleColor();
-                ImGui::PopStyleVar(3);
-                if (selectedPackage->fileExists) {
-                    if (selectedPackage->requireUpdate) {
-                        ImGui::NextColumn(); ImGui::NextColumn();
-                        ImGui::Text("Status:"); ImGui::NextColumn();
-                        if (selectedPackage->downloadTask) {
-                            ImGui::TextColored(ImVec4(.7f, .7f, .2f, 1.f), "Downloading...");
-                        } else {
-                            ImGui::TextColored(ImVec4(.7f, .7f, .2f, 1.f), "Found Updates");
-                            if (ImGui::Button("Download")) {
-								selectedPackage->downloadFile();
-								downloads.push_back(selectedPackage);
-							}
-                        }
-                    }
-                    ImGui::NextColumn(); ImGui::NextColumn();
-                    ImGui::Text("Enabled:"); ImGui::NextColumn();
-                    if (selectedPackage->enabled)
-                        ImGui::TextColored(ImVec4(.4f, 1.f, .4f, 1.f), "true");
-                    else ImGui::TextColored(ImVec4(.7f, .7f, .7f, 1.f), "false");
-                    if (ImGui::Button(selectedPackage->enabled ? "Disable" : "Enable")) {
-                        setPackageEnabled(selectedPackage, !selectedPackage->enabled);
-                        SaveSettings();
-                    }
-                } else {
-                    ImGui::NextColumn(); ImGui::NextColumn();
-                    ImGui::Text("Status: "); ImGui::NextColumn();
-                    if (selectedPackage->downloadTask) {
-                        ImGui::TextColored(ImVec4(.7f, .7f, .2f, 1.f), "Downloading...");
-                    } else {
-                        ImGui::TextColored(ImVec4(.8f, .3f, .3f, 1.f), "Not Downloaded");
-						if (ImGui::Button("Download")) {
-							selectedPackage->downloadFile();
-							downloads.push_back(selectedPackage);
-						}
-                    }
-                }
-                /*
-                ImGui::PopStyleVar(2);
-                ImGui::Columns();
-                if (selectedPackage->previewTask) {
-                    if (!selectedPackage->previewTask->isDone()) {
-                        ImGui::SetCursorPos(ImVec2(ImGui::GetContentRegionAvail().x / 2,
-                            screenHeight - ImGui::GetTextLineHeightWithSpacing()));
-                        ImGui::Text("%c", "|/-\\"[(int)(0.009f*GetTickCount()) & 3]);
-                    //} else if (selectedPackage->previewTask->texture) {
-                        //ImGui::SetCursorPos(ImVec2(0, screenHeight - 270));
-                        //ImGui::Image(selectedPackage->previewTask->texture->id, ImVec2(360, 270));
-                    }
-                }
-                */
-            } ImGui::EndChild();
-        }        
-    } ImGui::End(); }
+int ModList::appendLine(SokuLib::String& out, void* unknown, SokuLib::Deque<SokuLib::String>& list, int index) {
+	ModPackage* package = ModPackage::packageList[index];
+	int color = package->enabled ? 0x40ff40
+		: package->isLocal() ? 0x6060d0
+		: 0x808080;
 
-    ImGuiStyle& style = ImGui::GetStyle();
-    style.WindowPadding = ImVec2(0, 0);
-    ImVec2 size = ImGui::CalcTextSize("shady-loader");
-    ImGui::SetNextWindowPos(ImVec2(640 - size.x - 8, 480 - size.y - 8));
-    ImGui::SetNextWindowSize(ImVec2(size.x + 8, size.y + 8));
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.f);
-    ImGui::Begin("", 0, ImGuiWindowFlags_NoDecoration);
-    if (ImGui::Button("shady-loader")) tLoader = true;
-    ImGui::End();
+	char buffer[15]; sprintf(buffer, "<color %06x>", color);
+	out.append(buffer, 14);
+	int len = CFileList::appendLine(out, unknown, list, index);
+	out.append("</color>", 8);
+
+	return len;
+}
+
+ModMenu::ModMenu() {
+	design.loadResource("shady/downloader.dat");
+	modList.updateList();
+
+	design.getById((SokuLib::CDesign::Sprite**)&modList.scrollBar, 101);
+	modList.scrollBar->active = true;
+	modList.scrollBar->gauge.set(&modList.scrollLen, 0, 286);
+	modCursor.set(SokuLib::InputHandler::keyUpDown(), 0, modList.names.size());
+	this->updateView(modCursor.pos);
+
+	if (!remoteConfig.isRunning() && !remoteConfig.isDone()) {
+		remoteConfig.fileId = iniRemoteConfig;
+		remoteConfig.start();
+		syncing = true;
+	}
+}
+
+ModMenu::~ModMenu() {
+	design.clear();
+	modList.clear();
+}
+
+void ModMenu::_() {}
+
+int ModMenu::onProcess() {
+	if (syncing && remoteConfig.isDone()) {
+		syncing = false;
+		if (remoteConfig.data.is_object()) ModPackage::LoadFromRemote(remoteConfig.data);
+		modList.updateList();
+		modCursor.set(SokuLib::InputHandler::keyUpDown(), modCursor.pos, modList.names.size());
+		this->updateView(modCursor.pos);
+	}
+
+	// Cursor On List
+	if (this->state == 0) {
+		if (modCursor.update()) {
+			SokuLib::playSEWaveBuffer(0x27);
+			this->updateView(modCursor.pos);
+		}
+
+		if (*SokuLib::InputHandler::keyB() == 1) {
+			SokuLib::playSEWaveBuffer(0x29);
+			return false; // close
+		}
+
+		if (*SokuLib::InputHandler::keyA() == 1 && this->options != 3) {
+			SokuLib::playSEWaveBuffer(0x28);
+			this->state = 1;
+			viewCursor.set(SokuLib::InputHandler::keyUpDown(), 0, this->options == 1 ? 2 : 1);
+		}
+	// Cursor On View
+	} else if (this->state == 1) {
+		if (viewCursor.update()) {
+			SokuLib::playSEWaveBuffer(0x27);
+		}
+
+		if (*SokuLib::InputHandler::keyB() == 1) {
+			SokuLib::playSEWaveBuffer(0x29);
+			this->state = 0;
+			return true;
+		}
+
+		if (*SokuLib::InputHandler::keyA() == 1) {
+			ModPackage* package = ModPackage::packageList[modCursor.pos];
+			if (options < 2 && viewCursor.pos == 0) {
+				SokuLib::playSEWaveBuffer(0x28);
+				setPackageEnabled(package, !package->enabled);
+				modList.updateList();
+				this->updateView(modCursor.pos);
+			} else if (options != 3) {
+				SokuLib::playSEWaveBuffer(0x28);
+				package->downloadFile();
+				downloads.push_back(package);
+				if (!downloadController.isRunning()) downloadController.start();
+				this->updateView(modCursor.pos);
+				this->state = 0;
+			}
+		}
+	}
+
+	return !SokuLib::checkKeyOneshot(0x1, false, false, false);
+}
+
+int ModMenu::onRender() {
+	design.render4();
+
+	if (modCursor.pos > scrollPos + 16) {
+		scrollPos = modCursor.pos - 16;
+	} else if (modCursor.pos < scrollPos) {
+		scrollPos = modCursor.pos;
+	}
+
+	SokuLib::CDesign::Object* pos;
+	design.getById(&pos, 100);
+	if (this->state == 0) SokuLib::InputHandler::renderBar(pos->x2, pos->y2 + (modCursor.pos - scrollPos)*16, 256);
+	modList.renderScroll(pos->x2, pos->y2, scrollPos, modList.getLength(), 17);
+
+	design.getById(&pos, 200);
+	viewTitle.render(pos->x2, pos->y2);
+	design.getById(&pos, 201);
+	viewContent.render(pos->x2, pos->y2);
+	design.getById(&pos, 202);
+	if (this->state == 1 && this->options != 3) SokuLib::InputHandler::renderBar(pos->x2, pos->y2 + viewCursor.pos*16, 256);
+	viewOption.render(pos->x2, pos->y2);
+
+	return 0;
+}
+
+void ModMenu::updateView(int index) {
+	ModPackage* package = ModPackage::packageList[index];
+	SokuLib::FontDescription fontDesc {
+		"",
+		0xff, 0xa0, 0xff, 0xa0, 0xff, 0xff,
+		20, 400,
+		false, true, false,
+		100000, 0, 0, 0, 2
+	}; strcpy(fontDesc.faceName, SokuLib::defaultFontName);
+	SokuLib::SWRFont font; font.create();
+	int textureId;
+
+	font.setIndirect(fontDesc);
+	SokuLib::textureMgr.createTextTexture(&textureId, package->name.string().c_str(), font, 220, 24, 0, 0);
+	viewTitle.setTexture2(textureId, 0, 0, 220, 24);
+
+	fontDesc.weight = 300;
+	fontDesc.height = 14;
+	fontDesc.useOffset = true;
+	font.setIndirect(fontDesc);
+	std::string temp;
+	if (package->isLocal()) temp = "<color 404040>This is a local Package.</color>";
+	else {
+		temp += "Version: <color 404040>" + package->version() + "</color><br>";
+		temp += "Creator: <color 404040>" + package->creator() + "</color><br>";
+		temp += "Description: <color 404040>" + package->description() + "</color><br>";
+		temp += "Tags: ";
+		for (int i = 0; i < package->tags.size(); ++i) {
+			if (i > 0) temp += ", ";
+			temp += "<color 404040>" + package->tags[i] + "</color>";
+		}
+	}
+	// TODO status
+	SokuLib::textureMgr.createTextTexture(&textureId, temp.c_str(), font, 220, 190, 0, 0);
+	viewContent.setTexture2(textureId, 0, 0, 220, 190);
+
+	if (package->downloadTask) {
+		this->options = 3;
+		temp = "Downloading ...";
+	} else if (package->fileExists) {
+		temp = (package->enabled ? "Disable Package<br>" : "Enable Package<br>");
+		if (package->requireUpdate) {
+			this->options = 1;
+			temp += "Update Package<br>";
+		} else this->options = 0;
+	} else {
+		this->options = 2;
+		temp = "Download Package<br>";
+	}
+	SokuLib::textureMgr.createTextTexture(&textureId, temp.c_str(), font, 220, 40, 0, 0);
+	viewOption.setTexture2(textureId, 0, 0, 220, 40);
 }
 
 void LoadPackage() {
@@ -243,11 +307,6 @@ void LoadPackage() {
 			false, (ModPackage::basePath / L"shady-loader.ini").c_str());
 		setPackageEnabled(package, isEnabled);
 	}
-
-	if (iniAutoUpdate) {
-		remoteConfig.start();
-		updateController.start();
-	}
 }
 
 void UnloadPackage() {
@@ -256,6 +315,12 @@ void UnloadPackage() {
 		setPackageEnabled(package, false);
 		delete package;
 	}
-	loadLock.lock();
+	loadLock.unlock();
 	ModPackage::packageList.clear();
+}
+
+void StartUpdate() {
+	remoteConfig.fileId = iniRemoteConfig;
+	remoteConfig.start();
+	updateController.start();
 }

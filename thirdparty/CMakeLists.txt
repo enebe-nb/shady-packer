@@ -66,6 +66,11 @@ add_git_module(libzip git://github.com/nih-at/libzip v1.8.0)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/libzip EXCLUDE_FROM_ALL)
 #target_compile_definitions(zip INTERFACE ZIP_STATIC)
 
+# cxxopts Library
+add_git_module(cxxopts git://github.com/jarro2783/cxxopts.git v2.2.1)
+add_library(cxxopts INTERFACE)
+target_include_directories(cxxopts INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/cxxopts/include)
+
 if(SHADY_ENABLE_MODULE)
     # libcurl Library
     add_download_module(curl "-7.78.0" https://curl.haxx.se/download/curl-7.78.0.zip)
@@ -91,15 +96,8 @@ if(SHADY_ENABLE_MODULE)
 #    target_include_directories(termcolor INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/termcolor/include)
 
     # SokuLib Library
-    add_git_module(SokuLib git://github.com/SokuDev/SokuLib dev)
+    add_git_module(SokuLib git://github.com/enebe-nb/SokuLib dev)
     add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/SokuLib EXCLUDE_FROM_ALL)
-endif()
-
-if(SHADY_ENABLE_CLI OR SHADY_ENABLE_MODULE)
-    # cxxopts Library
-    add_git_module(cxxopts git://github.com/jarro2783/cxxopts.git v2.2.1)
-    add_library(cxxopts INTERFACE)
-    target_include_directories(cxxopts INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/cxxopts/include)
 endif()
 
 if(SHADY_ENABLE_TEST)

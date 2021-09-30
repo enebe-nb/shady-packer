@@ -14,12 +14,6 @@ set(SRC_LOADER_Loader
 )
 source_group("Source Files\\Loader" FILES ${SRC_LOADER_Loader})
 
-set(SRC_LOADER_Manage
-	manager.cpp
-	${CMAKE_CURRENT_BINARY_DIR}/resource.rc
-)
-source_group("Source Files\\Manage" FILES ${SRC_LOADER_Manage})
-
 if(NOT WIN32 OR NOT CMAKE_SIZEOF_VOID_P EQUAL 4)
 	message(WARNING Skipping shady-loader: Can only build on Windows 32bits)
 else()
@@ -27,15 +21,16 @@ else()
     target_link_libraries(shady-loader -static shady-core shady-lualib libcurl json)
 	set_target_properties(shady-loader PROPERTIES PREFIX "")
     install(TARGETS shady-loader LIBRARY DESTINATION soku-modules)
-endif()
 
-if(WIN32)
-	set(SHADY_TARGET_NAME "shady-manage")
-	set(SHADY_NAME "Shady Manage")
-	set(SHADY_DESCRIPTION "A specific fighting game package manager.")
-	configure_file(../resource.rc.in resource.rc @ONLY)
-	file(COPY ../icon.ico DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
+	file(GLOB SRC_LOADER_Pack ${CMAKE_CURRENT_SOURCE_DIR}/data/*)
+	add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/shady-loader.dat"
+		COMMAND $<TARGET_FILE:shady-cli> pack -m data -f default
+			-o "${CMAKE_CURRENT_BINARY_DIR}/shady-loader.dat"
+			"${CMAKE_CURRENT_SOURCE_DIR}/data"
+		DEPENDS ${SRC_LOADER_Pack}
+		VERBATIM
+	)
+	add_custom_target(shady-loader-pack DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/shady-loader.dat" shady-cli)
+	add_dependencies(shady-loader shady-loader-pack)
+	install(FILES "${CMAKE_CURRENT_BINARY_DIR}/shady-loader.dat" DESTINATION soku-modules)
 endif()
-
-add_executable(shady-manage ${SRC_LOADER_Common} ${SRC_LOADER_Manage})
-target_link_libraries(shady-manage -static libcurl termcolor json)

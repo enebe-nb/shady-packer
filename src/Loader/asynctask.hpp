@@ -30,10 +30,10 @@ public:
 class FetchFile : public AsyncTask {
 protected:
     void run();
-private:
+public:
     std::string fileId;
     std::filesystem::path filename;
-public:
+    inline FetchFile() {}
     inline FetchFile(const std::string& fileId, const std::filesystem::path& filename)
         : fileId(fileId), filename(filename) {}
 };
@@ -41,20 +41,20 @@ public:
 class FetchJson : public AsyncTask {
 protected:
     void run();
-private:
-    std::string fileId;
 public:
+    std::string fileId;
     nlohmann::json data;
+    inline FetchJson() {}
     inline FetchJson(const std::string& fileId) : fileId(fileId) {}
 };
 
 class FetchImage : public AsyncTask {
 protected:
     void run();
-private:
-    std::string fileId;
 public:
+    std::string fileId;
     std::filesystem::path filename;
+    inline FetchImage() {}
     inline FetchImage(const std::string& fileId) : fileId(fileId) {}
     inline void Dispose() { std::filesystem::remove(filename); }
 };

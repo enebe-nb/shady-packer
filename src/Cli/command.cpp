@@ -43,11 +43,13 @@ bool ShadyCli::Command::run(int argc, char* argv[]) {
     if (command) {
         command->buildOptions();
         auto result = command->options.parse(--argc, argv = &argv[1]);
-        return command->run(result);
+        auto ret = command->run(result);
+        delete command;
+        return ret;
     } else {
         printf("Unknown command: %s. Use `%s help` for help.\n", argv[1], argv[0]);
     }
-    
+
     return false;
 }
 

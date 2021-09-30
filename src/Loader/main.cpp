@@ -1,14 +1,14 @@
-#include <curl/curl.h>
-
 #include "main.hpp"
 #include "modpackage.hpp"
 #include "../Lua/logger.hpp"
 
 namespace {
 	const BYTE TARGET_HASH[16] = { 0xdf, 0x35, 0xd1, 0xfb, 0xc7, 0xb5, 0x83, 0x31, 0x7a, 0xda, 0xbe, 0x8c, 0xd9, 0xf5, 0x3b, 0x2e };
+	bool _initialized = false, _initialized2 = false;
 }
 bool iniAutoUpdate;
 bool iniUseLoadLock;
+std::string iniRemoteConfig;
 std::shared_mutex loadLock;
 
 static bool GetModulePath(HMODULE handle, std::filesystem::path& result) {
@@ -42,7 +42,6 @@ extern "C" __declspec(dllexport) bool CheckVersion(const BYTE hash[16]) {
 }
 
 // TODO allow to recognize the engine existence in this case
-namespace {bool _initialized = false;}
 extern "C" __declspec(dllexport) bool Initialize(HMODULE hMyModule, HMODULE hParentModule) {
 	if (!_initialized) _initialized = true;
 	else return FALSE;
@@ -52,12 +51,10 @@ extern "C" __declspec(dllexport) bool Initialize(HMODULE hMyModule, HMODULE hPar
 	LoadSettings();
 
 	if (iniUseLoadLock) loadLock.lock();
+	LoadPackage();
 	std::filesystem::path callerName;
 	GetModuleName(hParentModule, callerName);
-	LoadTamper(callerName);
-
-	curl_global_init(CURL_GLOBAL_DEFAULT);
-	LoadPackage();
+	HookLoader(callerName);
 	if (iniUseLoadLock) loadLock.unlock();
 
 	return TRUE;
@@ -67,11 +64,9 @@ extern "C" __declspec(dllexport) void AtExit() {}
 
 BOOL WINAPI DllMain(HMODULE hModule, DWORD fdwReason, LPVOID lpReserved) {
 	if (DLL_PROCESS_DETACH) {
-		UnloadTamper();
+		UnloadLoader();
 		UnloadPackage();
 		Logger::Finalize();
-
-		curl_global_cleanup();
 	}
 
 	return TRUE;
@@ -82,6 +77,11 @@ void LoadSettings() {
 		true, (ModPackage::basePath / L"shady-loader.ini").c_str());
 	iniUseLoadLock = GetPrivateProfileIntW(L"Options", L"useLoadLock",
 		true, (ModPackage::basePath / L"shady-loader.ini").c_str());
+	iniRemoteConfig.resize(64);
+	auto len = GetPrivateProfileStringA("Options", "remoteConfig",
+		"1EpxozKDE86N3Vb8b4YIwx798J_YfR_rt", iniRemoteConfig.data(), 64,
+		(ModPackage::basePath / L"shady-loader.ini").string().c_str());
+	iniRemoteConfig.resize(len);
 }
 
 void SaveSettings() {
@@ -89,6 +89,8 @@ void SaveSettings() {
 		iniAutoUpdate ? L"1" : L"0", (ModPackage::basePath / L"shady-loader.ini").c_str());
 	WritePrivateProfileStringW(L"Options", L"useLoadLock",
 		iniUseLoadLock ? L"1" : L"0", (ModPackage::basePath / L"shady-loader.ini").c_str());
+	WritePrivateProfileStringA("Options", "remoteConfig",
+		iniRemoteConfig.c_str(), (ModPackage::basePath / L"shady-loader.ini").string().c_str());
 
 	nlohmann::json root;
 	for (auto& package : ModPackage::packageList) {
