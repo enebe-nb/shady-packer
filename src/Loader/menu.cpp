@@ -1,13 +1,6 @@
 #include "main.hpp"
 #include "modpackage.hpp"
-#include "asynctask.hpp"
-
-#include <vector>
-#include <list>
-#include <algorithm>
-#include <cctype>
-#include <thread>
-#include <mutex>
+#include "menu.hpp"
 
 namespace {
 	ModPackage* selectedPackage = 0;
@@ -67,7 +60,7 @@ namespace{
 				std::this_thread::sleep_for(1000ms);
 			}
 		}
-	} downloadController;
+	} downloadController; // TODO can't reuse Tasks
 
 	class : public AsyncTask {
 	protected:
@@ -114,8 +107,8 @@ void ModList::renderScroll(float x, float y, int offset, int size, int view) {
 void ModList::updateList() {
 	this->names.clear();
 	this->types.clear();
-	for (auto& package : ModPackage::packageList) {
-		auto& name = package->name.string();
+	for (auto package : ModPackage::packageList) {
+		auto name = package->name.string();
 		SokuLib::String str; str.assign(name.c_str(), name.length());
 		this->names.push_back(str);
 		this->types.push_back(package->enabled);
@@ -144,7 +137,7 @@ ModMenu::ModMenu() {
 	design.getById((SokuLib::CDesign::Sprite**)&modList.scrollBar, 101);
 	modList.scrollBar->active = true;
 	modList.scrollBar->gauge.set(&modList.scrollLen, 0, 286);
-	modCursor.set(SokuLib::InputHandler::keyUpDown(), 0, modList.names.size());
+	modCursor.set(&SokuLib::inputMgrs.input.verticalAxis, modList.names.size());
 	this->updateView(modCursor.pos);
 
 	if (!remoteConfig.isRunning() && !remoteConfig.isDone()) {
@@ -166,7 +159,7 @@ int ModMenu::onProcess() {
 		syncing = false;
 		if (remoteConfig.data.is_object()) ModPackage::LoadFromRemote(remoteConfig.data);
 		modList.updateList();
-		modCursor.set(SokuLib::InputHandler::keyUpDown(), modCursor.pos, modList.names.size());
+		modCursor.set(&SokuLib::inputMgrs.input.verticalAxis, modList.names.size(), modCursor.pos);
 		this->updateView(modCursor.pos);
 	}
 
@@ -177,15 +170,15 @@ int ModMenu::onProcess() {
 			this->updateView(modCursor.pos);
 		}
 
-		if (*SokuLib::InputHandler::keyB() == 1) {
+		if (SokuLib::inputMgrs.input.b == 1) {
 			SokuLib::playSEWaveBuffer(0x29);
 			return false; // close
 		}
 
-		if (*SokuLib::InputHandler::keyA() == 1 && this->options != 3) {
+		if (SokuLib::inputMgrs.input.a == 1 && this->options != 3) {
 			SokuLib::playSEWaveBuffer(0x28);
 			this->state = 1;
-			viewCursor.set(SokuLib::InputHandler::keyUpDown(), 0, this->options == 1 ? 2 : 1);
+			viewCursor.set(&SokuLib::inputMgrs.input.verticalAxis, this->options == 1 ? 2 : 1);
 		}
 	// Cursor On View
 	} else if (this->state == 1) {
@@ -193,13 +186,13 @@ int ModMenu::onProcess() {
 			SokuLib::playSEWaveBuffer(0x27);
 		}
 
-		if (*SokuLib::InputHandler::keyB() == 1) {
+		if (SokuLib::inputMgrs.input.b == 1) {
 			SokuLib::playSEWaveBuffer(0x29);
 			this->state = 0;
 			return true;
 		}
 
-		if (*SokuLib::InputHandler::keyA() == 1) {
+		if (SokuLib::inputMgrs.input.a == 1) {
 			ModPackage* package = ModPackage::packageList[modCursor.pos];
 			if (options < 2 && viewCursor.pos == 0) {
 				SokuLib::playSEWaveBuffer(0x28);
@@ -231,7 +224,7 @@ int ModMenu::onRender() {
 
 	SokuLib::CDesign::Object* pos;
 	design.getById(&pos, 100);
-	if (this->state == 0) SokuLib::InputHandler::renderBar(pos->x2, pos->y2 + (modCursor.pos - scrollPos)*16, 256);
+	if (this->state == 0) SokuLib::MenuCursor::render(pos->x2, pos->y2 + (modCursor.pos - scrollPos)*16, 256);
 	modList.renderScroll(pos->x2, pos->y2, scrollPos, modList.getLength(), 17);
 
 	design.getById(&pos, 200);
@@ -239,7 +232,7 @@ int ModMenu::onRender() {
 	design.getById(&pos, 201);
 	viewContent.render(pos->x2, pos->y2);
 	design.getById(&pos, 202);
-	if (this->state == 1 && this->options != 3) SokuLib::InputHandler::renderBar(pos->x2, pos->y2 + viewCursor.pos*16, 256);
+	if (this->state == 1 && this->options != 3) SokuLib::MenuCursor::render(pos->x2, pos->y2 + viewCursor.pos*16, 256);
 	viewOption.render(pos->x2, pos->y2);
 
 	return 0;

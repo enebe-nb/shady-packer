@@ -24,8 +24,7 @@ static SokuLib::SWRFont* createFont() {
         0xff, 0xff, 0xff, 0xff, 0xff, 0xff, // color
         14, 500,                            // height, weight
         false, true, false,                 // italic, shadow, wrap
-        100000,                             // bufferSize ???
-        0, 0, 0, 0,                         // padding, spacing
+        0, 0, 0, 0, 0,                      // buffer?, padding, spacing
     });
     return font;
 }

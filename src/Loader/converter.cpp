@@ -6,13 +6,11 @@
 
 #include "../Core/package.hpp"
 #include "../Core/reader.hpp"
-#include "ModPackage.hpp"
+#include "modpackage.hpp"
+#include "menu.hpp"
 #include "../Lua/lualibs/soku.hpp"
-#include "design.hpp"
 
-#include <d3d9types.h>
-
-ShadyCore::Package package;
+ShadyCore::Package package; // TODO limit access and fix lua
 namespace {
     auto __readerCreate = reinterpret_cast<void* (__stdcall *)(const char *filename, unsigned int *size, unsigned int *offset)>(0x0041c080);
     auto __loader = reinterpret_cast<int(*)()>(0);
@@ -20,7 +18,6 @@ namespace {
 
     int (SokuLib::Title::* __titleOnProcess)();
     int (SokuLib::Title::* __titleOnRender)();
-    auto __showMenu = reinterpret_cast<void (*)(void*)>(0x444ac0);
 
     struct {
         SokuLib::CSprite* sprite = 0;
@@ -98,20 +95,22 @@ static int __fastcall titleOnProcess(SokuLib::Title* t) {
     int ret = (t->*__titleOnProcess)();
 
     if (!menuHint.sprite && !menuHint.shown) {
-        SokuLib::SWRFont font; font.create();
         menuHint.shown = true;
+
         int texture = 0;
+        SokuLib::SWRFont font; font.create();
         font.setIndirect(SokuLib::FontDescription{
             "Courier New",
             255,255,255,255,255,255,
             14, 500,
             false, true, false,
-            0,0,0,0,0
+            0, 0, 0, 0, 0
         });
         SokuLib::textureMgr.createTextTexture(&texture, "Enabled shady-loader. Press F2 to open the menu.", font, 640, 20, 0, 0);
+        font.destruct();
+
         menuHint.sprite = new SokuLib::CSprite();
         menuHint.sprite->setTexture2(texture, 0, 0, 640, 20);
-        font.destruct();
     } else if (menuHint.sprite && menuHint.timeout <= 0) {
         SokuLib::textureMgr.remove(menuHint.sprite->texture);
         delete menuHint.sprite;
@@ -119,9 +118,8 @@ static int __fastcall titleOnProcess(SokuLib::Title* t) {
     }
 
     if (SokuLib::checkKeyOneshot(0x3C, false, false, false) && !*((int*)0x89a88c)) {
-        //auto menu = SokuLib::New<ModMenu>(1);
-        auto menu = new ModMenu();
-        __showMenu(menu);
+        //SokuLib::activateMenu(SokuLib::New<ModMenu>(1));
+        SokuLib::activateMenu(new ModMenu()); // TODO test destructor
     }
 
     return ret;
@@ -168,8 +166,8 @@ static int _HookLoader() {
 }
 
 void HookLoader(const std::wstring& caller) {
-    // TODO remake lua interface
     ShadyLua::LoadTamper(caller);
+
     if (caller == L"SokuEngine.dll") _HookLoader();
     else {
         DWORD dwOldProtect;

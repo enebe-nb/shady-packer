@@ -6,7 +6,7 @@ std::filesystem::path ModPackage::basePath(std::filesystem::current_path());
 std::vector<ModPackage*> ModPackage::packageList;
 
 ModPackage::ModPackage(const std::string& name, const nlohmann::json::value_type& data)
-    : name(name), data(data), ext(".zip") {
+    : name(name), ext(".zip"), data(data) {
 
     if (data.count("tags") && data["tags"].is_array()) for (auto& tag : data["tags"]) {
 		tags.push_back(tag.get<std::string>());
