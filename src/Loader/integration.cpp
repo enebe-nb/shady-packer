@@ -54,7 +54,7 @@ void EnablePackage(ModPackage* p) {
         applyGameFilters(p->packageId);
     }
 
-    auto iter = package.findFile("init.lua");
+    auto iter = package.findFile("init.lua"); // TODO verify validity
     if (iter != package.end() && iter->getId() == p->packageId) {
         ShadyLua::LuaScript* script = new ShadyLua::LuaScript(&package, _lua_open, _lua_read);
         ShadyLua::LualibBase(script->L, ModPackage::basePath);

@@ -41,7 +41,6 @@ extern "C" __declspec(dllexport) bool CheckVersion(const BYTE hash[16]) {
 	return ::memcmp(TARGET_HASH, hash, sizeof TARGET_HASH) == 0;
 }
 
-// TODO allow to recognize the engine existence in this case
 extern "C" __declspec(dllexport) bool Initialize(HMODULE hMyModule, HMODULE hParentModule) {
 	if (!_initialized) _initialized = true;
 	else return FALSE;
@@ -63,7 +62,7 @@ extern "C" __declspec(dllexport) bool Initialize(HMODULE hMyModule, HMODULE hPar
 extern "C" __declspec(dllexport) void AtExit() {}
 
 BOOL WINAPI DllMain(HMODULE hModule, DWORD fdwReason, LPVOID lpReserved) {
-	if (DLL_PROCESS_DETACH) {
+	if (fdwReason == DLL_PROCESS_DETACH) {
 		UnloadLoader();
 		UnloadPackage();
 		Logger::Finalize();
@@ -93,11 +92,12 @@ void SaveSettings() {
 		iniRemoteConfig.c_str(), (ModPackage::basePath / L"shady-loader.ini").string().c_str());
 
 	nlohmann::json root;
+	ModPackage::packageListMutex.lock_shared();
 	for (auto& package : ModPackage::packageList) {
 		root[package->name.string()] = package->data;
 		if (package->fileExists) WritePrivateProfileStringW(L"Packages", package->name.c_str(),
 			package->enabled ? L"1" : L"0", (ModPackage::basePath / L"shady-loader.ini").c_str());
-	}
+	} ModPackage::packageListMutex.unlock_shared();
 
 	std::ofstream output(ModPackage::basePath / L"packages.json");
 	output << root;

@@ -118,8 +118,9 @@ static int __fastcall titleOnProcess(SokuLib::Title* t) {
     }
 
     if (SokuLib::checkKeyOneshot(0x3C, false, false, false) && !*((int*)0x89a88c)) {
-        //SokuLib::activateMenu(SokuLib::New<ModMenu>(1));
-        SokuLib::activateMenu(new ModMenu()); // TODO test destructor
+        // the virtual destructor will call free from this binary
+        // so here should be `new` instead of `SokuLib::New`
+        SokuLib::activateMenu(new ModMenu());
     }
 
     return ret;
@@ -137,11 +138,6 @@ static int __fastcall titleOnRender(SokuLib::Title* t) {
     return ret;
 }
 
-// static void RenderEvent() {
-//     Logger::Render();
-//     ShadyLua::EmitSokuEventRender();
-// }
-
 static int _HookLoader() {
     if (__loader) __loader();
     curl_global_init(CURL_GLOBAL_DEFAULT);
@@ -158,7 +154,7 @@ static int _HookLoader() {
     __titleOnRender  = SokuLib::TamperDword(&SokuLib::VTable_Title.onRender, titleOnRender);
     VirtualProtect((PVOID)RDATA_SECTION_OFFSET, RDATA_SECTION_SIZE, dwOldProtect, &dwOldProtect);
 
-    if (iniAutoUpdate) StartUpdate();
+    if (iniAutoUpdate) ModPackage::LoadFromRemote();
 
     _initialized = true;
     // set EAX to restore hooked instruction
@@ -188,6 +184,6 @@ void UnloadLoader() {
     SokuLib::TamperNearJmpOpr(0x0040D227, __readerCreate);
     ::VirtualProtect(reinterpret_cast<LPVOID>(0x0040D227), 5, dwOldProtect, &dwOldProtect);
 
-    // TODO lock curl calls
+    // TODO join downloadController before this
     curl_global_cleanup();
 }

@@ -23,10 +23,12 @@ private:
     SokuLib::CSprite viewTitle;
     SokuLib::CSprite viewContent;
     SokuLib::CSprite viewOption;
+    SokuLib::CSprite viewPreview;
     SokuLib::MenuCursor viewCursor;
     int scrollPos = 0;
     int state = 0;
-    int options = 0;
+    int optionCount = 0;
+    int options[2];
 
 public:
     ModMenu();

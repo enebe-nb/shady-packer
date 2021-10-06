@@ -10,7 +10,8 @@
 	<slidervert id="101" xposition="285" yposition="100" mirror="0">
 		<image name="scroll.bmp" xposition="0" yposition="0" width="2" height="286"/>
 	</slidervert>
-	<mutable id="200" xposition="347" yposition="98"/>
-	<mutable id="201" xposition="347" yposition="130"/>
-	<mutable id="202" xposition="358" yposition="320"/>
+	<mutable id="200" xposition="337" yposition="98"/>
+	<mutable id="201" xposition="337" yposition="124"/>
+	<mutable id="202" xposition="530" yposition="280"/>
+	<mutable id="203" xposition="302" yposition="264"/>
 </layout>

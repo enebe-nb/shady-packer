@@ -5,7 +5,8 @@
 namespace {
 	ModPackage* selectedPackage = 0;
 	std::list<ModPackage*> downloads;
-	FetchJson remoteConfig;
+
+	enum :int { OPTION_ENABLE_DISABLE, OPTION_DOWNLOAD };
 }
 
 static void setPackageEnabled(ModPackage* package, bool value) {
@@ -16,77 +17,6 @@ static void setPackageEnabled(ModPackage* package, bool value) {
 	} else {
 		DisablePackage(package);
 	}
-}
-
-namespace{
-	class : public AsyncTask {
-	protected:
-		void run() {
-			using namespace std::chrono_literals;
-
-			while (!downloads.empty()) {
-				for (auto i = downloads.begin(); i != downloads.end();) {
-					if ((*i)->downloadTask && (*i)->downloadTask->isDone()) {
-						ModPackage* package = (*i);
-						bool wasEnabled = package->enabled;
-						if (wasEnabled) {
-							if (iniUseLoadLock) loadLock.lock();
-							setPackageEnabled(package, false);
-						}
-						std::filesystem::path filename(ModPackage::basePath / package->name);
-						filename += package->ext; filename += L".part";
-						if (std::filesystem::exists(filename)) {
-							std::filesystem::path target(filename);
-							target.replace_extension();
-							std::error_code err;
-							std::filesystem::remove(target, err);
-							if (!err) std::filesystem::rename(filename, target, err);
-							if (!err) {
-								package->data["version"] = package->data.value("remoteVersion", "");
-								package->requireUpdate = false;
-								package->fileExists = true;
-							}
-						}
- 						delete package->downloadTask;
-						package->downloadTask = 0;
-						if (wasEnabled) {
-							setPackageEnabled(package, true);
-							if (iniUseLoadLock) loadLock.unlock();
-						}
-						SaveSettings();
-						i = downloads.erase(i);
-					} else ++i;
-				}
-				std::this_thread::sleep_for(1000ms);
-			}
-		}
-	} downloadController; // TODO can't reuse Tasks
-
-	class : public AsyncTask {
-	protected:
-		void run() {
-			using namespace std::chrono_literals;
-			// Wait for module database
-			while (true) {
-				if (remoteConfig.isDone()) {
-					// We are sync here
-					if (!remoteConfig.data.is_object()) return;
-					ModPackage::LoadFromRemote(remoteConfig.data);
-					if (iniAutoUpdate) for (auto& package : ModPackage::packageList) {
-						if (!package->isLocal() && package->requireUpdate) {
-							package->downloadFile();
-							downloads.push_back(package);
-						}
-					}
-					break;
-				}
-				std::this_thread::sleep_for(100ms);
-			}
-
-			downloadController.start();
-		}
-	} updateController;
-
 }
 
 ModList::ModList() : CFileList() {
@@ -107,18 +37,21 @@ void ModList::renderScroll(float x, float y, int offset, int size, int view) {
 void ModList::updateList() {
 	this->names.clear();
 	this->types.clear();
+	ModPackage::packageListMutex.lock_shared();
 	for (auto package : ModPackage::packageList) {
 		auto name = package->name.string();
 		SokuLib::String str; str.assign(name.c_str(), name.length());
 		this->names.push_back(str);
 		this->types.push_back(package->enabled);
-	}
+	} ModPackage::packageListMutex.unlock_shared();
 	this->updateResources();
 }
 
 int ModList::appendLine(SokuLib::String& out, void* unknown, SokuLib::Deque<SokuLib::String>& list, int index) {
+	std::shared_lock lock(ModPackage::packageListMutex);
 	ModPackage* package = ModPackage::packageList[index];
-	int color = package->enabled ? 0x40ff40
+	int color = package->requireUpdate ? 0xff8040
+		: package->enabled ? 0x40ff40
 		: package->isLocal() ? 0x6060d0
 		: 0x808080;
 
@@ -140,24 +73,22 @@ ModMenu::ModMenu() {
 	modCursor.set(&SokuLib::inputMgrs.input.verticalAxis, modList.names.size());
 	this->updateView(modCursor.pos);
 
-	if (!remoteConfig.isRunning() && !remoteConfig.isDone()) {
-		remoteConfig.fileId = iniRemoteConfig;
-		remoteConfig.start();
-		syncing = true;
-	}
+	ModPackage::LoadFromRemote();
 }
 
 ModMenu::~ModMenu() {
 	design.clear();
 	modList.clear();
+	if (viewTitle.texture) SokuLib::textureMgr.remove(viewTitle.texture);
+	if (viewContent.texture) SokuLib::textureMgr.remove(viewContent.texture);
+	if (viewOption.texture) SokuLib::textureMgr.remove(viewOption.texture);
+	if (viewPreview.texture) SokuLib::textureMgr.remove(viewPreview.texture);
 }
 
 void ModMenu::_() {}
 
 int ModMenu::onProcess() {
-	if (syncing && remoteConfig.isDone()) {
-		syncing = false;
-		if (remoteConfig.data.is_object()) ModPackage::LoadFromRemote(remoteConfig.data);
+	if (ModPackage::Notify()) {
 		modList.updateList();
 		modCursor.set(&SokuLib::inputMgrs.input.verticalAxis, modList.names.size(), modCursor.pos);
 		this->updateView(modCursor.pos);
@@ -175,10 +106,10 @@ int ModMenu::onProcess() {
 			return false; // close
 		}
 
-		if (SokuLib::inputMgrs.input.a == 1 && this->options != 3) {
+		if (SokuLib::inputMgrs.input.a == 1 && this->optionCount) {
 			SokuLib::playSEWaveBuffer(0x28);
 			this->state = 1;
-			viewCursor.set(&SokuLib::inputMgrs.input.verticalAxis, this->options == 1 ? 2 : 1);
+			viewCursor.set(&SokuLib::inputMgrs.input.verticalAxis, this->optionCount);
 		}
 	// Cursor On View
 	} else if (this->state == 1) {
@@ -193,20 +124,22 @@ int ModMenu::onProcess() {
 		}
 
 		if (SokuLib::inputMgrs.input.a == 1) {
+			std::shared_lock lock(ModPackage::packageListMutex);
+			SokuLib::playSEWaveBuffer(0x28);
 			ModPackage* package = ModPackage::packageList[modCursor.pos];
-			if (options < 2 && viewCursor.pos == 0) {
-				SokuLib::playSEWaveBuffer(0x28);
+			switch (options[viewCursor.pos]) {
+			case OPTION_ENABLE_DISABLE:
 				setPackageEnabled(package, !package->enabled);
+				SaveSettings();
 				modList.updateList();
-				this->updateView(modCursor.pos);
-			} else if (options != 3) {
-				SokuLib::playSEWaveBuffer(0x28);
+				break;
+			case OPTION_DOWNLOAD:
 				package->downloadFile();
-				downloads.push_back(package);
-				if (!downloadController.isRunning()) downloadController.start();
-				this->updateView(modCursor.pos);
 				this->state = 0;
+				break;
 			}
+
+			this->updateView(modCursor.pos);
 		}
 	}
 
@@ -232,13 +165,16 @@ int ModMenu::onRender() {
 	design.getById(&pos, 201);
 	viewContent.render(pos->x2, pos->y2);
 	design.getById(&pos, 202);
-	if (this->state == 1 && this->options != 3) SokuLib::MenuCursor::render(pos->x2, pos->y2 + viewCursor.pos*16, 256);
+	if (this->state == 1) SokuLib::MenuCursor::render(pos->x2, pos->y2 + viewCursor.pos*16, 120);
 	viewOption.render(pos->x2, pos->y2);
+	design.getById(&pos, 203);
+	if(viewPreview.texture) viewPreview.renderScreen(pos->x2, pos->y2, pos->x2 + 200, pos->y2 + 150);
 
 	return 0;
 }
 
 void ModMenu::updateView(int index) {
+	std::shared_lock lock(ModPackage::packageListMutex);
 	ModPackage* package = ModPackage::packageList[index];
 	SokuLib::FontDescription fontDesc {
 		"",
@@ -252,6 +188,7 @@ void ModMenu::updateView(int index) {
 
 	font.setIndirect(fontDesc);
 	SokuLib::textureMgr.createTextTexture(&textureId, package->name.string().c_str(), font, 220, 24, 0, 0);
+	if (viewTitle.texture) SokuLib::textureMgr.remove(viewTitle.texture);
 	viewTitle.setTexture2(textureId, 0, 0, 220, 24);
 
 	fontDesc.weight = 300;
@@ -272,29 +209,47 @@ void ModMenu::updateView(int index) {
 	}
 	// TODO status
 	SokuLib::textureMgr.createTextTexture(&textureId, temp.c_str(), font, 220, 190, 0, 0);
+	if (viewContent.texture) SokuLib::textureMgr.remove(viewContent.texture);
 	viewContent.setTexture2(textureId, 0, 0, 220, 190);
 
-	if (package->downloadTask) {
-		this->options = 3;
+	if (package->downloading) {
+		this->optionCount = 0;
 		temp = "Downloading ...";
 	} else if (package->fileExists) {
-		temp = (package->enabled ? "Disable Package<br>" : "Enable Package<br>");
+		temp = (package->enabled ? "Disable<br>" : "Enable<br>");
+		this->options[0] = OPTION_ENABLE_DISABLE;
 		if (package->requireUpdate) {
-			this->options = 1;
-			temp += "Update Package<br>";
-		} else this->options = 0;
+			temp += "Update";
+			this->options[1] = OPTION_DOWNLOAD;
+			this->optionCount = 2;
+		} else {
+			this->optionCount = 1;
+		}
 	} else {
-		this->options = 2;
-		temp = "Download Package<br>";
+		temp = "Download";
+		this->options[0] = OPTION_DOWNLOAD;
+		this->optionCount = 1;
 	}
 	SokuLib::textureMgr.createTextTexture(&textureId, temp.c_str(), font, 220, 40, 0, 0);
+	if (viewOption.texture) SokuLib::textureMgr.remove(viewOption.texture);
 	viewOption.setTexture2(textureId, 0, 0, 220, 40);
+
+	if (viewPreview.texture) SokuLib::textureMgr.remove(viewPreview.texture);
+	if (!package->previewPath.empty()) {
+		int width, height;
+		SokuLib::textureMgr.loadTexture(&textureId, package->previewPath.c_str(), &width, &height);
+		viewPreview.setTexture2(textureId, 0, 0, width, height);
+	} else {
+		package->downloadPreview();
+		viewPreview.texture = 0;
+	}
 }
 
 void LoadPackage() {
 	ModPackage::LoadFromLocalData();
 	ModPackage::LoadFromFilesystem();
 
+	std::shared_lock lock(ModPackage::packageListMutex);
 	for (auto& package : ModPackage::packageList) {
 		bool isEnabled = GetPrivateProfileIntW(L"Packages", package->name.c_str(),
 			false, (ModPackage::basePath / L"shady-loader.ini").c_str());
@@ -303,6 +258,7 @@ void LoadPackage() {
 }
 
 void UnloadPackage() {
+	std::shared_lock lock(ModPackage::packageListMutex);
 	loadLock.lock();
 	for (auto& package : ModPackage::packageList) {
 		setPackageEnabled(package, false);
@@ -310,10 +266,4 @@ void UnloadPackage() {
 	}
 	loadLock.unlock();
 	ModPackage::packageList.clear();
-}
-
-void StartUpdate() {
-	remoteConfig.fileId = iniRemoteConfig;
-	remoteConfig.start();
-	updateController.start();
 }

@@ -3,6 +3,7 @@
 #include <filesystem>
 #include <thread>
 #include <nlohmann/json.hpp>
+#include <sstream>
 
 class AsyncTask {
 protected:
@@ -53,8 +54,8 @@ protected:
     void run();
 public:
     std::string fileId;
-    std::filesystem::path filename;
+    std::stringstream data;
+    bool hasError;
     inline FetchImage() {}
     inline FetchImage(const std::string& fileId) : fileId(fileId) {}
-    inline void Dispose() { std::filesystem::remove(filename); }
 };
