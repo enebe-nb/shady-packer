@@ -58,6 +58,7 @@ add_dependencies(ZLIB::ZLIB zlibstatic)
 
 # libpng Library
 add_git_module(libpng git://git.code.sf.net/p/libpng/code libpng16)
+set(PNG_TESTS OFF)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/libpng EXCLUDE_FROM_ALL)
 target_include_directories(png_static PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/libpng ${CMAKE_CURRENT_BINARY_DIR}/zlib ${CMAKE_CURRENT_BINARY_DIR}/libpng)
 
@@ -101,8 +102,7 @@ if(SHADY_ENABLE_MODULE)
 endif()
 
 if(SHADY_ENABLE_TEST)
-    # cxxtest Library
-    enable_testing()
-    add_git_module(cxxtest git://github.com/cxxtest/cxxtest 4.4)
-    set(CXXTEST_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/cxxtest PARENT_SCOPE)
+    # gtest Library
+    add_git_module(googletest git://github.com/google/googletest release-1.11.0)
+    add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/googletest EXCLUDE_FROM_ALL)
 endif()

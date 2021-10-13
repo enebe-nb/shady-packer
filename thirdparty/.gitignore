@@ -3,6 +3,7 @@ boost/
 curl/
 cxxopts/
 cxxtest/
+googletest/
 imgui/
 json/
 libpng/

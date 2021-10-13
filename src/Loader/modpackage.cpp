@@ -3,6 +3,7 @@
 #include "../Core/package.hpp"
 #include <fstream>
 #include <mutex>
+#include <cctype>
 // NOTE: Don't use wchar is this file, so it can be build on linux
 
 std::filesystem::path ModPackage::basePath(std::filesystem::current_path());
@@ -115,7 +116,7 @@ namespace {
 
 						if (!i->second->hasError) {
 							p->previewPath = "shady_preview_" + p->name.string() + ".png";
-							std::transform(p->previewPath.begin() + 14, p->previewPath.end(), p->previewPath.begin() + 14, std::tolower);
+							std::transform(p->previewPath.begin() + 14, p->previewPath.end(), p->previewPath.begin() + 14, tolower); // better convertion/comparison?
 							package.appendFile(p->previewPath.c_str(), i->second->data);
 						} p->downloadingPreview = false;
 

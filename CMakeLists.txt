@@ -33,5 +33,6 @@ endif()
 
 # Shady *Test*
 if(SHADY_ENABLE_TEST)
+	enable_testing()
 	add_subdirectory(${CMAKE_SOURCE_DIR}/src/Test)
 endif()
