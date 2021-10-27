@@ -80,11 +80,11 @@ namespace {
 void ShadyCli::ScaleCommand::process(std::filesystem::path filename, std::filesystem::path targetPath) {
     if (!std::filesystem::is_regular_file(filename)) return; // ignore
     
-    std::ifstream input(filename.string(), std::fstream::binary);
-    const ShadyCore::FileType& type = ShadyCore::FileType::get(filename.generic_string().c_str(), input);
+    std::ifstream input(filename, std::fstream::binary);
+    ShadyCore::FileType type = ShadyCore::FileType::get(filename.string().c_str());
     if (type == ShadyCore::FileType::TYPE_IMAGE) {
-        if (std::strncmp((char*)filename.filename().c_str(), prefix.c_str(), prefix.length()) == 0) return;
-        ShadyCore::Image* image = (ShadyCore::Image*)ShadyCore::readResource(type, input);
+        //if (std::strncmp((char*)filename.filename().c_str(), prefix.c_str(), prefix.length()) == 0) return;
+        ShadyCore::Image* image = (ShadyCore::Image*)ShadyCore::readResource(type.type, type.format, input);
         if (image->getBitsPerPixel() == 8) {
             uint8_t* imageData = new uint8_t[image->getWidth() * image->getHeight()];
             std::memcpy(imageData, image->getRawImage(), image->getWidth() * image->getHeight());
@@ -94,9 +94,10 @@ void ShadyCli::ScaleCommand::process(std::filesystem::path filename, std::filesy
             std::filesystem::path targetName = targetPath / prefix; targetName += filename.filename();
             std::filesystem::create_directories(targetPath);
             std::ofstream output(targetName.string(), std::fstream::binary);
-            ShadyCore::writeResource(image, output, type.isEncrypted);
+            ShadyCore::writeResource(image, type.format, output);
         } delete image;
-    } else if (type == ShadyCore::FileType::TYPE_PATTERN) {
+    } else if (type == ShadyCore::FileType::TYPE_SCHEMA) {
+        /* TODO
         ShadyCore::Pattern* pattern = (ShadyCore::Pattern*)ShadyCore::readResource(type, input);
         process(pattern);
 
@@ -105,6 +106,7 @@ void ShadyCli::ScaleCommand::process(std::filesystem::path filename, std::filesy
         std::ofstream output(targetName.string(), std::fstream::binary);
         ShadyCore::writeResource(pattern, output, type.isEncrypted);
         delete pattern;
+        */
     }
 }
 

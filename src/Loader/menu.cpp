@@ -79,10 +79,10 @@ ModMenu::ModMenu() {
 ModMenu::~ModMenu() {
 	design.clear();
 	modList.clear();
-	if (viewTitle.texture) SokuLib::textureMgr.remove(viewTitle.texture);
-	if (viewContent.texture) SokuLib::textureMgr.remove(viewContent.texture);
-	if (viewOption.texture) SokuLib::textureMgr.remove(viewOption.texture);
-	if (viewPreview.texture) SokuLib::textureMgr.remove(viewPreview.texture);
+	if (viewTitle.dxHandle) SokuLib::textureMgr.remove(viewTitle.dxHandle);
+	if (viewContent.dxHandle) SokuLib::textureMgr.remove(viewContent.dxHandle);
+	if (viewOption.dxHandle) SokuLib::textureMgr.remove(viewOption.dxHandle);
+	if (viewPreview.dxHandle) SokuLib::textureMgr.remove(viewPreview.dxHandle);
 }
 
 void ModMenu::_() {}
@@ -168,7 +168,7 @@ int ModMenu::onRender() {
 	if (this->state == 1) SokuLib::MenuCursor::render(pos->x2, pos->y2 + viewCursor.pos*16, 120);
 	viewOption.render(pos->x2, pos->y2);
 	design.getById(&pos, 203);
-	if(viewPreview.texture) viewPreview.renderScreen(pos->x2, pos->y2, pos->x2 + 200, pos->y2 + 150);
+	if(viewPreview.dxHandle) viewPreview.renderScreen(pos->x2, pos->y2, pos->x2 + 200, pos->y2 + 150);
 
 	return 0;
 }
@@ -188,7 +188,7 @@ void ModMenu::updateView(int index) {
 
 	font.setIndirect(fontDesc);
 	SokuLib::textureMgr.createTextTexture(&textureId, package->name.string().c_str(), font, 220, 24, 0, 0);
-	if (viewTitle.texture) SokuLib::textureMgr.remove(viewTitle.texture);
+	if (viewTitle.dxHandle) SokuLib::textureMgr.remove(viewTitle.dxHandle);
 	viewTitle.setTexture2(textureId, 0, 0, 220, 24);
 
 	fontDesc.weight = 300;
@@ -209,7 +209,7 @@ void ModMenu::updateView(int index) {
 	}
 	// TODO status
 	SokuLib::textureMgr.createTextTexture(&textureId, temp.c_str(), font, 220, 190, 0, 0);
-	if (viewContent.texture) SokuLib::textureMgr.remove(viewContent.texture);
+	if (viewContent.dxHandle) SokuLib::textureMgr.remove(viewContent.dxHandle);
 	viewContent.setTexture2(textureId, 0, 0, 220, 190);
 
 	if (package->downloading) {
@@ -231,17 +231,17 @@ void ModMenu::updateView(int index) {
 		this->optionCount = 1;
 	}
 	SokuLib::textureMgr.createTextTexture(&textureId, temp.c_str(), font, 220, 40, 0, 0);
-	if (viewOption.texture) SokuLib::textureMgr.remove(viewOption.texture);
+	if (viewOption.dxHandle) SokuLib::textureMgr.remove(viewOption.dxHandle);
 	viewOption.setTexture2(textureId, 0, 0, 220, 40);
 
-	if (viewPreview.texture) SokuLib::textureMgr.remove(viewPreview.texture);
+	if (viewPreview.dxHandle) SokuLib::textureMgr.remove(viewPreview.dxHandle);
 	if (!package->previewPath.empty()) {
 		int width, height;
 		SokuLib::textureMgr.loadTexture(&textureId, package->previewPath.c_str(), &width, &height);
 		viewPreview.setTexture2(textureId, 0, 0, width, height);
 	} else {
 		package->downloadPreview();
-		viewPreview.texture = 0;
+		viewPreview.dxHandle = 0;
 	}
 }
 

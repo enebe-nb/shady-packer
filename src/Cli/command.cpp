@@ -1,9 +1,9 @@
 #include "command.hpp"
 
 static inline ShadyCli::Command* getCommand(const char* arg) {
-    if (strcmp(arg, "convert") == 0) {
+    /*if (strcmp(arg, "convert") == 0) {
         return new ShadyCli::ConvertCommand;
-    } else if (strcmp(arg, "pack") == 0) {
+    } else */if (strcmp(arg, "pack") == 0) {
         return new ShadyCli::PackCommand;
     } else if (strcmp(arg, "merge") == 0) {
         return new ShadyCli::MergeCommand;

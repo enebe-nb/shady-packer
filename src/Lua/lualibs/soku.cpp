@@ -140,19 +140,18 @@ void ShadyLua::EmitSokuEventFileLoader(const char* filename, std::istream** inpu
                 const char* data = lua_tolstring(L, 1, &dataSize);
                 if (!data || !dataSize) break;
                 const char* format = lua_tostring(L, 2);
-                if (format) {
-                    auto& type = ShadyCore::FileType::getByName(format);
-                    if (!type.isEncrypted && type != ShadyCore::FileType::TYPE_UNKNOWN) {
-                        charbuf decBuf(data, data + dataSize);
-                        std::istream decStream(&decBuf);
-                        std::stringstream* encStream = 
-                            new std::stringstream(std::ios::in|std::ios::out|std::ios::binary);
-                        ShadyCore::convertResource(type, decStream, *encStream);
-                        *size = encStream->tellp();
-                        *input = encStream;
-                        lua_pop(L, 2);
-                        return;
-                    }
+                if (strcmp(format, "png") == 0) {
+                    charbuf decBuf(data, data + dataSize);
+                    std::istream decStream(&decBuf);
+                    std::stringstream* encStream = 
+                        new std::stringstream(std::ios::in|std::ios::out|std::ios::binary);
+                    ShadyCore::convertResource(ShadyCore::FileType::TYPE_IMAGE,
+                        ShadyCore::FileType::IMAGE_PNG, decStream,
+                        ShadyCore::FileType::IMAGE_GAME, *encStream);
+                    *size = encStream->tellp();
+                    *input = encStream;
+                    lua_pop(L, 2);
+                    return;
                 }
                 *size = dataSize;
                 *input = new std::stringstream(std::string(data, dataSize),
@@ -163,7 +162,8 @@ void ShadyLua::EmitSokuEventFileLoader(const char* filename, std::istream** inpu
             case LUA_TUSERDATA: {
                 RefCountedPtr<ShadyCore::Resource> resource = Stack<ShadyCore::Resource*>::get(L, 1);
                 std::stringstream* buffer = new std::stringstream(std::ios::in|std::ios::out|std::ios::binary);
-                ShadyCore::writeResource(resource.get(), *buffer, true);
+                throw std::exception("TODO fix");
+                //ShadyCore::writeResource(resource.get(), *buffer, true);
                 *size = buffer->tellp();
                 *input = buffer;
                 lua_pop(L, 2);

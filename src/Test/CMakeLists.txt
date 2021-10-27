@@ -1,9 +1,10 @@
 set(SRC_TEST_Test
+	util.hpp
+	util.cpp
 	readerwriter.cpp
 	dataentry.cpp
 	fileentry.cpp
 	package.cpp
-	util.hpp
 	zipentry.cpp
 )
 source_group("Source Files\\Test" FILES ${SRC_TEST_Test})

@@ -10,7 +10,7 @@
 #include "menu.hpp"
 #include "../Lua/lualibs/soku.hpp"
 
-ShadyCore::Package package; // TODO limit access and fix lua
+ShadyCore::PackageEx package; // TODO limit access and fix lua
 namespace {
     auto __readerCreate = reinterpret_cast<void* (__stdcall *)(const char *filename, unsigned int *size, unsigned int *offset)>(0x0041c080);
     auto __loader = reinterpret_cast<int(*)()>(0);
@@ -20,7 +20,7 @@ namespace {
     int (SokuLib::Title::* __titleOnRender)();
 
     struct {
-        SokuLib::CSprite* sprite = 0;
+        SokuLib::Sprite* sprite = 0;
         int timeout = 240;
         bool shown = false;
     } menuHint;
@@ -30,47 +30,24 @@ static void* __stdcall readerCreate(const char *filename, unsigned int *_size, u
     int esi_value;
 	__asm mov esi_value, esi
 
-    size_t len = strlen(filename);
-	char* filenameB = new char[len + 1];
-	for (int i = 0; i < len; ++i) {
-        if (filename[i] >= 0x80 && filename[i] <= 0xa0 || filename[i] >= 0xe0 && filename[i] <= 0xff) {
-            // sjis character (those stand pictures)
-            filenameB[i] = filename[i];
-            ++i; filenameB[i] = filename[i];
-        } else if (filename[i] == '/') filenameB[i] = '_';
-		else filenameB[i] = std::tolower(filename[i]);
-	} filenameB[len] = 0;
-
     loadLock.lock_shared();
-    auto iter = package.findFile(filenameB);
-    if (iter == package.end()) {
-        auto type = ShadyCore::FileType::getSimple(filenameB);
-        if (type.type != ShadyCore::FileType::TYPE_UNKNOWN
-            && type.type != ShadyCore::FileType::TYPE_PACKAGE) {
-            char* filenameC = new char[len + 1];
-            strcpy(filenameC, filenameB);
-            strcpy(filenameC + len - 4, type.inverseExt);
-            iter = package.findFile(filenameC);
-            delete[] filenameC;
-        }
-    }
-    delete[] filenameB;
+    auto iter = package.find(filename);
 
     void* result;
     if (iter != package.end()) {
-        auto type = ShadyCore::FileType::get(*iter);
+        auto type = iter.fileType();
         *_offset = 0x40000000; // just to hold a value
-        if (type.isEncrypted || type == ShadyCore::FileType::TYPE_UNKNOWN) {
-            *_size = iter->getSize();
+        if (type.format <= 0 || type.format >= 4) { // || type == ShadyCore::FileType::TYPE_UNKNOWN
+            *_size = iter->second->getSize();
             *(int*)esi_value = ShadyCore::entry_reader_vtbl;
-            result = new ShadyCore::EntryReader(*iter, loadLock);
+            result = new ShadyCore::EntryReader(*iter->second, loadLock);
         } else {
             // TODO this convertion is slow, change it
-            std::istream& input = iter->open();
+            std::istream& input = iter->second->open();
             std::stringstream* buffer = new std::stringstream(std::ios::in|std::ios::out|std::ios::binary);
-            ShadyCore::convertResource(type, input, *buffer);
+            ShadyCore::convertResource(type.type, type.format, input, (ShadyCore::FileType::Format)0, *buffer); // TODO fix
             *_size = buffer->tellp();
-            iter->close();
+            iter->second->close();
 
             *(int*)esi_value = ShadyCore::stream_reader_vtbl;
             result = buffer;
@@ -109,10 +86,10 @@ static int __fastcall titleOnProcess(SokuLib::Title* t) {
         SokuLib::textureMgr.createTextTexture(&texture, "Enabled shady-loader. Press F2 to open the menu.", font, 640, 20, 0, 0);
         font.destruct();
 
-        menuHint.sprite = new SokuLib::CSprite();
+        menuHint.sprite = new SokuLib::Sprite();
         menuHint.sprite->setTexture2(texture, 0, 0, 640, 20);
     } else if (menuHint.sprite && menuHint.timeout <= 0) {
-        SokuLib::textureMgr.remove(menuHint.sprite->texture);
+        SokuLib::textureMgr.remove(menuHint.sprite->dxHandle);
         delete menuHint.sprite;
         menuHint.sprite = 0;
     }
@@ -142,7 +119,7 @@ static int _HookLoader() {
     if (__loader) __loader();
     curl_global_init(CURL_GLOBAL_DEFAULT);
 
-    package.appendPackage(std::filesystem::relative(ModPackage::basePath / L"shady-loader.dat").string().c_str());
+    package.merge(std::filesystem::relative(ModPackage::basePath / L"shady-loader.dat"));
 
     DWORD dwOldProtect;
     VirtualProtect((PVOID)TEXT_SECTION_OFFSET, TEXT_SECTION_SIZE, PAGE_EXECUTE_WRITECOPY, &dwOldProtect);

@@ -1,10 +1,9 @@
 set(SRC_CLI
 	command.hpp
 	command.cpp
-	convert.cpp
+#	convert.cpp
 	merge.cpp
 	merge-palette.cpp
-	merge-pattern.cpp
 	pack.cpp
 	scale.cpp
 	${CMAKE_CURRENT_BINARY_DIR}/resource.rc

@@ -25,7 +25,8 @@ const char* ZipEntrySuite::dataArray[] = {
 };
 
 TEST_F(ZipEntrySuite, StreamRead) {
-	ShadyCore::ZipPackageEntry entry(0, "test-data/zip-package.dat", "data_my-text.cv0", 12);
+	ShadyCore::Package package("test-data/zip-package.dat");
+	ShadyCore::ZipPackageEntry entry(&package, "data_my-text.cv0", 12);
 	std::istream& stream = entry.open();
 	char buffer[5];
 
@@ -53,7 +54,8 @@ TEST_F(ZipEntrySuite, StreamRead) {
 }
 
 TEST_F(ZipEntrySuite, StreamSeek) {
-	ShadyCore::ZipPackageEntry entry(0, "test-data/zip-package.dat", "data_my-text.cv0", 12);
+	ShadyCore::Package package("test-data/zip-package.dat");
+	ShadyCore::ZipPackageEntry entry(&package, "data_my-text.cv0", 12);
 	std::istream& stream = entry.open();
 	char buffer[5];
 
@@ -93,42 +95,51 @@ TEST_F(ZipEntrySuite, StreamSeek) {
 }
 
 TEST_F(ZipEntrySuite, PackageRead) {
-	ShadyCore::Package package;
-	package.appendPackage("test-data/zip-package.dat");
+	ShadyCore::Package package("test-data/zip-package.dat");
 
 	for (const char* data : dataArray) {
-		std::istream& input = package.findFile(data)->open();
+		std::istream& input = package.find(data)->second->open();
 		std::filesystem::path fileName("test-data/zip-extracted"); fileName /= data;
 		std::ifstream expected(fileName, std::ios::binary);
 
-		ASSERT_STREAM(input, expected);
+		EXPECT_TRUE(testing::isSameData(input, expected)) << "filename: " << data;
 
-		package.findFile(data)->close();
+		package.find(data)->second->close();
 		expected.close();
 	}
 }
 
 TEST_F(ZipEntrySuite, PackageWrite) {
-	std::filesystem::path tempFile = ShadyUtil::TempFile();
-	ShadyCore::Package package;
-	package.appendPackage("test-data/zip-extracted");
-	package.save(tempFile.string().c_str(), ShadyCore::Package::ZIP_MODE, 0, 0);
-	package.clear();
+	const char* inputList[] = {
+		"test-data/encrypted",
+		"test-data/decrypted",
+		"test-data/data-package.dat",
+		"test-data/zip-package.dat",
+	};
 
-	ShadyCore::Package expectedPackage;
-	package.appendPackage(tempFile.string().c_str());
-	expectedPackage.appendPackage("test-data/zip-package.dat");
+	for (auto packageName : inputList) {
+		ShadyCore::Package* input = new ShadyCore::Package(packageName);
+		std::filesystem::path tempFile = ShadyUtil::TempFile();
+		input->save(tempFile, ShadyCore::Package::ZIP_MODE, 0, 0);
+		ASSERT_TRUE(std::filesystem::exists(tempFile));
+		delete input; input = new ShadyCore::Package(tempFile);
 
-	EXPECT_EQ(package.size(), 10);
-	for (auto& entry : package) {
-		std::istream& input = entry.open();
-		std::istream& expected = expectedPackage.findFile(entry.getName())->open();
+		ShadyCore::Package expected("test-data/zip-package.dat");
+		EXPECT_EQ(input->size(), expected.size());
+		for (auto& entry : expected) {
+			std::string filename(entry.first.name);
+			entry.first.fileType.appendExtValue(filename);
+			auto i = input->find(filename);
+			ASSERT_TRUE(i != input->end());
 
-		ASSERT_STREAM(input, expected);
+			std::istream& inputS = i->second->open();
+			std::istream& expectedS = entry.second->open();
+			EXPECT_TRUE(testing::isSameData(inputS, expectedS)) << "filename: " << filename << ", package: " << packageName;
+			entry.second->close();
+			i->second->close();
+		}
 
-		entry.close();
-		expectedPackage.findFile(entry.getName())->close();
+		delete input;
+		std::filesystem::remove(tempFile);
 	}
-
-	std::filesystem::remove(tempFile);
 }

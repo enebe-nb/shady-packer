@@ -28,8 +28,10 @@ static RefCountedPtr<ShadyCore::Resource> resource_createfromfile(const char* fi
         data.write(buffer, size);
     }
 
-    const ShadyCore::FileType& type = ShadyCore::FileType::get(filename, data);
-    return ShadyCore::readResource(type, data);
+    // TODO fix
+    // const ShadyCore::FileType& type = ShadyCore::FileType::get(filename, data);
+    // return ShadyCore::readResource(type, data);
+    return 0;
 }
 
 /** Saves a resource into filesystem */

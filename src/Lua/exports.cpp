@@ -58,7 +58,7 @@ static void LoadSettings() {
         ShadyLua::LualibResource(script->L);
         //ShadyLua::LualibImGui(script->L);
         ShadyLua::LualibSoku(script->L);
-        if (script->load(scriptPath.filename().u8string().c_str()) == LUA_OK) script->run();
+        if (script->load((const char*)scriptPath.filename().u8string().c_str()) == LUA_OK) script->run();
         line += len + 1;
     }
 }

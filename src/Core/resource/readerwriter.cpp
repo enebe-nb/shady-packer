@@ -1,34 +1,63 @@
 #include "readerwriter.hpp"
-#include <cstring>
+#include <string>
+#include <unordered_set>
 
-constexpr uint32_t getExtValue(const char* ext) {
-    return ext ? (((uint32_t)ext[1]) << 16) + (((uint32_t)ext[2]) << 8) + ((uint32_t)ext[3]) : 0;
+// const ShadyCore::FileType ShadyCore::FileType::typeDText(TYPE_TEXT, false, ".txt", ".cv0");
+// const ShadyCore::FileType ShadyCore::FileType::typeDTable(TYPE_TEXT, false, ".csv", ".cv1");
+// const ShadyCore::FileType ShadyCore::FileType::typeDLabel(TYPE_LABEL, false, ".lbl", ".sfl");
+// const ShadyCore::FileType ShadyCore::FileType::typeDImage(TYPE_IMAGE, false, ".png", ".cv2");
+// const ShadyCore::FileType ShadyCore::FileType::typeDPalette(TYPE_PALETTE, false, ".act", ".pal");
+// const ShadyCore::FileType ShadyCore::FileType::typeDSfx(TYPE_SFX, false, ".wav", ".cv3");
+// const ShadyCore::FileType ShadyCore::FileType::typeDGui(TYPE_GUI, false, ".xml", ".dat");
+// const ShadyCore::FileType ShadyCore::FileType::typeDAnimation(TYPE_ANIMATION, false, ".xml", ".pat");
+// const ShadyCore::FileType ShadyCore::FileType::typeDPattern(TYPE_PATTERN, false, ".xml", ".pat");
+// const ShadyCore::FileType ShadyCore::FileType::typeEText(TYPE_TEXT, true, ".cv0", ".txt");
+// const ShadyCore::FileType ShadyCore::FileType::typeETable(TYPE_TEXT, true, ".cv1", ".csv");
+// const ShadyCore::FileType ShadyCore::FileType::typeELabel(TYPE_LABEL, true, ".sfl", ".lbl");
+// const ShadyCore::FileType ShadyCore::FileType::typeEImage(TYPE_IMAGE, true, ".cv2", ".png");
+// const ShadyCore::FileType ShadyCore::FileType::typeEPalette(TYPE_PALETTE, true, ".pal", ".act");
+// const ShadyCore::FileType ShadyCore::FileType::typeESfx(TYPE_SFX, true, ".cv3", ".wav");
+// const ShadyCore::FileType ShadyCore::FileType::typeEGui(TYPE_GUI, true, ".dat", ".xml");
+// const ShadyCore::FileType ShadyCore::FileType::typeEAnimation(TYPE_ANIMATION, true, ".pat", ".xml");
+// const ShadyCore::FileType ShadyCore::FileType::typeEPattern(TYPE_PATTERN, true, ".pat", ".xml");
+namespace {
+    using FT = ShadyCore::FileType;
+
+    struct _comparator {
+        using is_transparent = uint32_t;
+        inline std::size_t operator()(const FT& v) const noexcept { return std::hash<uint32_t>()(v.extValue); }
+        inline std::size_t operator()(const uint32_t v) const noexcept { return std::hash<uint32_t>()(v); }
+        inline bool operator()(const FT& l, const FT& r) const noexcept { return l.extValue == r.extValue; }
+        inline bool operator()(const uint32_t l, const FT& r) const noexcept { return l == r.extValue; }
+    };
+
+    const std::unordered_set<FT, _comparator, _comparator> typeMap = {
+        FT(FT::TYPE_TEXT, FT::TEXT_NORMAL, FT::getExtValue(".txt")),
+        FT(FT::TYPE_TEXT, FT::FORMAT_UNKNOWN, FT::getExtValue(".cv0")),
+        FT(FT::TYPE_TABLE, FT::TABLE_CSV, FT::getExtValue(".csv")),
+        FT(FT::TYPE_TABLE, FT::FORMAT_UNKNOWN, FT::getExtValue(".cv1")),
+        FT(FT::TYPE_LABEL, FT::LABEL_LBL, FT::getExtValue(".lbl")),
+        FT(FT::TYPE_LABEL, FT::LABEL_RIFF, FT::getExtValue(".sfl")),
+        FT(FT::TYPE_IMAGE, FT::IMAGE_PNG, FT::getExtValue(".png")),
+        FT(FT::TYPE_IMAGE, FT::IMAGE_GAME, FT::getExtValue(".cv2")),
+        FT(FT::TYPE_PALETTE, FT::PALETTE_ACT, FT::getExtValue(".act")),
+        FT(FT::TYPE_PALETTE, FT::PALETTE_PAL, FT::getExtValue(".pal")),
+        FT(FT::TYPE_SFX, FT::SFX_WAV, FT::getExtValue(".wav")),
+        FT(FT::TYPE_SFX, FT::SFX_GAME, FT::getExtValue(".cv3")),
+
+        FT(FT::TYPE_SCHEMA, FT::FORMAT_UNKNOWN, FT::getExtValue(".xml")),
+        FT(FT::TYPE_SCHEMA, FT::SCHEMA_GAME_GUI, FT::getExtValue(".dat")),
+        FT(FT::TYPE_SCHEMA, FT::FORMAT_UNKNOWN, FT::getExtValue(".pat")),
+    };
 }
 
-constexpr ShadyCore::FileType::FileType(Type type, bool isEncrypted, const char* normalExt, const char* inverseExt)
-    : type(type), isEncrypted(isEncrypted), normalExt(normalExt), inverseExt(inverseExt), extValue(getExtValue(normalExt)) {}
+ShadyCore::FileType ShadyCore::FileType::get(uint32_t extValue) {
+    auto i = typeMap.find(extValue);
+    if (i == typeMap.end()) return FileType(extValue);
+    return *i;
+}
 
-const ShadyCore::FileType ShadyCore::FileType::typeUnknown(TYPE_UNKNOWN, false);
-const ShadyCore::FileType ShadyCore::FileType::typePackage(TYPE_PACKAGE, false);
-const ShadyCore::FileType ShadyCore::FileType::typeDText(TYPE_TEXT, false, ".txt", ".cv0");
-const ShadyCore::FileType ShadyCore::FileType::typeDTable(TYPE_TEXT, false, ".csv", ".cv1");
-const ShadyCore::FileType ShadyCore::FileType::typeDLabel(TYPE_LABEL, false, ".lbl", ".sfl");
-const ShadyCore::FileType ShadyCore::FileType::typeDImage(TYPE_IMAGE, false, ".png", ".cv2");
-const ShadyCore::FileType ShadyCore::FileType::typeDPalette(TYPE_PALETTE, false, ".act", ".pal");
-const ShadyCore::FileType ShadyCore::FileType::typeDSfx(TYPE_SFX, false, ".wav", ".cv3");
-const ShadyCore::FileType ShadyCore::FileType::typeDGui(TYPE_GUI, false, ".xml", ".dat");
-const ShadyCore::FileType ShadyCore::FileType::typeDAnimation(TYPE_ANIMATION, false, ".xml", ".pat");
-const ShadyCore::FileType ShadyCore::FileType::typeDPattern(TYPE_PATTERN, false, ".xml", ".pat");
-const ShadyCore::FileType ShadyCore::FileType::typeEText(TYPE_TEXT, true, ".cv0", ".txt");
-const ShadyCore::FileType ShadyCore::FileType::typeETable(TYPE_TEXT, true, ".cv1", ".csv");
-const ShadyCore::FileType ShadyCore::FileType::typeELabel(TYPE_LABEL, true, ".sfl", ".lbl");
-const ShadyCore::FileType ShadyCore::FileType::typeEImage(TYPE_IMAGE, true, ".cv2", ".png");
-const ShadyCore::FileType ShadyCore::FileType::typeEPalette(TYPE_PALETTE, true, ".pal", ".act");
-const ShadyCore::FileType ShadyCore::FileType::typeESfx(TYPE_SFX, true, ".cv3", ".wav");
-const ShadyCore::FileType ShadyCore::FileType::typeEGui(TYPE_GUI, true, ".dat", ".xml");
-const ShadyCore::FileType ShadyCore::FileType::typeEAnimation(TYPE_ANIMATION, true, ".pat", ".xml");
-const ShadyCore::FileType ShadyCore::FileType::typeEPattern(TYPE_PATTERN, true, ".pat", ".xml");
-
+/*
 const ShadyCore::FileType& ShadyCore::FileType::getSimple(const char* name) {
     static const FileType* extMap[] = {
         &typeDPalette, // ".act"
@@ -150,50 +179,62 @@ const ShadyCore::FileType& ShadyCore::FileType::getByName(const char* name) {
     if (strcmp(name, "wav") == 0) return typeDSfx;
     return typeUnknown;
 }
+*/
 
-ShadyCore::Resource* ShadyCore::createResource(const FileType& type) {
-    switch(type.type) {
+ShadyCore::Resource* ShadyCore::createResource(const FileType::Type type, const FileType::Format format) {
+    switch(type) {
 	case FileType::TYPE_TEXT: return new TextResource();
+    case FileType::TYPE_TABLE: return new TextResource();
 	case FileType::TYPE_LABEL: return new LabelResource();
 	case FileType::TYPE_PALETTE: return new Palette();
     case FileType::TYPE_IMAGE: return new Image();
 	case FileType::TYPE_SFX: return new Sfx();
-    case FileType::TYPE_GUI: return new GuiRoot();
-    case FileType::TYPE_PATTERN: return new Pattern(false);
-    case FileType::TYPE_ANIMATION: return new Pattern(true);
+    case FileType::TYPE_SCHEMA:
+        // TODO simplify schema selection
+        if (format == FileType::SCHEMA_GAME_GUI
+            || format == FileType::SCHEMA_XML_GUI) return new GuiRoot();
+        if (format == FileType::SCHEMA_GAME_ANIM
+            || format == FileType::SCHEMA_XML_ANIM) return new Pattern(true);
+        if (format == FileType::SCHEMA_GAME_PATTERN
+            || format == FileType::SCHEMA_XML_PATTERN) return new Pattern(false);
+        throw std::runtime_error("Unknown Format ID: " + std::to_string(format));
 	default: return 0;
     }
 }
 
-ShadyCore::Resource* ShadyCore::readResource(const FileType& type, std::istream& input) {
-	Resource* resource = createResource(type);
+ShadyCore::Resource* ShadyCore::readResource(const FileType::Type type, const FileType::Format format, std::istream& input) {
+	Resource* resource = createResource(type, format);
 	if (resource) {
-		if (type.isEncrypted) ResourceEReader(resource, input);
+        // TODO remake readers for any format
+		if (format == 0 || format >= 4) ResourceEReader(resource, input);
 		else ResourceDReader(resource, input);
 	} return resource;
 }
 
-//ShadyCore::Resource* ShadyCore::readResource(BasePackageEntry& entry) {
-//	std::istream& input = entry.open();
-//	ShadyCore::Resource* resource = readResource(FileType::get(entry.getName(), input), input);
-//	entry.close();
-//	return resource;
-//}
+	//void readResource(Resource*, const FileType::Format, std::istream&);
+	//void writeResource(Resource*, const FileType::Format, std::ostream&);
+	//void convertResource(const FileType::Type, const FileType::Format, std::istream&, const FileType::Format, std::ostream&);
 
-void ShadyCore::readResource(Resource* resource, std::istream& input, bool isEncrypted) {
-	if (isEncrypted) ResourceEReader(resource, input);
+void ShadyCore::readResource(Resource* resource, const FileType::Format format, std::istream& input) {
+    // TODO remake readers for any format
+	if (format == 0 || format >= 4) ResourceEReader(resource, input);
     else ResourceDReader(resource, input);
 }
 
-void ShadyCore::writeResource(Resource* resource, std::ostream& output, bool isEncrypted) {
-	if (isEncrypted) ResourceEWriter(resource, output);
+void ShadyCore::writeResource(Resource* resource, const FileType::Format format, std::ostream& output) {
+    // TODO remake readers for any format
+	if (format == 0 || format >= 4) ResourceEWriter(resource, output);
 	else ResourceDWriter(resource, output);
 }
 
-void ShadyCore::convertResource(const FileType& type, std::istream& input, std::ostream& output) {
-	Resource* resource = createResource(type);
+void ShadyCore::convertResource(const FileType::Type type, const FileType::Format inputFormat, std::istream& input, const FileType::Format outputFormat, std::ostream& output) {
+    // TODO make a speed test
+    if (inputFormat == outputFormat) { output << input.rdbuf(); return; }
+
+	Resource* resource = createResource(type, inputFormat);
 	if (!resource) throw; // TODO Error Handling
-	if (type.isEncrypted) {
+    // TODO remake readers for any format
+	if (inputFormat == 0 || inputFormat >= 4) {
 		ResourceEReader(resource, input);
 		ResourceDWriter(resource, output);
 	} else {

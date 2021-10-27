@@ -9,7 +9,7 @@
 std::filesystem::path ModPackage::basePath(std::filesystem::current_path());
 std::vector<ModPackage*> ModPackage::packageList;
 std::shared_mutex ModPackage::packageListMutex;
-extern ShadyCore::Package package;
+extern ShadyCore::PackageEx package;
 
 static ModPackage* findPackage(const std::string& name) {
 	for(auto& pack : ModPackage::packageList) if(name == pack->name) return pack;
@@ -117,7 +117,7 @@ namespace {
 						if (!i->second->hasError) {
 							p->previewPath = "shady_preview_" + p->name.string() + ".png";
 							std::transform(p->previewPath.begin() + 14, p->previewPath.end(), p->previewPath.begin() + 14, tolower); // better convertion/comparison?
-							package.appendFile(p->previewPath.c_str(), i->second->data);
+							package.insert(p->previewPath, i->second->data);
 						} p->downloadingPreview = false;
 
  						delete i->second;

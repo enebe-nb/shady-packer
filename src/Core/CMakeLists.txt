@@ -31,7 +31,8 @@ set(SRC_CORE_Root
 	reader.cpp
 	package.hpp
 	package.cpp
-	packagefilter.cpp)
+	packageslash.cpp
+)
 source_group("Source Files" FILES ${SRC_CORE_Root})
 
 add_library(shady-core STATIC ${SRC_CORE_Resource} ${SRC_CORE_Util} ${SRC_CORE_Root})

@@ -1,5 +1,6 @@
 #pragma once
 #include "baseentry.hpp"
+#include "package.hpp"
 #include <stack>
 
 namespace ShadyCore {
@@ -71,15 +72,15 @@ namespace ShadyCore {
 
 	class DataPackageEntry : public BasePackageEntry {
 	private:
-		const char* packageFilename;
 		unsigned int packageOffset;
 		std::istream fileStream;
 		DataFileFilter fileFilter;
-	public:
-		inline DataPackageEntry(int id, const char* packageFilename, const char* name, unsigned int offset, unsigned int size)
-			: BasePackageEntry(id, name, size), packageFilename(packageFilename), fileStream(&fileFilter), fileFilter(offset, size), packageOffset(offset) {}
 
-		inline EntryType getType() const override final { return TYPE_DATA; }
+	public:
+		inline DataPackageEntry(Package* parent, unsigned int offset, unsigned int size)
+			: BasePackageEntry(parent, size), fileStream(&fileFilter), fileFilter(offset, size), packageOffset(offset) {}
+
+		inline StorageType getStorage() const override final { return TYPE_DATA; }
 		inline bool isOpen() const override final { return fileFilter.getBaseBuffer(); }
 		std::istream& open() override;
 		void close() override;

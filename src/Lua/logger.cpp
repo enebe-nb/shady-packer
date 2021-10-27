@@ -8,7 +8,7 @@
 
 namespace {
     SokuLib::SWRFont* consoleFont = 0;
-    SokuLib::CSprite consoleView;
+    SokuLib::Sprite consoleView;
     std::mutex consoleLock;
     int logFlags, logTimeout = 0;
     bool isDirty = false;
@@ -35,7 +35,7 @@ void Logger::Initialize(int flags) {
 
 void Logger::Finalize() {
     std::lock_guard guard(consoleLock);
-    if (consoleView.texture) SokuLib::textureMgr.remove(consoleView.texture);
+    if (consoleView.dxHandle) SokuLib::textureMgr.remove(consoleView.dxHandle);
     logContent.clear();
 
     if (consoleFont) {
@@ -63,14 +63,14 @@ void Logger::Render() {
             content += line + "<br>";
         }
 
-        if (consoleView.texture) SokuLib::textureMgr.remove(consoleView.texture);
+        if (consoleView.dxHandle) SokuLib::textureMgr.remove(consoleView.dxHandle);
         int texture, width, height;
         int* x = SokuLib::textureMgr.createTextTexture(&texture, content.c_str(), *consoleFont, 632, 472, &width, &height);
         consoleView.setTexture2(texture, 0, 0, width, height);
     }
 
     if (logTimeout > 0) {
-        consoleView.render(4, 476 - consoleView.sizeY);
+        consoleView.render(4, 476 - consoleView.size.y);
         if (--logTimeout == 0) logContent.clear();
     }
 }

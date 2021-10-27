@@ -1,7 +1,10 @@
 #include "zipentry.hpp"
 #include "package.hpp"
+#include "util/tempfiles.hpp"
+
 #include <zip.h>
 #include <filesystem>
+#include <fstream>
 
 std::streambuf::int_type ShadyCore::ZipStream::underflow() {
 	if (!pool.empty()) return pool.top();
@@ -103,7 +106,7 @@ typedef struct {
 	std::istream* stream;
 } ZipData;
 
-static inline ZipData* createZipEntry(ShadyCore::BasePackageEntry* entry) { return new ZipData{entry, 0}; }
+static inline ZipData* createZipReader(ShadyCore::BasePackageEntry* entry) { return new ZipData{entry, 0}; }
 
 static zip_int64_t zipInputFunc(void* userdata, void* data, zip_uint64_t len, zip_source_cmd_t command) {
 	ZipData* zipData = (ZipData*)userdata;
@@ -201,36 +204,85 @@ static void zipProgress(double percent) {
 
 //-------------------------------------------------------------
 
-int ShadyCore::Package::appendZipPackage(std::istream& input, const char* filename) {
-	filename = allocateString(filename);
-
-	BasePackageEntry* entry = new StreamPackageEntry(nextId, input, filename, std::filesystem::file_size(filename));
-	zip_source_t* inputSource = zip_source_function_create(zipInputFunc, createZipEntry(entry), 0);
-	zip_t* file = zip_open_from_source(inputSource, ZIP_RDONLY, 0);
+void ShadyCore::Package::loadZip(const std::filesystem::path& path) {
+	//BasePackageEntry* entry = new StreamPackageEntry(nextId, input, filename, std::filesystem::file_size(filename));
+	//zip_source_t* inputSource = zip_source_function_create(zipInputFunc, createZipReader(entry), 0);
+	//zip_t* file = zip_open_from_source(inputSource, ZIP_RDONLY, 0);
+	zip_t* file = zip_open(path.string().c_str(), ZIP_RDONLY, 0);
 
 	zip_int64_t count = zip_get_num_entries(file, 0);
 	for (zip_int64_t i = 0; i < count; ++i) {
 		zip_stat_t fileStat;
 		zip_stat_index(file, i, 0, &fileStat);
 
-		addOrReplace(new ZipPackageEntry(nextId, filename, allocateString(fileStat.name), fileStat.size));
+		// TODO normalize name?
+		this->insert(fileStat.name, new ZipPackageEntry(this, fileStat.name, fileStat.size));
 	}
 
 	zip_close(file);
-	delete entry;
-	return nextId++;
+	//delete entry;
 }
 
-void ShadyCore::Package::saveZip(std::ostream& output, Callback* callback, void* userData) {
+namespace {
+	using FT = ShadyCore::FileType;
+	constexpr FT outputTypes[] = {
+		FT(FT::TYPE_UNKNOWN, FT::FORMAT_UNKNOWN),
+		FT(FT::TYPE_TEXT, FT::TEXT_NORMAL, FT::getExtValue(".cv0")),
+		FT(FT::TYPE_TABLE, FT::TABLE_CSV, FT::getExtValue(".cv1")),
+		FT(FT::TYPE_LABEL, FT::LABEL_RIFF, FT::getExtValue(".sfl")),
+		FT(FT::TYPE_IMAGE, FT::IMAGE_PNG, FT::getExtValue(".png")),
+		FT(FT::TYPE_PALETTE, FT::PALETTE_PAL, FT::getExtValue(".pal")),
+		FT(FT::TYPE_SFX, FT::SFX_GAME, FT::getExtValue(".cv3")),
+		FT(FT::TYPE_BGM, FT::BGM_OGG, FT::getExtValue(".ogg")),
+		// TODO TYPE_SCHEMA
+		FT(FT::TYPE_SCHEMA, FT::FORMAT_UNKNOWN, FT::getExtValue(".pat")),
+	};
+}
+
+void ShadyCore::Package::saveZip(const std::filesystem::path& filename, Callback callback, void* userData) {
+	std::ofstream output(filename, std::ios::binary);
 	zip_source_t* outputSource = zip_source_function_create(zipOutputFunc, &output, 0);
 	zip_t* file = zip_open_from_source(outputSource, ZIP_CREATE | ZIP_TRUNCATE | ZIP_CHECKCONS, 0);
 
-	for (auto entry : entries) {
-		zip_source_t* inputSource = zip_source_function_create(zipInputFunc, createZipEntry(entry.second), 0);
-		zip_file_add(file, entry.second->getName(), inputSource, ZIP_FL_OVERWRITE);
+	for (auto i = begin(); i != end(); ++i) {
+		auto entry = i->second;
+
+		zip_source_t* inputSource;
+		FileType inputType = i.fileType();
+		FileType targetType = outputTypes[i->first.fileType.type];
+
+		if (inputType.format == targetType.format) {
+			inputSource = zip_source_function_create(zipInputFunc, createZipReader(entry), 0);
+		} else {
+			std::filesystem::path tempFile = ShadyUtil::TempFile();
+			std::ofstream output(tempFile, std::ios::binary);
+			std::istream& input = entry->open();
+
+			if (targetType != FileType::TYPE_SCHEMA) ShadyCore::convertResource(targetType.type, inputType.format, input, targetType.format, output);
+			// TODO fix TYPE_SCHEMA
+			else switch(inputType.format) {
+				case FileType::SCHEMA_XML_ANIM:
+					ShadyCore::convertResource(inputType.type, inputType.format, input, FileType::SCHEMA_GAME_ANIM, output); break;
+				case FileType::SCHEMA_XML_GUI:
+					targetType.extValue = FileType::getExtValue(".dat");
+					ShadyCore::convertResource(inputType.type, inputType.format, input, FileType::SCHEMA_GAME_GUI, output); break;
+				case FileType::SCHEMA_XML_PATTERN:
+					ShadyCore::convertResource(inputType.type, inputType.format, input, FileType::SCHEMA_GAME_PATTERN, output); break;
+
+				case FileType::SCHEMA_GAME_ANIM:
+				case FileType::SCHEMA_GAME_GUI:
+				case FileType::SCHEMA_GAME_PATTERN:
+					ShadyCore::convertResource(inputType.type, inputType.format, input, inputType.format, output); break;
+			}
+
+			inputSource = zip_source_file_create(tempFile.string().c_str(), 0, 0, 0);
+		}
+
+		std::string filename(i->first.name);
+		zip_file_add(file, targetType.appendExtValue(filename).c_str(), inputSource, ZIP_FL_OVERWRITE);
 	}
 
-	zipProgressDelegate = callback;
+	zipProgressDelegate = (void(*)(void*, const char*, unsigned int, unsigned int))callback;
     zipProgressData = userData;
 	zip_register_progress_callback(file, zipProgress);
 	zip_close(file);

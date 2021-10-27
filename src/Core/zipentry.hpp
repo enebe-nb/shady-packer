@@ -1,5 +1,7 @@
 #pragma once
+
 #include "baseentry.hpp"
+#include "package.hpp"
 #include <stack>
 
 namespace ShadyCore {
@@ -34,17 +36,17 @@ namespace ShadyCore {
 
 	class ZipPackageEntry : public BasePackageEntry {
 	private:
-		const char* packageFilename;
+		const std::string name;
 
 		ZipStream zipBuffer;
 		std::istream zipStream;
 	public:
-		inline ZipPackageEntry(int id, const char* packageFilename, const char* name, unsigned int size)
-			: BasePackageEntry(id, name, size), packageFilename(packageFilename), zipStream(&zipBuffer) {}
+		inline ZipPackageEntry(Package* parent, const std::string& name, unsigned int size)
+			: BasePackageEntry(parent, size), name(name), zipStream(&zipBuffer) {}
 
-		inline EntryType getType() const override final { return TYPE_ZIP; }
+		inline StorageType getStorage() const override final { return TYPE_ZIP; }
 		inline bool isOpen() const override final { return zipBuffer.isOpen(); }
-		inline std::istream& open() override final { zipStream.clear(); zipBuffer.open(packageFilename, name); return zipStream; }
+		inline std::istream& open() override final { zipStream.clear(); zipBuffer.open(parent->getBasePath().string().c_str(), name.c_str()); return zipStream; }
 		inline void close() override final { zipBuffer.close(); }
 	};
 }

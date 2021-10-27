@@ -15,14 +15,14 @@ namespace ShadyCli {
         inline Command(std::string name, std::string help) : options(name, help) {}
     };
 
-    class ConvertCommand : public Command {
-    private:
-        void processFile(std::filesystem::path, std::filesystem::path, bool);
-    public:
-        inline ConvertCommand() : Command("convert", "Converts game files into their encrypted/decrypted counterpart.") {}
-        void buildOptions() override;
-        bool run(const cxxopts::ParseResult&) override;
-    };
+    // class ConvertCommand : public Command {
+    // private:
+    //     void processFile(std::filesystem::path, std::filesystem::path, bool);
+    // public:
+    //     inline ConvertCommand() : Command("convert", "Converts game files into their encrypted/decrypted counterpart.") {}
+    //     void buildOptions() override;
+    //     bool run(const cxxopts::ParseResult&) override;
+    // };
 
     class MergeCommand : public Command {
     private:

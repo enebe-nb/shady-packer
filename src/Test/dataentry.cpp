@@ -149,39 +149,52 @@ TEST_F(DataEntrySuite, ListFilter) {
 }
 
 TEST_F(DataEntrySuite, PackageRead) {
-	ShadyCore::Package package;
-	package.appendPackage("test-data/data-package.dat");
+	ShadyCore::Package package("test-data/data-package.dat");
 
 	for (const char* data : dataArray) {
-		std::istream& input = package.findFile(data)->open();
+		std::istream& input = package.find(data)->second->open();
 		EXPECT_TRUE(input.good());
 
-		std::filesystem::path fileName("test-data/encrypted"); fileName /= data;
-		std::ifstream expected(fileName, std::ios::binary);
-		ASSERT_STREAM(input, expected);
+		std::filesystem::path filename("test-data/encrypted"); filename /= data;
+		std::ifstream expected(filename, std::ios::binary);
+		EXPECT_TRUE(testing::isSameData(input, expected)) << "filename: " << data;
 
-		package.findFile(data)->close();
+		package.find(data)->second->close();
 		expected.close();
 	}
 }
 
 TEST_F(DataEntrySuite, PackageWrite) {
-	ShadyCore::Package package;
-	package.appendPackage("test-data/encrypted");
-	std::filesystem::path tempFile = ShadyUtil::TempFile();
-	package.save(tempFile.string().c_str(), ShadyCore::Package::DATA_MODE, 0, 0);
+	const char* inputList[] = {
+		"test-data/encrypted",
+		"test-data/decrypted",
+		"test-data/data-package.dat",
+		"test-data/zip-package.dat",
+	};
 
-	ShadyCore::Package packageTemp;
-	packageTemp.appendPackage(tempFile.string().c_str());
-	EXPECT_EQ(package.size(), packageTemp.size());
-	for (auto& file : package) {
-		auto tempFile = packageTemp.findFile(file.getName());
-		EXPECT_TRUE(tempFile != packageTemp.end());
-		std::istream& fileS = file.open();
-		std::istream& tempFileS = tempFile->open();
-		ASSERT_STREAM(fileS, tempFileS);// << "Data package write error in: " << file.getName();
-		file.close();
-		tempFile->close();
+	for (auto packageName : inputList) {
+		ShadyCore::Package* input = new ShadyCore::Package(packageName);
+		std::filesystem::path tempFile = ShadyUtil::TempFile();
+		input->save(tempFile, ShadyCore::Package::DATA_MODE, 0, 0);
+		ASSERT_TRUE(std::filesystem::exists(tempFile));
+		delete input; input = new ShadyCore::Package(tempFile);
+
+		ShadyCore::Package expected("test-data/data-package.dat");
+		EXPECT_EQ(input->size(), expected.size());
+		for (auto& file : expected) {
+			std::string filename(file.first.name);
+			file.first.fileType.appendExtValue(filename);
+			auto i = input->find(filename);
+			ASSERT_TRUE(i != input->end());
+
+			std::istream& inputS = i->second->open();
+			std::istream& expectedS = file.second->open();
+			EXPECT_TRUE(testing::isSameData(inputS, expectedS)) << "filename: " << filename << ", package: " << packageName;
+			file.second->close();
+			i->second->close();
+		}
+
+		delete input;
+		std::filesystem::remove(tempFile);
 	}
-	std::filesystem::remove(tempFile);
 }

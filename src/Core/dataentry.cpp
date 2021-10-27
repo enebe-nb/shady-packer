@@ -1,5 +1,7 @@
 #include "dataentry.hpp"
 #include "package.hpp"
+#include "util/tempfiles.hpp"
+
 #include <fstream>
 #include <filesystem>
 #include <cmath>
@@ -14,7 +16,7 @@ std::streamsize ShadyCore::StreamFilter::xsgetn(char_type* buffer, std::streamsi
 	}
 	pos += buffered;
 
-	count = base->sgetn(buffer + buffered, std::min(count, (std::streamsize)(size - pos)));
+	count = base->sgetn(buffer + buffered, min(count, (std::streamsize)(size - pos)));
 	for (int i = buffered; i < count + buffered; ++i) {
 		buffer[i] = filter(buffer[i]);
 	}
@@ -169,7 +171,7 @@ std::istream& ShadyCore::DataPackageEntry::open() {
 	if (!base) base = new std::filebuf();
 	else base->close();
 
-	base->open(packageFilename, std::ios::in | std::ios::binary);
+	base->open(parent->getBasePath(), std::ios::in | std::ios::binary);
 	base->pubseekoff(packageOffset, std::ios::beg);
 	fileFilter.setBaseBuffer(base);
 
@@ -186,8 +188,8 @@ void ShadyCore::DataPackageEntry::close() {
 
 //-------------------------------------------------------------
 
-int ShadyCore::Package::appendDataPackage(std::istream& input, const char* filename) {
-	filename = allocateString(filename);
+void ShadyCore::Package::loadData(const std::filesystem::path& path) {
+	std::ifstream input(path, std::ios::binary);
 
 	unsigned short fileCount; input.read((char*)&fileCount, 2);
 	unsigned int listSize; input.read((char*)&listSize, 4);
@@ -197,54 +199,100 @@ int ShadyCore::Package::appendDataPackage(std::istream& input, const char* filen
 	for (int i = 0; i < fileCount; ++i) {
 		unsigned int offset, size;
 		unsigned char nameSize;
-		char* name;
 
 		filteredInput.read((char*)&offset, 4);
 		filteredInput.read((char*)&size, 4);
 		filteredInput.read((char*)&nameSize, 1);
-		name = allocateString(nameSize);
-		filteredInput.read(name, nameSize);
+		std::string name; name.resize(nameSize);
+		filteredInput.read(name.data(), nameSize);
 
-		addOrReplace(new DataPackageEntry(nextId, filename, name, offset, size));
+		this->insert(name, new DataPackageEntry(this, offset, size));
 	}
-	return nextId++;
 }
 
-void ShadyCore::Package::saveData(std::ostream& output, Callback* callback, void* userData) {
+namespace {
+	using FT = ShadyCore::FileType;
+	constexpr FT outputTypes[] = {
+		FT(FT::TYPE_UNKNOWN, FT::FORMAT_UNKNOWN),
+		FT(FT::TYPE_TEXT, FT::TEXT_GAME, FT::getExtValue(".cv0")),
+		FT(FT::TYPE_TABLE, FT::TABLE_GAME, FT::getExtValue(".cv1")),
+		FT(FT::TYPE_LABEL, FT::LABEL_RIFF, FT::getExtValue(".sfl")),
+		FT(FT::TYPE_IMAGE, FT::IMAGE_GAME, FT::getExtValue(".cv2")),
+		FT(FT::TYPE_PALETTE, FT::PALETTE_PAL, FT::getExtValue(".pal")),
+		FT(FT::TYPE_SFX, FT::SFX_GAME, FT::getExtValue(".cv3")),
+		FT(FT::TYPE_BGM, FT::BGM_OGG, FT::getExtValue(".ogg")),
+		// TODO TYPE_SCHEMA
+		FT(FT::TYPE_SCHEMA, FT::FORMAT_UNKNOWN, FT::getExtValue(".pat")),
+	};
+}
+
+void ShadyCore::Package::saveData(const std::filesystem::path& filename, Callback callback, void* userData) {
+	std::list<std::pair<std::string, std::filesystem::path> > tempFiles;
 	unsigned short fileCount = entries.size();
-	unsigned int listSize = 0;
-	for (auto entry : entries) {
-		listSize += 9 + entry.first.size();
+	unsigned int listSize = 0, index = 0;
+	for (auto i = begin(); i != end(); ++i) {
+		auto entry = i->second;
+		FileType inputType = i.fileType();
+		FileType targetType = outputTypes[i->first.fileType.type];
+		tempFiles.emplace_back(i->first.name, ShadyUtil::TempFile());
+		if (callback) callback(userData, i->first.name.data(), ++index, fileCount);
+
+		std::ofstream output(tempFiles.back().second, std::ios::binary);
+		std::istream& input = entry->open();
+
+		if (targetType != FileType::TYPE_SCHEMA) ShadyCore::convertResource(inputType.type, inputType.format, input, targetType.format, output);
+		// TODO fix TYPE_SCHEMA
+		else switch(inputType.format) {
+			case FileType::SCHEMA_XML_ANIM:
+				ShadyCore::convertResource(inputType.type, inputType.format, input, FileType::SCHEMA_GAME_ANIM, output); break;
+			case FileType::SCHEMA_XML_GUI:
+				targetType.extValue = FileType::getExtValue(".dat");
+				ShadyCore::convertResource(inputType.type, inputType.format, input, FileType::SCHEMA_GAME_GUI, output); break;
+			case FileType::SCHEMA_XML_PATTERN:
+				ShadyCore::convertResource(inputType.type, inputType.format, input, FileType::SCHEMA_GAME_PATTERN, output); break;
+
+			case FileType::SCHEMA_GAME_ANIM:
+			case FileType::SCHEMA_GAME_GUI:
+			case FileType::SCHEMA_GAME_PATTERN:
+				ShadyCore::convertResource(inputType.type, inputType.format, input, inputType.format, output); break;
+		}
+
+		entry->close();
+		Package::underlineToSlash(tempFiles.back().first);
+		targetType.appendExtValue(tempFiles.back().first);
+		listSize += 9 + tempFiles.back().first.size();
 	}
 
+	std::ofstream output(filename, std::ios::binary);
 	output.write((char*)&fileCount, 2);
 	output.write((char*)&listSize, 4);
 	std::ostream headerOutput(new DataListFilter(output.rdbuf(), listSize + 6, listSize));
 	unsigned int curOffset = listSize + 6;
-	for (auto entry : entries) {
-		unsigned char len = entry.first.size();
+	for (auto& file : tempFiles) {
+		uint32_t size = std::filesystem::file_size(file.second);
 		headerOutput.write((char*)&curOffset, 4);
-		headerOutput.write((char*)&entry.second->getSize(), 4);
-		headerOutput.put(len);
-		headerOutput.write(std::filesystem::path(entry.first).generic_string().c_str(), len);
+		headerOutput.write((char*)&size, 4);
+		headerOutput.put(file.first.size());
+		headerOutput.write(file.first.c_str(), file.first.size());
 
-		curOffset += entry.second->getSize();
+		curOffset += size;
 	} delete headerOutput.rdbuf();
 
 	char buffer[4096];
-	unsigned int index = 0;
 	curOffset = listSize + 6;
-	for (auto entry : entries) {
-		if (callback) callback(userData, entry.second->getName(), ++index, fileCount);
-		std::ostream fileOutput(new DataFileFilter(output.rdbuf(), curOffset, entry.second->getSize()));
-		std::istream& input = entry.second->open();
+	for (auto& file : tempFiles) {
+		uint32_t size = std::filesystem::file_size(file.second);
+		std::ostream fileOutput(new DataFileFilter(output.rdbuf(), curOffset, size));
+		std::ifstream input(file.second, std::ios::binary);
 
-		int read;
-		while (read = input.read(buffer, 4096).gcount())
-			fileOutput.write(buffer, read);
+		// TODO make speed test
+		fileOutput << input.rdbuf();
+		// int read;
+		// while (read = input.read(buffer, 4096).gcount())
+		// 	fileOutput.write(buffer, read);
 
-		entry.second->close();
-		curOffset += entry.second->getSize();
+		input.close(); std::filesystem::remove(file.second);
+		curOffset += size;
 		delete fileOutput.rdbuf();
 	}
 }

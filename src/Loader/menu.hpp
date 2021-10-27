@@ -20,10 +20,10 @@ private:
     SokuLib::CDesign design;
     ModList modList;
     SokuLib::MenuCursor modCursor;
-    SokuLib::CSprite viewTitle;
-    SokuLib::CSprite viewContent;
-    SokuLib::CSprite viewOption;
-    SokuLib::CSprite viewPreview;
+    SokuLib::Sprite viewTitle;
+    SokuLib::Sprite viewContent;
+    SokuLib::Sprite viewOption;
+    SokuLib::Sprite viewPreview;
     SokuLib::MenuCursor viewCursor;
     int scrollPos = 0;
     int state = 0;
