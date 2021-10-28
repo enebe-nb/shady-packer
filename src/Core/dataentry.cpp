@@ -285,11 +285,7 @@ void ShadyCore::Package::saveData(const std::filesystem::path& filename, Callbac
 		std::ostream fileOutput(new DataFileFilter(output.rdbuf(), curOffset, size));
 		std::ifstream input(file.second, std::ios::binary);
 
-		// TODO make speed test
 		fileOutput << input.rdbuf();
-		// int read;
-		// while (read = input.read(buffer, 4096).gcount())
-		// 	fileOutput.write(buffer, read);
 
 		input.close(); std::filesystem::remove(file.second);
 		curOffset += size;

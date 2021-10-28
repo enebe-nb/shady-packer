@@ -3,26 +3,12 @@
 #include "resource/readerwriter.hpp"
 
 #include <unordered_map>
-#include <mutex>
+#include <shared_mutex>
 #include <filesystem>
 
 namespace ShadyCore {
-	/*
-	class StreamPackageEntry : public BasePackageEntry {
-	private:
-		std::istream& stream;
-	public:
-		inline StreamPackageEntry(int id, std::istream& stream, const char* name, unsigned int size) : BasePackageEntry(id, name, size), stream(stream) {};
-
-		inline EntryType getType() const final { return TYPE_STREAM; }
-		inline std::istream& open() final { return stream; }
-		inline bool isOpen() const final { return true; }
-		inline void close() final {}
-	};
-	*/
-
 	class PackageEx;
-	class Package : public std::mutex {
+	class Package : public std::shared_mutex {
 		friend PackageEx;
 	protected:
 		class Key {

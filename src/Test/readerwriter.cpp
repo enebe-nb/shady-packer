@@ -4,6 +4,7 @@
 #include "util.hpp"
 #include <fstream>
 #include <gtest/gtest.h>
+#include <benchmark/benchmark.h>
 
 using filePair = std::pair<const char*, const char*>;
 
@@ -23,7 +24,7 @@ filePair ReaderWriterSuite::dataArray[] = {
 	{ "test-data/encrypted/data/my-gui.dat", "test-data/decrypted/data/my-gui.xml" },
 	{ "test-data/encrypted/data/my-pattern.pat", "test-data/decrypted/data/my-pattern.xml" },
 	{ "test-data/encrypted/data/my-effect.pat", "test-data/decrypted/data/my-effect.xml" }
-};;
+};
 
 TEST_P(ReaderWriterSuite, Convertion) {
 	auto data = GetParam();

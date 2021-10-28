@@ -228,7 +228,6 @@ void ShadyCore::writeResource(Resource* resource, const FileType::Format format,
 }
 
 void ShadyCore::convertResource(const FileType::Type type, const FileType::Format inputFormat, std::istream& input, const FileType::Format outputFormat, std::ostream& output) {
-    // TODO make a speed test
     if (inputFormat == outputFormat) { output << input.rdbuf(); return; }
 
 	Resource* resource = createResource(type, inputFormat);

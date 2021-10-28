@@ -6,11 +6,12 @@ set(SRC_TEST_Test
 	fileentry.cpp
 	package.cpp
 	zipentry.cpp
+	main.cpp
 )
 source_group("Source Files\\Test" FILES ${SRC_TEST_Test})
 
 add_executable(shady-test ${SRC_TEST_Test})
-target_link_libraries(shady-test -static shady-core gtest_main)
+target_link_libraries(shady-test -static shady-core gtest benchmark)
 add_test(NAME "ShadyTests" COMMAND shady-test WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 
 add_custom_command(TARGET shady-test POST_BUILD

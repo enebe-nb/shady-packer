@@ -57,6 +57,18 @@ ShadyCore::Package::Package(const std::filesystem::path& basePath) : basePath(ba
 	}
 }
 
+// class StreamPackageEntry : public BasePackageEntry {
+// private:
+// 	std::istream& stream;
+// public:
+// 	inline StreamPackageEntry(int id, std::istream& stream, const char* name, unsigned int size) : BasePackageEntry(id, name, size), stream(stream) {};
+
+// 	inline EntryType getType() const final { return TYPE_STREAM; }
+// 	inline std::istream& open() final { return stream; }
+// 	inline bool isOpen() const final { return true; }
+// 	inline void close() final {}
+// };
+
 // ShadyCore::Package::iterator ShadyCore::Package::rename(iterator i, const std::string& name) {
 // 	std::lock_guard lock(*this);
 // 	//setDirty();
@@ -188,11 +200,7 @@ ShadyCore::Package::iterator ShadyCore::PackageEx::insert(const std::string_view
 	std::filesystem::path tempFile = ShadyUtil::TempFile();
 	std::ofstream output(tempFile, std::ios::binary);
 
-	output << data.rdbuf(); // TODO speed test
-	// char buffer[4096]; int read;
-	// while (read = data.read(buffer, 4096).gcount()) {
-	// 	output.write(buffer, read);
-	// } output.close();
+	output << data.rdbuf();
 
 	return Package::insert(name, new FilePackageEntry(this, tempFile, true));
 }

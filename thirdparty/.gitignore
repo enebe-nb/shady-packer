@@ -1,4 +1,5 @@
 alsa-lib/
+benchmark/
 boost/
 curl/
 cxxopts/

@@ -105,4 +105,8 @@ if(SHADY_ENABLE_TEST)
     # gtest Library
     add_git_module(googletest git://github.com/google/googletest release-1.11.0)
     add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/googletest EXCLUDE_FROM_ALL)
+
+    # benchmark Library
+    add_git_module(benchmark git://github.com/google/benchmark v1.6.0)
+    add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/benchmark EXCLUDE_FROM_ALL)
 endif()
