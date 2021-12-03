@@ -18,4 +18,6 @@ namespace ShadyLua {
 
     void LoadTamper(const std::wstring& caller);
     void UnloadTamper();
+    class LuaScript;
+    void RemoveEvents(LuaScript*);
 }

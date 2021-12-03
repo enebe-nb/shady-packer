@@ -86,7 +86,9 @@ void ShadyCore::ResourceDReader::accept(LabelResource& resource) {
 	char name[32]; name[0] = '\0';
 	double offset, size;
 
-	input >> std::skipws >> offset >> size >> name;
+	input.setf(std::ios::skipws);
+	input >> offset >> size >> name;
+	input.unsetf(std::ios::skipws);
 	resource.initialize(name);
 	resource.setOffset(offset * 44100.);
 	resource.setSize(size * 44100.);

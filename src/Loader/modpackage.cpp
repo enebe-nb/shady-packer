@@ -4,15 +4,14 @@
 #include <fstream>
 #include <mutex>
 #include <cctype>
-// NOTE: Don't use wchar is this file, so it can be build on linux
 
 std::filesystem::path ModPackage::basePath(std::filesystem::current_path());
-std::vector<ModPackage*> ModPackage::packageList;
-std::shared_mutex ModPackage::packageListMutex;
-extern ShadyCore::PackageEx package;
+std::unique_ptr<ShadyCore::PackageEx> ModPackage::basePackage;
+std::vector<ModPackage*> ModPackage::descPackage;
+std::shared_mutex ModPackage::descMutex;
 
 static ModPackage* findPackage(const std::string& name) {
-	for(auto& pack : ModPackage::packageList) if(name == pack->name) return pack;
+	for(auto& pack : ModPackage::descPackage) if(name == pack->name) return pack;
 	return 0;
 }
 
@@ -36,13 +35,13 @@ namespace {
 			while(!remoteConfig->isDone()) std::this_thread::sleep_for(50ms);
 
 			{
-				std::unique_lock lock(ModPackage::packageListMutex);
+				std::unique_lock lock(ModPackage::descMutex);
 				for (auto& entry : remoteConfig->data.items()) {
 					ModPackage* package = findPackage(entry.key());
 					if (package) {
 						package->merge(entry.value());
 					} else {
-						ModPackage::packageList.push_back(package = new ModPackage(entry.key(), entry.value()));
+						ModPackage::descPackage.push_back(package = new ModPackage(entry.key(), entry.value()));
 						package->data["remoteVersion"] = package->data.value("version", "");
 						package->data.erase("version");
 					}
@@ -50,8 +49,8 @@ namespace {
 			}
 
 			if (iniAutoUpdate) {
-				std::shared_lock lock(ModPackage::packageListMutex);
-				for (auto& package : ModPackage::packageList) {
+				std::shared_lock lock(ModPackage::descMutex);
+				for (auto& package : ModPackage::descPackage) {
 					if (!package->isLocal() && package->requireUpdate) package->downloadFile();
 				}
 			}
@@ -70,15 +69,13 @@ namespace {
 				for (auto i = fileTasks.begin(); i != fileTasks.end();) {
 					if (i->second->isDone()) {
 						ModPackage* p = i->first;
-						ModPackage::packageListMutex.lock();
-						bool wasEnabled = p->enabled;
-						if (wasEnabled) {
-							if (iniUseLoadLock) loadLock.lock();
-							DisablePackage(p);
-						}
+						ModPackage::descMutex.lock();
+						bool wasEnabled = p->isEnabled();
+						if (wasEnabled) DisablePackage(p);
 
-						std::filesystem::path filename(ModPackage::basePath / p->name);
-						filename += p->ext; filename += L".part";
+						// TODO remake after fislesystem change check
+						std::filesystem::path filename(p->path);
+						filename += L".part";
 						if (std::filesystem::exists(filename)) {
 							std::filesystem::path target(filename);
 							target.replace_extension();
@@ -95,12 +92,9 @@ namespace {
 							if (err) throw std::runtime_error(std::string("Failed to Rename: ") + err.message());
 						}
 
-						if (wasEnabled) {
-							EnablePackage(p);
-							if (iniUseLoadLock) loadLock.unlock();
-						}
+						if (wasEnabled) EnablePackage(p);
 						p->downloading = false;
-						ModPackage::packageListMutex.unlock();
+						ModPackage::descMutex.unlock();
 						SaveSettings();
 
  						delete i->second;
@@ -112,12 +106,11 @@ namespace {
 				for (auto i = imageTasks.begin(); i != imageTasks.end();) {
 					if (i->second->isDone()) {
 						ModPackage* p = i->first;
-						std::unique_lock lock(ModPackage::packageListMutex);
+						std::unique_lock lock(ModPackage::descMutex);
 
 						if (!i->second->hasError) {
-							p->previewPath = "shady_preview_" + p->name.string() + ".png";
-							std::transform(p->previewPath.begin() + 14, p->previewPath.end(), p->previewPath.begin() + 14, tolower); // better convertion/comparison?
-							package.insert(p->previewPath, i->second->data);
+							p->previewName = "shady_preview_" + p->name + ".png";
+							ModPackage::basePackage->insert(p->previewName, i->second->data);
 						} p->downloadingPreview = false;
 
  						delete i->second;
@@ -166,8 +159,8 @@ namespace {
 			if (package->downloading) return;
 
 			package->downloading = true;
-			std::filesystem::path filename(ModPackage::basePath / package->name);
-			filename += (package->ext = ".zip"); filename += ".part";
+			std::filesystem::path filename(package->name);
+			filename += ".part";
 			try {
 				std::filesystem::remove(filename);
 			} catch (std::filesystem::filesystem_error err) {return;}
@@ -199,21 +192,15 @@ namespace {
 }
 
 ModPackage::ModPackage(const std::string& name, const nlohmann::json::value_type& data)
-    : name(name), ext(".zip"), data(data) {
+    : name(name), path(basePath / (name + ".zip")), data(data), fileExists(std::filesystem::exists(path)) {
 
     if (data.count("tags") && data["tags"].is_array()) for (auto& tag : data["tags"]) {
 		tags.push_back(tag.get<std::string>());
-	}
-
-	std::filesystem::path path(basePath / name); path += ext;
-	fileExists = std::filesystem::exists(path);
+	};
 }
 
 ModPackage::ModPackage(const std::filesystem::path& filename) 
-    : name(filename.stem()), ext(filename.extension()), data({}) {
-
-	fileExists = std::filesystem::exists(basePath / filename);
-}
+    : name(filename.stem().string()), path(filename), data({}), fileExists(std::filesystem::exists(filename)) {}
 
 void ModPackage::downloadFile() { downloadController.downloadFile(this); }
 void ModPackage::downloadPreview() { downloadController.downloadImage(this); }
@@ -241,11 +228,11 @@ void ModPackage::LoadFromLocalData() {
 		std::ifstream input(basePath / "packages.json");
 		try {input >> localConfig;} catch (...) {}
 
-		std::shared_lock lock(packageListMutex);
+		std::unique_lock lock(descMutex);
 		for (auto& entry : localConfig.items()) {
 			std::filesystem::path filename(basePath / (entry.key() + ".zip"));
 			if (std::filesystem::exists(filename))
-				packageList.push_back(new ModPackage(entry.key(), entry.value()));
+				descPackage.push_back(new ModPackage(entry.key(), entry.value()));
 		}
 	}
 }
@@ -256,11 +243,69 @@ void ModPackage::LoadFromFilesystem() {
         auto ext = iter->path().extension();
         if (isDir || ext == ".zip" || ext == ".dat") {
 			if (iter->path().stem() == "shady-loader") continue;
-			std::shared_lock lock(packageListMutex);
-			if (!findPackage(iter->path().stem().string())) packageList.push_back(new ModPackage(iter->path().filename()));
+			std::unique_lock lock(descMutex);
+			if (!findPackage(iter->path().stem().string())) descPackage.push_back(new ModPackage(iter->path().filename()));
 		}
 	}
 }
 
 void ModPackage::LoadFromRemote() { downloadController.fetchRemote(); }
 bool ModPackage::Notify() { return downloadController.notify(); }
+
+void LoadPackage() {
+	ModPackage::LoadFromLocalData();
+	ModPackage::LoadFromFilesystem();
+
+	const std::string spath = (ModPackage::basePath / L"shady-loader.ini").string();
+	std::shared_lock lock(ModPackage::descMutex);
+	for (auto& package : ModPackage::descPackage) {
+		if (GetPrivateProfileIntA("Packages", package->name.c_str(), false, spath.c_str())) {
+			EnablePackage(package);
+			package->watcher = ShadyUtil::FileWatcher::create(package->path);
+		}
+	}
+
+	if (iniAutoUpdate) ModPackage::LoadFromRemote();
+}
+
+void UnloadPackage() {
+	std::unique_lock lock(ModPackage::descMutex);
+	for (auto& package : ModPackage::descPackage) {
+		if (package->isEnabled()) {
+			DisablePackage(package);
+			if (package->watcher) {
+				delete package->watcher;
+				package->watcher = 0;
+			}
+		}
+	}
+
+	ModPackage::descPackage.clear();
+}
+
+void ModPackage::CheckUpdates() {
+	ShadyUtil::FileWatcher* current;
+	while(current = ShadyUtil::FileWatcher::getNextChange()) {
+		ModPackage* package = 0;
+		{ std::shared_lock lock(ModPackage::descMutex);
+		for (auto p : ModPackage::descPackage) {
+			if (p->watcher == current) { package = p; break; }
+		} }
+
+		if (package) switch (current->action) {
+		case ShadyUtil::FileWatcher::CREATED:
+			EnablePackage(package);
+			break;
+		case ShadyUtil::FileWatcher::REMOVED:
+			DisablePackage(package);
+			break;
+		case ShadyUtil::FileWatcher::RENAMED:
+			package->path.replace_filename(current->filename);
+			break;
+		case ShadyUtil::FileWatcher::MODIFIED:
+			DisablePackage(package);
+			EnablePackage(package);
+			break;
+		}
+	}
+}

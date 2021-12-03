@@ -3,6 +3,7 @@
 #include <sstream>
 #include <SokuLib.hpp>
 #include <curl/curl.h>
+#include <memory>
 
 #include "../Core/package.hpp"
 #include "../Core/reader.hpp"
@@ -10,7 +11,6 @@
 #include "menu.hpp"
 #include "../Lua/lualibs/soku.hpp"
 
-ShadyCore::PackageEx package; // TODO limit access and fix lua
 namespace {
     auto __readerCreate = reinterpret_cast<void* (__stdcall *)(const char *filename, unsigned int *size, unsigned int *offset)>(0x0041c080);
     auto __loader = reinterpret_cast<int(*)()>(0);
@@ -30,17 +30,17 @@ static void* __stdcall readerCreate(const char *filename, unsigned int *_size, u
     int esi_value;
 	__asm mov esi_value, esi
 
-    loadLock.lock_shared();
-    auto iter = package.find(filename);
+    ModPackage::CheckUpdates();
+    auto iter = ModPackage::basePackage->find(filename);
 
     void* result;
-    if (iter != package.end()) {
+    if (iter != ModPackage::basePackage->end()) {
         auto type = iter.fileType();
         *_offset = 0x40000000; // just to hold a value
         if (type.format <= 0 || type.format >= 4) { // || type == ShadyCore::FileType::TYPE_UNKNOWN
-            *_size = iter->second->getSize();
+            *_size = iter.entry().getSize();
             *(int*)esi_value = ShadyCore::entry_reader_vtbl;
-            result = new ShadyCore::EntryReader(*iter->second, loadLock);
+            result = new ShadyCore::EntryReader(iter.entry(), *iter.entry().getParent());
         } else {
             // TODO this convertion is slow, change it
             std::istream& input = iter->second->open();
@@ -63,7 +63,6 @@ static void* __stdcall readerCreate(const char *filename, unsigned int *_size, u
             mov result, eax;
         }
     }
-    loadLock.unlock_shared();
 
     return result;
 }
@@ -119,7 +118,7 @@ static int _HookLoader() {
     if (__loader) __loader();
     curl_global_init(CURL_GLOBAL_DEFAULT);
 
-    package.merge(std::filesystem::relative(ModPackage::basePath / L"shady-loader.dat"));
+    ModPackage::basePackage->merge(ModPackage::basePath / L"shady-loader.dat");
 
     DWORD dwOldProtect;
     VirtualProtect((PVOID)TEXT_SECTION_OFFSET, TEXT_SECTION_SIZE, PAGE_EXECUTE_WRITECOPY, &dwOldProtect);
@@ -130,8 +129,6 @@ static int _HookLoader() {
     __titleOnProcess  = SokuLib::TamperDword(&SokuLib::VTable_Title.onProcess, titleOnProcess);
     __titleOnRender  = SokuLib::TamperDword(&SokuLib::VTable_Title.onRender, titleOnRender);
     VirtualProtect((PVOID)RDATA_SECTION_OFFSET, RDATA_SECTION_SIZE, dwOldProtect, &dwOldProtect);
-
-    if (iniAutoUpdate) ModPackage::LoadFromRemote();
 
     _initialized = true;
     // set EAX to restore hooked instruction
@@ -157,9 +154,14 @@ void UnloadLoader() {
 
     if (!_initialized) return;
     DWORD dwOldProtect;
-    ::VirtualProtect(reinterpret_cast<LPVOID>(0x0040D227), 5, PAGE_EXECUTE_WRITECOPY, &dwOldProtect);
+    VirtualProtect((PVOID)TEXT_SECTION_OFFSET, TEXT_SECTION_SIZE, PAGE_EXECUTE_WRITECOPY, &dwOldProtect);
     SokuLib::TamperNearJmpOpr(0x0040D227, __readerCreate);
-    ::VirtualProtect(reinterpret_cast<LPVOID>(0x0040D227), 5, dwOldProtect, &dwOldProtect);
+    VirtualProtect((PVOID)TEXT_SECTION_OFFSET, TEXT_SECTION_SIZE, dwOldProtect, &dwOldProtect);
+
+    VirtualProtect((PVOID)RDATA_SECTION_OFFSET, RDATA_SECTION_SIZE, PAGE_EXECUTE_WRITECOPY, &dwOldProtect);
+    SokuLib::TamperDword(&SokuLib::VTable_Title.onProcess, __titleOnProcess);
+    SokuLib::TamperDword(&SokuLib::VTable_Title.onRender, __titleOnRender);
+    VirtualProtect((PVOID)RDATA_SECTION_OFFSET, RDATA_SECTION_SIZE, dwOldProtect, &dwOldProtect);
 
     // TODO join downloadController before this
     curl_global_cleanup();

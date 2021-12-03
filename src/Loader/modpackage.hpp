@@ -1,30 +1,35 @@
 #pragma once
 
+#include "../Core/package.hpp"
+#include "../Core/util/filewatcher.hpp"
 #include "asynctask.hpp"
-#include <shared_mutex>
+#include <memory>
 
 class ModPackage {
 public:
     static std::filesystem::path basePath;
-    static std::vector<ModPackage*> packageList;
-    static std::shared_mutex packageListMutex;
+    static std::unique_ptr<ShadyCore::PackageEx> basePackage;
+    static std::vector<ModPackage*> descPackage;
+    static std::shared_mutex descMutex;
     static void LoadFromLocalData();
     static void LoadFromFilesystem();
     static void LoadFromRemote();
     static bool Notify();
+    static void CheckUpdates();
 
-    bool enabled = false;
-    std::filesystem::path name;
-    std::filesystem::path ext;
-    std::string previewPath;
-    nlohmann::json data;
-    int packageId;
+    ShadyCore::Package* package = 0;
+    const std::string name;
+    std::filesystem::path path;
+    std::string previewName;
+    nlohmann::json::value_type data;
     std::vector<std::string> tags;
     bool requireUpdate = false;
     bool fileExists = false;
     bool downloading = false;
     bool downloadingPreview = false;
+    ShadyUtil::FileWatcher* watcher = 0;
 
+    inline bool isEnabled() {return package;}
     inline bool isLocal() {return fileExists && (!data.count("version") || data.value("version", "").empty());}
     inline std::string driveId() {return data.value("id", "");}
     inline std::string version() {return data.value("version", "");}

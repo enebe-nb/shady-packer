@@ -2,24 +2,6 @@
 #include <string>
 #include <unordered_set>
 
-// const ShadyCore::FileType ShadyCore::FileType::typeDText(TYPE_TEXT, false, ".txt", ".cv0");
-// const ShadyCore::FileType ShadyCore::FileType::typeDTable(TYPE_TEXT, false, ".csv", ".cv1");
-// const ShadyCore::FileType ShadyCore::FileType::typeDLabel(TYPE_LABEL, false, ".lbl", ".sfl");
-// const ShadyCore::FileType ShadyCore::FileType::typeDImage(TYPE_IMAGE, false, ".png", ".cv2");
-// const ShadyCore::FileType ShadyCore::FileType::typeDPalette(TYPE_PALETTE, false, ".act", ".pal");
-// const ShadyCore::FileType ShadyCore::FileType::typeDSfx(TYPE_SFX, false, ".wav", ".cv3");
-// const ShadyCore::FileType ShadyCore::FileType::typeDGui(TYPE_GUI, false, ".xml", ".dat");
-// const ShadyCore::FileType ShadyCore::FileType::typeDAnimation(TYPE_ANIMATION, false, ".xml", ".pat");
-// const ShadyCore::FileType ShadyCore::FileType::typeDPattern(TYPE_PATTERN, false, ".xml", ".pat");
-// const ShadyCore::FileType ShadyCore::FileType::typeEText(TYPE_TEXT, true, ".cv0", ".txt");
-// const ShadyCore::FileType ShadyCore::FileType::typeETable(TYPE_TEXT, true, ".cv1", ".csv");
-// const ShadyCore::FileType ShadyCore::FileType::typeELabel(TYPE_LABEL, true, ".sfl", ".lbl");
-// const ShadyCore::FileType ShadyCore::FileType::typeEImage(TYPE_IMAGE, true, ".cv2", ".png");
-// const ShadyCore::FileType ShadyCore::FileType::typeEPalette(TYPE_PALETTE, true, ".pal", ".act");
-// const ShadyCore::FileType ShadyCore::FileType::typeESfx(TYPE_SFX, true, ".cv3", ".wav");
-// const ShadyCore::FileType ShadyCore::FileType::typeEGui(TYPE_GUI, true, ".dat", ".xml");
-// const ShadyCore::FileType ShadyCore::FileType::typeEAnimation(TYPE_ANIMATION, true, ".pat", ".xml");
-// const ShadyCore::FileType ShadyCore::FileType::typeEPattern(TYPE_PATTERN, true, ".pat", ".xml");
 namespace {
     using FT = ShadyCore::FileType;
 
@@ -58,44 +40,6 @@ ShadyCore::FileType ShadyCore::FileType::get(uint32_t extValue) {
 }
 
 /*
-const ShadyCore::FileType& ShadyCore::FileType::getSimple(const char* name) {
-    static const FileType* extMap[] = {
-        &typeDPalette, // ".act"
-        &typeDTable, // ".csv"
-        &typeEText, // ".cv0"
-        &typeETable, // ".cv1"
-        &typeEImage, // ".cv2"
-        &typeESfx, // ".cv3"
-        &typeEGui, // ".dat"
-        &typeDLabel, // ".lbl"
-        &typeEPalette, // ".pal"
-        &typeEPattern, // ".pat"
-        &typeDImage, // ".png"
-        &typeELabel, // ".sfl"
-        &typeDText, // ".txt"
-        &typeDSfx, // ".wav"
-        &typeDPattern, // ".xml"
-    }; const uint32_t extMapCount = 15;
-
-    const char* ext = strrchr(name, '.');
-    if (!ext) return typePackage;
-    if (strcmp(ext, ".zip") == 0) return typePackage;
-
-    uint32_t extV = getExtValue(ext);
-    uint32_t lb = 0;
-    uint32_t ub = extMapCount - 1;
-    const FileType* type = &typeUnknown;
-
-    while(ub >= lb) {
-        uint32_t i = lb + (ub - lb) / 2;
-        if (extV == extMap[i]->extValue) { type = extMap[i]; break; }
-        if (extV > extMap[i]->extValue) lb = i + 1;
-        else ub = i - 1;
-    }
-
-    return *type;
-}
-
 const ShadyCore::FileType& ShadyCore::FileType::get(const char* name, std::istream& input) {
     const FileType& type = getSimple(name);
 
@@ -168,17 +112,6 @@ const ShadyCore::FileType& ShadyCore::FileType::get(BasePackageEntry& entry) {
 
 	return type;
 }
-
-const ShadyCore::FileType& ShadyCore::FileType::getByName(const char* name) {
-    if (!name) return typeUnknown;
-    // TODO remaining
-    if (strcmp(name, "lbl") == 0
-        || strcmp(name, "label") == 0) return typeDLabel;
-    if (strcmp(name, "png") == 0) return typeDImage;
-    if (strcmp(name, "act") == 0) return typeDPalette;
-    if (strcmp(name, "wav") == 0) return typeDSfx;
-    return typeUnknown;
-}
 */
 
 ShadyCore::Resource* ShadyCore::createResource(const FileType::Type type, const FileType::Format format) {
@@ -210,10 +143,6 @@ ShadyCore::Resource* ShadyCore::readResource(const FileType::Type type, const Fi
 		else ResourceDReader(resource, input);
 	} return resource;
 }
-
-	//void readResource(Resource*, const FileType::Format, std::istream&);
-	//void writeResource(Resource*, const FileType::Format, std::ostream&);
-	//void convertResource(const FileType::Type, const FileType::Format, std::istream&, const FileType::Format, std::ostream&);
 
 void ShadyCore::readResource(Resource* resource, const FileType::Format format, std::istream& input) {
     // TODO remake readers for any format

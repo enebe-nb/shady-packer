@@ -1,6 +1,7 @@
 #include "script.hpp"
 #include "logger.hpp"
 #include "lualibs.hpp"
+#include "lualibs/soku.hpp"
 
 #include <fstream>
 #include <sstream>
@@ -42,6 +43,7 @@ ShadyLua::LuaScript::~LuaScript() {
     if (lua_getglobal(L, "AtExit") == LUA_TFUNCTION) {
         if (lua_pcall(L, 0, 0, 0)) Logger::Error(lua_tostring(L, -1));
     }
+    RemoveEvents(this);
     ScriptMap.erase(L);
     if (fnDestroy) fnDestroy(userdata);
     lua_close(L);

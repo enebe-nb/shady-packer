@@ -19,6 +19,16 @@ namespace {
         {static const int valueHolder = value; return (int*)&valueHolder;}
 }
 
+void ShadyLua::RemoveEvents(LuaScript* script) {
+    std::unique_lock lock(eventMapLock);
+    for (auto& hooks : eventMap) {
+        auto i = hooks.second.begin(); while (i != hooks.second.end()) {
+            if (i->second == script) i = hooks.second.erase(i);
+            else ++i;
+        }
+    }
+}
+
 /*
 static int soku_Player_Character(const Soku::CPlayer* player) {
     return (int)player->CharID();

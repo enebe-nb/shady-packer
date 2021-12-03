@@ -6,22 +6,28 @@
 #include <list>
 #include <xhash>
 
-ShadyCore::Package::Key::Key(const std::string_view& str) {
-	size_t bufferSize = str.size() >= 4 && str[str.size() - 4] == '.' ? str.size() - 3 : str.size() + 1;
-	char* buffer = new char[bufferSize];
-	int i = 0; while(i < str.size() && str[i] != '.') {
+static inline std::string_view createNormalizedName(const std::string_view& str) {
+	char* buffer = new char[str.size() + 1];
+	int dotPos = str.size();
+	int i = 0; while(i < str.size()) {
 		if (str[i] >= 0x80 && str[i] <= 0xa0 || str[i] >= 0xe0 && str[i] <= 0xff) {
 			// sjis character (those stand pictures)
 			buffer[i] = str[i];
 			++i; buffer[i] = str[i];
 		} else if (str[i] == '/' || str[i] == '\\') buffer[i] = '_';
-		else buffer[i] = str[i];
+		else buffer[i] = std::tolower(str[i]);
+		if (buffer[i] == '.') dotPos = i;
 		++i;
 	} buffer[i] = '\0';
 
-	name = std::string_view(buffer, i);
-	if (i < str.size()) fileType = FileType::get(FileType::getExtValue(&str[i]));
+	return std::string_view(buffer, dotPos);
 }
+
+ShadyCore::Package::Key::Key(const std::string_view& str)
+	: name(createNormalizedName(str)), fileType(FileType::get(FileType::getExtValue(name.data() + name.size()))) {}
+
+ShadyCore::Package::Key::Key(const std::string_view& str, FileType::Type type)
+	: name(createNormalizedName(str)), fileType(type, FileType::FORMAT_UNKNOWN) {}
 
 ShadyCore::Package::~Package() {
 	for (auto& entry : entries) {
@@ -30,11 +36,10 @@ ShadyCore::Package::~Package() {
 }
 
 ShadyCore::Package::MapType::iterator ShadyCore::Package::insert(const std::string_view& name, BasePackageEntry* entry) {
-	std::lock_guard lock(*this);
+	std::unique_lock lock(*this);
 	auto result = entries.emplace(name, entry);
 	if (result.second) return result.first;
 
-	// TODO collision
 	delete entry;
 	return end();
 }
@@ -88,23 +93,24 @@ ShadyCore::Package::Package(const std::filesystem::path& basePath) : basePath(ba
 namespace ShadyCore {
 	class AliasPackageEntry : public BasePackageEntry {
 	protected:
-		BasePackageEntry* entry;
+		BasePackageEntry& entry;
 	public:
-		inline AliasPackageEntry(Package* parent, BasePackageEntry* entry) : BasePackageEntry(parent, entry->getSize()), entry(entry) {}
+		inline AliasPackageEntry(Package* parent, BasePackageEntry& entry) : BasePackageEntry(parent, entry.getSize()), entry(entry) {}
 
-		inline StorageType getStorage() const final { return entry->getStorage(); }
-		inline std::istream& open() final { return entry->open(); }
-		inline bool isOpen() const final { return entry->isOpen(); }
-		inline void close() final { entry->close(); }
+		inline StorageType getStorage() const final { return entry.getStorage(); }
+		inline std::istream& open() final { return entry.open(); }
+		inline bool isOpen() const final { return entry.isOpen(); }
+		inline void close() final { entry.close(); }
 	};
 }
 
-ShadyCore::Package::iterator ShadyCore::Package::alias(const std::string_view& name, BasePackageEntry* entry) {
-	BasePackageEntry* newEntry = new AliasPackageEntry(this, entry);
+ShadyCore::Package::iterator ShadyCore::Package::alias(const std::string_view& name, BasePackageEntry& entry) {
+	BasePackageEntry* newEntry = new AliasPackageEntry(entry.getParent(), entry);
 	return insert(name, newEntry);
 }
 
 void ShadyCore::Package::save(const std::filesystem::path& filename, Mode mode, Callback callback, void* userData) {
+	// TODO shared_lock?
 	if (mode == DIR_MODE) return saveDir(filename, callback, userData);
 
 	std::filesystem::path target = std::filesystem::absolute(filename);
@@ -118,6 +124,7 @@ void ShadyCore::Package::save(const std::filesystem::path& filename, Mode mode, 
 }
 
 ShadyCore::FileType ShadyCore::Package::iterator::fileType() const {
+	// TODO cant lock?
 	FileType ft = operator*().first.fileType;
     if (ft.format != FileType::FORMAT_UNKNOWN) return ft;
 
@@ -144,8 +151,8 @@ ShadyCore::FileType ShadyCore::Package::iterator::fileType() const {
 		        operator*().second->close();
                 if (version != 5) break;
 				auto& name = operator*().first.name;
-                if (name.size() >= 6 && strcmp(name.data() + name.size() - 6, "effect") == 0
-                    || name.size() >= 5 && strcmp(name.data() + name.size() - 5, "stand") == 0)
+                if (name.size() >= 6 && name.ends_with("effect")
+                    || name.size() >= 5 && name.ends_with("stand"))
                     ft.format = FileType::SCHEMA_GAME_ANIM;
                 else ft.format = FileType::SCHEMA_GAME_PATTERN;
             } else if(ft.extValue == FileType::getExtValue(".xml")) {
@@ -175,12 +182,25 @@ ShadyCore::PackageEx::~PackageEx() {
 	}
 }
 
-ShadyCore::Package* ShadyCore::PackageEx::merge(const std::filesystem::path& filename) {
-	Package* child = new Package(filename.is_relative() ? basePath / filename : filename);
-
+ShadyCore::Package* ShadyCore::PackageEx::merge(Package* child) {
 	std::scoped_lock lock(*this, *child);
 	groups.push_back(child);
 	entries.merge(child->entries);
+
+	return child;
+}
+
+ShadyCore::Package* ShadyCore::PackageEx::demerge(Package* child) {
+	std::scoped_lock lock(*this, *child);
+	auto iter = std::find(groups.begin(), groups.end(), child);
+	if (iter == groups.end()) return 0;
+
+	groups.erase(iter);
+	auto i = entries.begin(); while(i != entries.end()) {
+		if (child == i->second->getParent()) {
+			child->entries.insert(entries.extract(i++));
+		} else ++i;
+	}
 
 	return child;
 }
@@ -205,42 +225,44 @@ ShadyCore::Package::iterator ShadyCore::PackageEx::insert(const std::string_view
 	return Package::insert(name, new FilePackageEntry(this, tempFile, true));
 }
 
-ShadyCore::Package::iterator ShadyCore::PackageEx::erase(iterator i) {
-	std::lock_guard lock(*this);
+// ShadyCore::Package::iterator ShadyCore::PackageEx::erase(iterator i) {
+// 	std::unique_lock lock(*this);
 
-	if (i->second->getParent() == this) {
-		delete i->second;
-		return entries.erase(i);
-	} else {
-		Package* parent = i->second->getParent();
-		auto result = parent->entries.insert(entries.extract(i++));
-		if (!result.inserted) throw std::logic_error("Error reinserting node to parent. This should not happen!"); // TODO test and remove
-		return i;
-	}
-}
+// 	if (i->second->getParent() == this) {
+// 		delete i->second;
+// 		return entries.erase(i);
+// 	} else {
+// 		// TODO fix locks
+// 		Package* parent = i->second->getParent();
+// 		auto result = parent->entries.insert(entries.extract(i++));
+// 		if (!result.inserted) throw std::logic_error("Error reinserting node to parent. This should not happen!"); // TODO test and remove
+// 		return i;
+// 	}
+// }
 
-ShadyCore::Package::iterator ShadyCore::PackageEx::erase(const std::string_view& name) {
-	std::lock_guard lock(*this);
-	// lock context is required, don't simplify this function
-	iterator i = find(name);
+// ShadyCore::Package::iterator ShadyCore::PackageEx::erase(const std::string_view& name) {
+// 	std::unique_lock lock(*this);
+// 	// lock context is required, don't simplify this function
+// 	iterator i = find(name);
 
-	if (i->second->getParent() == this) {
-		delete i->second;
-		return entries.erase(i);
-	} else {
-		Package* parent = i->second->getParent();
-		auto result = parent->entries.insert(entries.extract(i++));
-		if (!result.inserted) throw std::logic_error("Error reinserting node to parent. This should not happen!"); // TODO test and remove
-		return i;
-	}
-}
+// 	if (i->second->getParent() == this) {
+// 		delete i->second;
+// 		return entries.erase(i);
+// 	} else {
+// 		// TODO fix locks
+// 		Package* parent = i->second->getParent();
+// 		auto result = parent->entries.insert(entries.extract(i++));
+// 		if (!result.inserted) throw std::logic_error("Error reinserting node to parent. This should not happen!"); // TODO test and remove
+// 		return i;
+// 	}
+// }
 
 void ShadyCore::PackageEx::erase(Package* package) {
-	std::lock_guard lock(*this);
+	std::scoped_lock lock(*this, *package);
 	if (!std::erase(groups, package)) return;
 
 	auto i = begin(); while(i != end()) {
-		if (i->second->getParent() == package) {
+		if (package == i.entry().getParent()) {
 			delete i->second;
 			i = entries.erase(i);
 		} else ++i;
@@ -250,11 +272,12 @@ void ShadyCore::PackageEx::erase(Package* package) {
 }
 
 void ShadyCore::PackageEx::clear() {
-	std::lock_guard lock(*this);
+	std::unique_lock lock(*this);
 	for (auto& entry : entries) {
 		delete entry.second;
 	} entries.clear();
 	for (auto group : groups) {
+		// TODO lock?
 		delete group;
 	} groups.clear();
 }

@@ -3,6 +3,7 @@
 #include "resource/readerwriter.hpp"
 
 #include <unordered_map>
+#include <unordered_set>
 #include <shared_mutex>
 #include <filesystem>
 
@@ -13,12 +14,13 @@ namespace ShadyCore {
 	protected:
 		class Key {
 		public:
-			std::string_view name;
-			FileType fileType;
+			const std::string_view name;
+			const FileType fileType;
 
 			Key(const Key&) = delete;
 			Key(Key&&) = delete;
 			Key(const std::string_view&);
+			Key(const std::string_view&, FileType::Type type);
 			inline ~Key() { delete name.data(); }
 
 			struct hash {
@@ -56,28 +58,28 @@ namespace ShadyCore {
 			inline iterator() : MapType::iterator() {}
 			inline iterator(const MapType::iterator& i) : MapType::iterator(i) {}
 			inline const std::string_view& name() const { return operator*().first.name; }
+			inline BasePackageEntry& entry() const { return *operator*().second; }
 			FileType fileType() const;
-			//inline std::istream& open() { return operator*().second->open(); }
-			//inline void close() { return operator*().second->close(); }
+			inline std::istream& open() { return operator*().second->open(); }
+			inline void close() { return operator*().second->close(); }
 		};
 
-		inline Package(const std::filesystem::path& basePath);
-		static Package* create(const std::filesystem::path&);
-
+		Package(const std::filesystem::path& basePath);
 		virtual ~Package();
+
 		inline iterator begin() { return entries.begin(); }
 		inline iterator end() { return entries.end(); }
 		inline iterator find(const std::string_view& name) { return entries.find(name); }
+		inline iterator find(const std::string_view& name, FileType::Type type)
+			{ Key k(name, type); return entries.find(k); }
 		inline size_t size() const { return entries.size(); }
 		inline bool empty() const { return entries.empty(); }
 		inline const std::filesystem::path& getBasePath() { return basePath; }
 
 		//iterator rename(iterator i, const std::string_view& name);
-		iterator alias(const std::string_view& name, BasePackageEntry* entry);
+		iterator alias(const std::string_view& name, BasePackageEntry& entry);
 
 		void save(const std::filesystem::path&, Mode, Callback, void*);
-		//static FileType::Format getFormat(iterator);
-		//static inline FileType getType(iterator i) { FileType type = i->first.fileType; type.format = getFormat(i); return type; }
 		static void underlineToSlash(std::string&);
 	};
 
@@ -89,46 +91,24 @@ namespace ShadyCore {
 		inline PackageEx(const std::filesystem::path& basePath = std::filesystem::current_path()) { this->basePath = basePath; }
 		virtual ~PackageEx();
 
-		Package* merge(const std::filesystem::path& filename);
+		Package* merge(Package* package);
+		Package* demerge(Package* package);
+		void erase(Package* package);
+		inline Package* merge(const std::filesystem::path& filename)
+			{ return merge(new Package(filename.is_relative() ? basePath / filename : filename)); }
 
 		iterator insert(const std::filesystem::path& filename);
 		iterator insert(const std::string_view& name, const std::filesystem::path& filename);
 		iterator insert(const std::string_view& name, std::istream& data); // uses temporary file
 
-		iterator erase(iterator i);
-		iterator erase(const std::string_view& name);
-		void erase(Package* package);
-
+		//iterator erase(iterator i);                   // TODO requires complexes locks
+		//iterator erase(const std::string_view& name); // TODO requires complexes locks
 		void clear();
-	};
-/*
-	class PackageFilter {
-	private:
-		typedef void (Callback)(void*, const char *, unsigned int, unsigned int);
-		Package& package;
-		Package::iterator iter;
-		inline PackageFilter(Package& package) : package(package) {}
-	public:
-		enum Filter : int {
-			FILTER_NONE	= 0,
-			// Sequence Order
-			FILTER_FROM_ZIP_TEXT_EXTENSION	= 1 << 0,
-			FILTER_DECRYPT_ALL				= 1 << 1,
-			FILTER_ENCRYPT_ALL				= 1 << 2,
-			FILTER_TO_ZIP_CONVERTER			= 1 << 3,
-			FILTER_TO_ZIP_TEXT_EXTENSION	= 1 << 4,
-			FILTER_SLASH_TO_UNDERLINE		= 1 << 5,
-			FILTER_UNDERLINE_TO_SLASH		= 1 << 6,
-			FILTER_TO_LOWERCASE				= 1 << 7,
-		};
 
-		static void apply(Package&, Filter, int = -1, Callback* = 0, void* = 0);
-		bool renameEntry(const char*);
-		bool convertEntry(const FileType&);
-		bool convertData(const FileType&);
+		template<class Iterator>
+		void reorder(const Iterator begin, const Iterator end) {
+			for (Iterator i = begin, i != end; ++i) demerge(*i);
+			for (Iterator i = begin, i != end; ++i) merge(*i);
+		}
 	};
-*/
 }
-
-//inline ShadyCore::PackageFilter::Filter& operator|=(ShadyCore::PackageFilter::Filter& l, const ShadyCore::PackageFilter::Filter& r)
-//	{return l = (ShadyCore::PackageFilter::Filter)(l | r);}

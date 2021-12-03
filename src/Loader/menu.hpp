@@ -25,6 +25,7 @@ private:
     SokuLib::Sprite viewOption;
     SokuLib::Sprite viewPreview;
     SokuLib::MenuCursor viewCursor;
+    int orderCursor = -1;
     int scrollPos = 0;
     int state = 0;
     int optionCount = 0;
@@ -37,4 +38,5 @@ public:
 	int onProcess() override;
 	int onRender() override;
     void updateView(int index);
+    void swap(int i, int j);
 };

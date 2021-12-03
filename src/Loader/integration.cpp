@@ -4,7 +4,6 @@
 #include "../Lua/script.hpp"
 #include "../Lua/lualibs.hpp"
 
-extern ShadyCore::PackageEx package;
 namespace {
     struct _lua_file {
         ShadyCore::BasePackageEntry* entry;
@@ -31,24 +30,25 @@ size_t _lua_read(void* userdata, void* file, char* buffer, size_t size) {
 }
 
 void EnablePackage(ModPackage* p) {
-	std::filesystem::path path(p->name); path += p->ext;
-	if (path.is_relative()) path = ModPackage::basePath / path;
+    if (!std::filesystem::is_directory(p->path) && !std::filesystem::is_regular_file(p->path)) return;
 
-    if (std::filesystem::is_directory(path)
-        || std::filesystem::is_regular_file(path)) {
-        
-        //std::string pathu8 = ws2s(path);
-        //p->packageId = package.appendPackage(pathu8.c_str());
-        p->packageId = (int)package.merge(std::filesystem::relative(path));
+    p->package = ModPackage::basePackage->merge(p->path);
+
+    bool initFound = false;
+    auto iter = p->package->find("init.lua");
+    if (iter != p->package->end()) initFound = true;
+    else {
+        iter = ModPackage::basePackage->find("init.lua");
+        if (iter != ModPackage::basePackage->end()) initFound = true;
     }
 
-    auto iter = package.find("init.lua"); // TODO verify validity
-    if (iter != package.end() && (int)iter->second->getParent() == p->packageId) {
-        ShadyLua::LuaScript* script = new ShadyLua::LuaScript(&package, _lua_open, _lua_read);
+    if (initFound && iter.entry().getParent() == p->package) {
+        ShadyLua::LuaScript* script = new ShadyLua::LuaScript(ModPackage::basePackage.get(), _lua_open, _lua_read);
         ShadyLua::LualibBase(script->L, ModPackage::basePath);
         ShadyLua::LualibMemory(script->L);
         ShadyLua::LualibResource(script->L);
         ShadyLua::LualibSoku(script->L);
+        // TODO this doesn't work right
         if (script->load("init.lua") != LUA_OK || !script->run()) {
             delete script;
             p->script = 0;
@@ -60,5 +60,6 @@ void EnablePackage(ModPackage* p) {
 
 void DisablePackage(ModPackage* p) {
     if (p->script) delete (ShadyLua::LuaScript*)p->script;
-    if (p->packageId >= 0) package.erase((ShadyCore::Package*)p->packageId);
+    if (p->package) ModPackage::basePackage->erase(p->package);
+    p->script = p->package = 0;
 }

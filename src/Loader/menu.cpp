@@ -1,6 +1,7 @@
 #include "main.hpp"
 #include "modpackage.hpp"
 #include "menu.hpp"
+#include "../Core/util/filewatcher.hpp"
 
 namespace {
 	ModPackage* selectedPackage = 0;
@@ -10,12 +11,16 @@ namespace {
 }
 
 static void setPackageEnabled(ModPackage* package, bool value) {
-	if (package->enabled == value) return;
-	package->enabled = value;
-	if (package->enabled) {
+	if (package->isEnabled() == value) return;
+	if (value) {
 		EnablePackage(package);
+		package->watcher = ShadyUtil::FileWatcher::create(package->path);
 	} else {
 		DisablePackage(package);
+		if (package->watcher) {
+			delete package->watcher;
+			package->watcher = 0;
+		}
 	}
 }
 
@@ -37,21 +42,20 @@ void ModList::renderScroll(float x, float y, int offset, int size, int view) {
 void ModList::updateList() {
 	this->names.clear();
 	this->types.clear();
-	ModPackage::packageListMutex.lock_shared();
-	for (auto package : ModPackage::packageList) {
-		auto name = package->name.string();
-		SokuLib::String str; str.assign(name.c_str(), name.length());
-		this->names.push_back(str);
-		this->types.push_back(package->enabled);
-	} ModPackage::packageListMutex.unlock_shared();
+	ModPackage::descMutex.lock_shared();
+	for (auto package : ModPackage::descPackage) {
+		this->names.emplace_back();
+		this->names.back().assign(package->name.c_str(), package->name.length());
+		this->types.push_back(package->isEnabled());
+	} ModPackage::descMutex.unlock_shared();
 	this->updateResources();
 }
 
 int ModList::appendLine(SokuLib::String& out, void* unknown, SokuLib::Deque<SokuLib::String>& list, int index) {
-	std::shared_lock lock(ModPackage::packageListMutex);
-	ModPackage* package = ModPackage::packageList[index];
+	std::shared_lock lock(ModPackage::descMutex);
+	ModPackage* package = ModPackage::descPackage[index];
 	int color = package->requireUpdate ? 0xff8040
-		: package->enabled ? 0x40ff40
+		: package->isEnabled() ? (package->package->empty() ? 0x40ff40 : 0xff2020)
 		: package->isLocal() ? 0x6060d0
 		: 0x808080;
 
@@ -101,15 +105,32 @@ int ModMenu::onProcess() {
 			this->updateView(modCursor.pos);
 		}
 
+		if (SokuLib::inputMgrs.input.c == 1) {
+			SokuLib::playSEWaveBuffer(0x28);
+			if (orderCursor >= 0) {
+				this->swap(orderCursor, modCursor.pos);
+				orderCursor = -1;
+			} else orderCursor = modCursor.pos;
+			return true;
+		}
+
 		if (SokuLib::inputMgrs.input.b == 1) {
 			SokuLib::playSEWaveBuffer(0x29);
-			return false; // close
+			if (orderCursor >= 0) {
+				orderCursor = -1;
+				return true;
+			} else return false; // close
 		}
 
 		if (SokuLib::inputMgrs.input.a == 1 && this->optionCount) {
 			SokuLib::playSEWaveBuffer(0x28);
-			this->state = 1;
-			viewCursor.set(&SokuLib::inputMgrs.input.verticalAxis, this->optionCount);
+			if (orderCursor >= 0) {
+				this->swap(orderCursor, modCursor.pos);
+				orderCursor = -1;
+			} else {
+				this->state = 1;
+				viewCursor.set(&SokuLib::inputMgrs.input.verticalAxis, this->optionCount);
+			}
 		}
 	// Cursor On View
 	} else if (this->state == 1) {
@@ -124,12 +145,12 @@ int ModMenu::onProcess() {
 		}
 
 		if (SokuLib::inputMgrs.input.a == 1) {
-			std::shared_lock lock(ModPackage::packageListMutex);
+			std::shared_lock lock(ModPackage::descMutex);
 			SokuLib::playSEWaveBuffer(0x28);
-			ModPackage* package = ModPackage::packageList[modCursor.pos];
+			ModPackage* package = ModPackage::descPackage[modCursor.pos];
 			switch (options[viewCursor.pos]) {
 			case OPTION_ENABLE_DISABLE:
-				setPackageEnabled(package, !package->enabled);
+				setPackageEnabled(package, !package->package);
 				SaveSettings();
 				modList.updateList();
 				break;
@@ -157,7 +178,11 @@ int ModMenu::onRender() {
 
 	SokuLib::CDesign::Object* pos;
 	design.getById(&pos, 100);
-	if (this->state == 0) SokuLib::MenuCursor::render(pos->x2, pos->y2 + (modCursor.pos - scrollPos)*16, 256);
+	if (this->state == 0) {
+		SokuLib::MenuCursor::render(pos->x2, pos->y2 + (modCursor.pos - scrollPos)*16, 256);
+		if (orderCursor >= scrollPos && orderCursor < scrollPos + 16)
+			SokuLib::MenuCursor::render(pos->x2, pos->y2 + (orderCursor - scrollPos)*16, 256);
+	}
 	modList.renderScroll(pos->x2, pos->y2, scrollPos, modList.getLength(), 17);
 
 	design.getById(&pos, 200);
@@ -174,8 +199,8 @@ int ModMenu::onRender() {
 }
 
 void ModMenu::updateView(int index) {
-	std::shared_lock lock(ModPackage::packageListMutex);
-	ModPackage* package = ModPackage::packageList[index];
+	std::shared_lock lock(ModPackage::descMutex);
+	ModPackage* package = ModPackage::descPackage[index];
 	SokuLib::FontDescription fontDesc {
 		"",
 		0xff, 0xa0, 0xff, 0xa0, 0xff, 0xff,
@@ -187,7 +212,7 @@ void ModMenu::updateView(int index) {
 	int textureId;
 
 	font.setIndirect(fontDesc);
-	SokuLib::textureMgr.createTextTexture(&textureId, package->name.string().c_str(), font, 220, 24, 0, 0);
+	SokuLib::textureMgr.createTextTexture(&textureId, package->name.c_str(), font, 220, 24, 0, 0);
 	if (viewTitle.dxHandle) SokuLib::textureMgr.remove(viewTitle.dxHandle);
 	viewTitle.setTexture2(textureId, 0, 0, 220, 24);
 
@@ -216,7 +241,7 @@ void ModMenu::updateView(int index) {
 		this->optionCount = 0;
 		temp = "Downloading ...";
 	} else if (package->fileExists) {
-		temp = (package->enabled ? "Disable<br>" : "Enable<br>");
+		temp = (package->isEnabled() ? "Disable<br>" : "Enable<br>");
 		this->options[0] = OPTION_ENABLE_DISABLE;
 		if (package->requireUpdate) {
 			temp += "Update";
@@ -235,9 +260,9 @@ void ModMenu::updateView(int index) {
 	viewOption.setTexture2(textureId, 0, 0, 220, 40);
 
 	if (viewPreview.dxHandle) SokuLib::textureMgr.remove(viewPreview.dxHandle);
-	if (!package->previewPath.empty()) {
+	if (!package->previewName.empty()) {
 		int width, height;
-		SokuLib::textureMgr.loadTexture(&textureId, package->previewPath.c_str(), &width, &height);
+		SokuLib::textureMgr.loadTexture(&textureId, package->previewName.c_str(), &width, &height);
 		viewPreview.setTexture2(textureId, 0, 0, width, height);
 	} else {
 		package->downloadPreview();
@@ -245,25 +270,49 @@ void ModMenu::updateView(int index) {
 	}
 }
 
-void LoadPackage() {
-	ModPackage::LoadFromLocalData();
-	ModPackage::LoadFromFilesystem();
+void ModMenu::swap(int i, int j) {
+	if (i == j) return;
+	if (i > j) std::swap(i, j);
 
-	std::shared_lock lock(ModPackage::packageListMutex);
-	for (auto& package : ModPackage::packageList) {
-		bool isEnabled = GetPrivateProfileIntW(L"Packages", package->name.c_str(),
-			false, (ModPackage::basePath / L"shady-loader.ini").c_str());
-		setPackageEnabled(package, isEnabled);
-	}
-}
+	std::list<ShadyCore::Package*> enabled;
+	{ std::unique_lock lock(ModPackage::descMutex);
+	// 	ModPackage* p;
 
-void UnloadPackage() {
-	std::shared_lock lock(ModPackage::packageListMutex);
-	loadLock.lock();
-	for (auto& package : ModPackage::packageList) {
-		setPackageEnabled(package, false);
-		delete package;
-	}
-	loadLock.unlock();
-	ModPackage::packageList.clear();
+	// 	int l = min(i, j) + 1, r = max(i, j) - 1;
+	// 	p = ModPackage::descPackage[r+1];
+	// 	if (p->isEnabled()) {
+	// 		enabled.push_back(p);
+	// 		DisablePackage(p);
+	// 	}
+	// 	for (int k = l; k <= r; ++k) {
+	// 		p = ModPackage::descPackage[k];
+	// 		if (p->isEnabled()) {
+	// 			enabled.push_back(p);
+	// 			DisablePackage(p);
+	// 		}
+	// 	}
+	// 	p = ModPackage::descPackage[l-1];
+	// 	if (p->isEnabled()) {
+	// 		enabled.push_back(p);
+	// 		DisablePackage(p);
+	// 	}
+
+	// 	p = ModPackage::descPackage[i];
+	// 	ModPackage::descPackage[i] = ModPackage::descPackage[j];
+	// 	ModPackage::descPackage[j] = p;
+
+	// 	while(!enabled.empty()) {
+	// 		EnablePackage(enabled.front());
+	// 		enabled.pop_front();
+	// 	}
+
+		std::swap(ModPackage::descPackage[i], ModPackage::descPackage[j]);
+
+		for (; i <= j; ++i) if (ModPackage::descPackage[i]->isEnabled())
+			enabled.push_back(ModPackage::descPackage[i]->package);
+	} if (enabled.size() > 1) ModPackage::basePackage->reorder(enabled.begin(), enabled.end());
+
+	modList.updateList();
+	this->updateView(modCursor.pos);
+	SaveSettings();
 }

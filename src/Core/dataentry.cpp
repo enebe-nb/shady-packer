@@ -171,7 +171,7 @@ std::istream& ShadyCore::DataPackageEntry::open() {
 	if (!base) base = new std::filebuf();
 	else base->close();
 
-	base->open(parent->getBasePath(), std::ios::in | std::ios::binary);
+	base->open(parent->getBasePath(), std::ios::in | std::ios::binary, _SH_DENYWR);
 	base->pubseekoff(packageOffset, std::ios::beg);
 	fileFilter.setBaseBuffer(base);
 

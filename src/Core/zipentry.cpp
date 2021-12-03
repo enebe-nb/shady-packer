@@ -82,6 +82,7 @@ std::streambuf::pos_type ShadyCore::ZipStream::seekpos(pos_type spos, std::ios::
 }
 
 void ShadyCore::ZipStream::open(const char* packageName, const char* innerName) {
+	// TODO deny write access and fix unicode path
 	pkgFile = zip_open(packageName, ZIP_RDONLY, 0);
 
 	zip_stat_t stat;
@@ -215,7 +216,6 @@ void ShadyCore::Package::loadZip(const std::filesystem::path& path) {
 		zip_stat_t fileStat;
 		zip_stat_index(file, i, 0, &fileStat);
 
-		// TODO normalize name?
 		this->insert(fileStat.name, new ZipPackageEntry(this, fileStat.name, fileStat.size));
 	}
 

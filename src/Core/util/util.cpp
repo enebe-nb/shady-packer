@@ -1,6 +1,7 @@
 #include "strallocator.hpp"
 #include "riffdocument.hpp"
 #include "xmlprinter.hpp"
+#include "filewatcher.hpp"
 
 ShadyUtil::StrAllocator::~StrAllocator() {
     for(char* str : strings) {
@@ -134,4 +135,154 @@ void ShadyUtil::XmlPrinter::closeNode() {
 	delete[] stack.top();
 	stack.pop();
 	isOpened = false;
+}
+
+#include <Windows.h>
+#include <mutex>
+
+namespace {
+	struct Change {
+		ShadyUtil::FileWatcher* watcher;
+		ShadyUtil::FileWatcher::Action action;
+	};
+	std::list<Change> changes;
+
+	const size_t bufferSize = 32*1024;
+	struct Delegate {
+		HANDLE handle;
+		OVERLAPPED overlapped = {0};
+		uint8_t buffer[bufferSize];
+		std::filesystem::path folder;
+		std::list<ShadyUtil::FileWatcher*> files;
+
+		inline ShadyUtil::FileWatcher* _find(const std::wstring_view& filename) {
+			for (auto file : files) if (file->filename == filename) return file;
+			return 0;
+		}
+
+		static inline Delegate* create(const std::filesystem::path& folder) {
+			HANDLE handle = CreateFileW(folder.c_str(), FILE_LIST_DIRECTORY,
+				FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+				nullptr, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OVERLAPPED, nullptr);
+			if (handle == INVALID_HANDLE_VALUE) return 0;
+
+			auto delegate = new Delegate;
+			delegate->handle = handle;
+			delegate->overlapped.hEvent = CreateEvent(nullptr, true, false, nullptr);
+			if (!delegate->overlapped.hEvent) throw std::runtime_error("Fail to create a event " + std::to_string(GetLastError())); // TODO
+			if (!ReadDirectoryChangesW(handle, delegate->buffer, bufferSize, false,
+				FILE_NOTIFY_CHANGE_FILE_NAME | FILE_NOTIFY_CHANGE_DIR_NAME | FILE_NOTIFY_CHANGE_LAST_WRITE,
+				nullptr, &delegate->overlapped, nullptr)) throw std::runtime_error("Fail to read directory (start) " + std::to_string(GetLastError())); // TODO
+			delegate->folder = folder;
+
+			return delegate;
+		}
+
+		inline ~Delegate() { // TODO better cancel
+			DWORD bytes;
+			CancelIoEx(handle, &overlapped);
+			GetOverlappedResult(handle, &overlapped, &bytes, true);
+			CloseHandle(overlapped.hEvent);
+			CloseHandle(handle);
+		}
+
+		void doHandle() {
+			DWORD bytes;
+			if (GetOverlappedResult(handle, &overlapped, &bytes, true)) {
+				FILE_NOTIFY_INFORMATION* info = reinterpret_cast<FILE_NOTIFY_INFORMATION*>(buffer);
+				std::wstring_view oldFilename;
+				if (bytes) for(;;) {
+					std::wstring_view filename(info->FileName, info->FileNameLength/sizeof(WCHAR));
+
+					ShadyUtil::FileWatcher* watcher;
+					switch (info->Action) {
+					case FILE_ACTION_ADDED:
+					case FILE_ACTION_REMOVED:
+					case FILE_ACTION_MODIFIED:
+						if (watcher = _find(filename)) changes.push_back({watcher, (ShadyUtil::FileWatcher::Action)info->Action});
+						break;
+					case FILE_ACTION_RENAMED_OLD_NAME:
+						oldFilename = filename;
+						break;
+					case FILE_ACTION_RENAMED_NEW_NAME:
+						if (watcher = _find(oldFilename)) {
+							watcher->filename = filename;
+							changes.push_back({watcher, ShadyUtil::FileWatcher::RENAMED});
+						} break;
+					}
+
+					if (info->NextEntryOffset == 0) break;
+					else info = reinterpret_cast<FILE_NOTIFY_INFORMATION*>((int)info + info->NextEntryOffset);
+				}
+			}
+
+			if (!ReadDirectoryChangesW(handle, buffer, bufferSize, false,
+				FILE_NOTIFY_CHANGE_FILE_NAME | FILE_NOTIFY_CHANGE_DIR_NAME | FILE_NOTIFY_CHANGE_LAST_WRITE,
+				nullptr, &overlapped, nullptr)) throw std::runtime_error("Fail to read directory (loop) " + std::to_string(GetLastError())); // TODO
+		};
+
+		inline bool empty() { return files.empty(); };
+		inline bool contains(ShadyUtil::FileWatcher* f) { return std::find(files.begin(), files.end(), f) != files.end(); };
+		inline void add(ShadyUtil::FileWatcher* f) { files.push_back(f); };
+		inline void remove(ShadyUtil::FileWatcher* f) { files.remove(f); };
+		inline bool isFolder(const std::filesystem::path& path) { return std::filesystem::equivalent(folder, path); };
+	};
+
+	std::vector<HANDLE> handles;
+	std::vector<Delegate*> delegates;
+	std::mutex delegateMutex;
+}
+
+ShadyUtil::FileWatcher* ShadyUtil::FileWatcher::create(const std::filesystem::path& path) {
+	ShadyUtil::FileWatcher* watcher;
+	std::filesystem::path folder = path.parent_path();
+	std::lock_guard lock(delegateMutex);
+
+	for (int i = 0; i < delegates.size(); ++i) {
+		if (delegates[i]->isFolder(folder)) {
+			delegates[i]->add(watcher = new FileWatcher(path.filename()));
+			return watcher;
+		}
+	}
+
+	auto delegate = Delegate::create(folder);
+	if (delegate) {
+		delegate->add(watcher = new FileWatcher(path.filename()));
+		delegates.push_back(delegate);
+		handles.push_back(delegate->overlapped.hEvent);
+		return watcher;
+	}
+
+	return 0;
+}
+
+ShadyUtil::FileWatcher::~FileWatcher() {
+	std::lock_guard lock(delegateMutex);
+
+	for (int i = 0; i < delegates.size();) {
+		if (delegates[i]->contains(this)) delegates[i]->remove(this);
+
+		if (delegates[i]->empty()) {
+			delete delegates[i];
+			handles.erase(handles.begin() + i);
+			delegates.erase(delegates.begin() + i);
+		} else ++i;
+	}
+}
+
+ShadyUtil::FileWatcher* ShadyUtil::FileWatcher::getNextChange() {
+	std::lock_guard lock(delegateMutex);
+
+	if (changes.empty()) {
+		DWORD result = WaitForMultipleObjects(handles.size(), handles.data(), false, 0);
+		if (result == WAIT_FAILED) throw std::runtime_error("FileWatcher wait failed: " + std::to_string(GetLastError())); // TODO
+		if (result >= WAIT_OBJECT_0 && result < WAIT_OBJECT_0 + handles.size()) {
+			delegates[result - WAIT_OBJECT_0]->doHandle();
+		}
+	} if (changes.empty()) return 0;
+
+	auto watcher = changes.front().watcher;
+	watcher->action = changes.front().action;
+	changes.pop_front();
+	return watcher;
 }

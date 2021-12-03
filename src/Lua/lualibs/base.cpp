@@ -63,12 +63,12 @@ void ShadyLua::LualibBase(lua_State* L, std::filesystem::path& basePath) {
     luaL_openlibs(L);
     auto package = luabridge::getGlobal(L, "package");
     package["cpath"] = package["cpath"].tostring()
-        + ";" + basePath.u8string() + "\\?.dll";
+        + ";" + basePath.string() + "\\?.dll";
     package["path"] = package["path"].tostring()
-        + ";" + basePath.u8string() + "\\?.lua"
-        + ";" + basePath.u8string() + "\\?\\init.lua"
-        + ";" + basePath.u8string() + "\\lua\\?.lua"
-        + ";" + basePath.u8string() + "\\lua\\?\\init.lua";
+        + ";" + basePath.string() + "\\?.lua"
+        + ";" + basePath.string() + "\\?\\init.lua"
+        + ";" + basePath.string() + "\\lua\\?.lua"
+        + ";" + basePath.string() + "\\lua\\?\\init.lua";
     lua_register(L, "print", _print);
     lua_register(L, "loadfile", _loadfile);
     lua_register(L, "readfile", _readfile);
