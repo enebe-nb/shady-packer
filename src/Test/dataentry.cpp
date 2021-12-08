@@ -175,7 +175,7 @@ TEST_F(DataEntrySuite, PackageWrite) {
 	for (auto packageName : inputList) {
 		ShadyCore::Package* input = new ShadyCore::Package(packageName);
 		std::filesystem::path tempFile = ShadyUtil::TempFile();
-		input->save(tempFile, ShadyCore::Package::DATA_MODE, 0, 0);
+		input->save(tempFile, ShadyCore::Package::DATA_MODE);
 		ASSERT_TRUE(std::filesystem::exists(tempFile));
 		delete input; input = new ShadyCore::Package(tempFile);
 

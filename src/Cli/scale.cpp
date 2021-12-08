@@ -97,16 +97,15 @@ void ShadyCli::ScaleCommand::process(std::filesystem::path filename, std::filesy
             ShadyCore::writeResource(image, type.format, output);
         } delete image;
     } else if (type == ShadyCore::FileType::TYPE_SCHEMA) {
-        /* TODO
-        ShadyCore::Pattern* pattern = (ShadyCore::Pattern*)ShadyCore::readResource(type, input);
+        ShadyCore::FileType::Format format = filename.extension() == ".dat" ? ShadyCore::FileType::SCHEMA_GAME_PATTERN : ShadyCore::FileType::SCHEMA_XML_PATTERN;
+        ShadyCore::Pattern* pattern = (ShadyCore::Pattern*)ShadyCore::readResource(type.type, format, input);
         process(pattern);
 
         std::filesystem::path targetName = targetPath / filename.filename();
         std::filesystem::create_directories(targetPath);
         std::ofstream output(targetName.string(), std::fstream::binary);
-        ShadyCore::writeResource(pattern, output, type.isEncrypted);
+        ShadyCore::writeResource(pattern, format, output);
         delete pattern;
-        */
     }
 }
 

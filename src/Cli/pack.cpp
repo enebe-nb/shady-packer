@@ -8,11 +8,6 @@ static inline ShadyCore::Package::Mode getMode(std::string mode) {
     return (ShadyCore::Package::Mode)-1;
 }
 
-static void outputCallback(void*, const char * name, unsigned int index, unsigned int size) {
-    printf("\r\x1B[K%03d/%03d -> %40s", index, size, name);
-    fflush(stdout);
-}
-
 void ShadyCli::PackCommand::buildOptions() {
     options.add_options()
         ("o,output", "Target output file or directory.", cxxopts::value<std::string>())
@@ -54,7 +49,7 @@ bool ShadyCli::PackCommand::run(const cxxopts::ParseResult& options) {
     }
 
     printf("\r\x1B[KSaving to disk.\n");
-    package.save(output.c_str(), mode, outputCallback, 0);
+    package.save(output.c_str(), mode);
     printf("\n");
 
     return true;

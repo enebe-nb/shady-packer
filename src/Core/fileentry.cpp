@@ -28,9 +28,10 @@ ShadyCore::FilePackageEntry::~FilePackageEntry() { if (deleteOnDestroy) std::fil
 void ShadyCore::Package::loadDir(const std::filesystem::path& path) {
 	for (std::filesystem::recursive_directory_iterator iter(path), end; iter != end; ++iter) {
 		if (std::filesystem::is_regular_file(iter->path())) {
+			std::filesystem::path relPath = std::filesystem::relative(iter->path(), path);
 			this->insert(
-				ws2sjis(std::filesystem::relative(iter->path(), path)),
-				new FilePackageEntry(this, iter->path())
+				ws2sjis(relPath),
+				new FilePackageEntry(this, relPath)
 			);
 		}
 	}
@@ -52,22 +53,19 @@ namespace {
 	};
 }
 
-void ShadyCore::Package::saveDir(const std::filesystem::path& directory, Callback callback, void* userData) {
+void ShadyCore::Package::saveDir(const std::filesystem::path& directory) {
+	std::unique_lock lock(*this);
 	if (!std::filesystem::exists(directory)) std::filesystem::create_directories(directory);
 	else if (!std::filesystem::is_directory(directory)) return;
 
-	unsigned int index = 0, fileCount = entries.size();
-	std::filesystem::path target(directory);
-	target = std::filesystem::absolute(target);
+	std::filesystem::path target = std::filesystem::absolute(directory);
 	for (auto i = begin(); i != end(); ++i) {
-		auto entry = i->second;
-		if (callback) callback(userData, i->first.name.data(), ++index, fileCount);
 		FileType inputType = i.fileType();
 		FileType targetType = outputTypes[i->first.fileType.type];
 
 		std::filesystem::path tempFile = ShadyUtil::TempFile();
 		std::ofstream output(tempFile, std::ios::binary);
-		std::istream& input = entry->open();
+		std::istream& input = i.open();
 
 		if (targetType != FileType::TYPE_SCHEMA) ShadyCore::convertResource(targetType.type, inputType.format, input, targetType.format, output);
 		// TODO fix TYPE_SCHEMA
@@ -85,10 +83,34 @@ void ShadyCore::Package::saveDir(const std::filesystem::path& directory, Callbac
 				ShadyCore::convertResource(inputType.type, inputType.format, input, FileType::SCHEMA_XML_PATTERN, output); break;
 		}
 
-		entry->close();
+		i.close();
 		output.close();
 
 		std::wstring filename = sjis2ws(i->first.name);
 		std::filesystem::rename(tempFile, target / targetType.appendExtValue(filename));
 	}
+}
+
+//-------------------------------------------------------------
+
+ShadyCore::Package::iterator ShadyCore::PackageEx::insert(const std::filesystem::path& filename) {
+	if (filename.is_relative())
+		return Package::insert(ws2sjis(filename), new FilePackageEntry(this, filename));
+	else {
+		std::filesystem::path relPath = std::filesystem::proximate(filename, std::filesystem::absolute(basePath));
+		return Package::insert(ws2sjis(relPath), new FilePackageEntry(this, filename));
+	}
+}
+
+ShadyCore::Package::iterator ShadyCore::PackageEx::insert(const std::string_view& name, const std::filesystem::path& filename) {
+	return Package::insert(name, new FilePackageEntry(this, filename));
+}
+
+ShadyCore::Package::iterator ShadyCore::PackageEx::insert(const std::string_view& name, std::istream& data) {
+	std::filesystem::path tempFile = ShadyUtil::TempFile();
+	std::ofstream output(tempFile, std::ios::binary);
+
+	output << data.rdbuf();
+
+	return Package::insert(name, new FilePackageEntry(this, tempFile, true));
 }

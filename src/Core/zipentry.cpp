@@ -7,21 +7,21 @@
 #include <fstream>
 
 std::streambuf::int_type ShadyCore::ZipStream::underflow() {
-	if (!pool.empty()) return pool.top();
+	if (hasBufVal) return bufVal;
 
 	char value;
 	if (zip_fread((zip_file_t*)innerFile, &value, 1)) {
-		pool.push(traits_type::to_int_type(value));
-		return pool.top();
+		hasBufVal = true;
+		return bufVal = traits_type::to_int_type(value);
 	} return traits_type::eof();
 }
 
 std::streamsize ShadyCore::ZipStream::xsgetn(char_type* buffer, std::streamsize size) {
 	int buffered = 0;
-	while (!pool.empty() && size) {
+	while (hasBufVal && size) {
 		--size;
-		buffer[buffered++] = pool.top();
-		pool.pop();
+		buffer[buffered++] = bufVal;
+		hasBufVal = false;
 	}
 	pos += buffered;
 
@@ -31,11 +31,10 @@ std::streamsize ShadyCore::ZipStream::xsgetn(char_type* buffer, std::streamsize 
 }
 
 std::streambuf::int_type ShadyCore::ZipStream::uflow() {
-	if (!pool.empty()) {
+	if (hasBufVal) {
 		++pos;
-		int_type value = pool.top();
-		pool.pop();
-		return value;
+		hasBufVal = false;
+		return bufVal;
 	}
 
 	char value;
@@ -81,13 +80,14 @@ std::streambuf::pos_type ShadyCore::ZipStream::seekpos(pos_type spos, std::ios::
 	return seekoff(spos, std::ios::beg, mode);
 }
 
-void ShadyCore::ZipStream::open(const char* packageName, const char* innerName) {
-	// TODO deny write access and fix unicode path
-	pkgFile = zip_open(packageName, ZIP_RDONLY, 0);
+void ShadyCore::ZipStream::open(const std::filesystem::path& packageFile, const std::string& name) {
+	auto handle = CreateFileW(packageFile.c_str(), GENERIC_READ, FILE_SHARE_READ, 0, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
+	if (handle == INVALID_HANDLE_VALUE) return;
+	pkgFile = zip_open_from_source(zip_source_win32handle_create(handle, 0, 0, 0), ZIP_RDONLY, 0);
 
 	zip_stat_t stat;
 	zip_stat_init(&stat);
-	zip_stat((zip_t*)pkgFile, innerName, 0, &stat);
+	zip_stat((zip_t*)pkgFile, name.c_str(), 0, &stat);
 	index = stat.index;
 	size = stat.size;
 	pos = 0;
@@ -197,19 +197,12 @@ static zip_int64_t zipOutputFunc(void* userdata, void* data, zip_uint64_t len, z
 	throw; // Force unsupported error
 }
 
-static void* zipProgressData = 0;
-static void(*zipProgressDelegate)(void*, const char*, unsigned int, unsigned int) = 0;
-static void zipProgress(double percent) {
-	if (zipProgressDelegate) zipProgressDelegate(zipProgressData, "Compressing Zip", percent * 1000, 1000);
-}
-
 //-------------------------------------------------------------
 
 void ShadyCore::Package::loadZip(const std::filesystem::path& path) {
-	//BasePackageEntry* entry = new StreamPackageEntry(nextId, input, filename, std::filesystem::file_size(filename));
-	//zip_source_t* inputSource = zip_source_function_create(zipInputFunc, createZipReader(entry), 0);
-	//zip_t* file = zip_open_from_source(inputSource, ZIP_RDONLY, 0);
-	zip_t* file = zip_open(path.string().c_str(), ZIP_RDONLY, 0);
+	auto handle = CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ, 0, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
+	if (handle == INVALID_HANDLE_VALUE) return;
+	auto file = zip_open_from_source(zip_source_win32handle_create(handle, 0, 0, 0), ZIP_RDONLY, 0);
 
 	zip_int64_t count = zip_get_num_entries(file, 0);
 	for (zip_int64_t i = 0; i < count; ++i) {
@@ -220,7 +213,6 @@ void ShadyCore::Package::loadZip(const std::filesystem::path& path) {
 	}
 
 	zip_close(file);
-	//delete entry;
 }
 
 namespace {
@@ -239,7 +231,8 @@ namespace {
 	};
 }
 
-void ShadyCore::Package::saveZip(const std::filesystem::path& filename, Callback callback, void* userData) {
+void ShadyCore::Package::saveZip(const std::filesystem::path& filename) {
+	std::shared_lock lock(*this);
 	std::ofstream output(filename, std::ios::binary);
 	zip_source_t* outputSource = zip_source_function_create(zipOutputFunc, &output, 0);
 	zip_t* file = zip_open_from_source(outputSource, ZIP_CREATE | ZIP_TRUNCATE | ZIP_CHECKCONS, 0);
@@ -282,9 +275,6 @@ void ShadyCore::Package::saveZip(const std::filesystem::path& filename, Callback
 		zip_file_add(file, targetType.appendExtValue(filename).c_str(), inputSource, ZIP_FL_OVERWRITE);
 	}
 
-	zipProgressDelegate = (void(*)(void*, const char*, unsigned int, unsigned int))callback;
-    zipProgressData = userData;
-	zip_register_progress_callback(file, zipProgress);
 	zip_close(file);
 }
 

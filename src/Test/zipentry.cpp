@@ -26,7 +26,7 @@ const char* ZipEntrySuite::dataArray[] = {
 
 TEST_F(ZipEntrySuite, StreamRead) {
 	ShadyCore::Package package("test-data/zip-package.dat");
-	ShadyCore::ZipPackageEntry entry(&package, "data_my-text.cv0", 12);
+	ShadyCore::ZipPackageEntry& entry = dynamic_cast<ShadyCore::ZipPackageEntry&>(package.find("data_my-text.cv0").entry());
 	std::istream& stream = entry.open();
 	char buffer[5];
 
@@ -55,7 +55,7 @@ TEST_F(ZipEntrySuite, StreamRead) {
 
 TEST_F(ZipEntrySuite, StreamSeek) {
 	ShadyCore::Package package("test-data/zip-package.dat");
-	ShadyCore::ZipPackageEntry entry(&package, "data_my-text.cv0", 12);
+	ShadyCore::ZipPackageEntry& entry = dynamic_cast<ShadyCore::ZipPackageEntry&>(package.find("data_my-text.cv0").entry());
 	std::istream& stream = entry.open();
 	char buffer[5];
 
@@ -120,7 +120,7 @@ TEST_F(ZipEntrySuite, PackageWrite) {
 	for (auto packageName : inputList) {
 		ShadyCore::Package* input = new ShadyCore::Package(packageName);
 		std::filesystem::path tempFile = ShadyUtil::TempFile();
-		input->save(tempFile, ShadyCore::Package::ZIP_MODE, 0, 0);
+		input->save(tempFile, ShadyCore::Package::ZIP_MODE);
 		ASSERT_TRUE(std::filesystem::exists(tempFile));
 		delete input; input = new ShadyCore::Package(tempFile);
 

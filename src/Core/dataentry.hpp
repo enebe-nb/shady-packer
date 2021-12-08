@@ -7,9 +7,10 @@ namespace ShadyCore {
 	class StreamFilter : public std::streambuf {
 	protected:
 		std::streambuf* base;
-		std::stack<int_type> pool;
 		std::streamoff pos = 0;
 		std::streamsize size;
+		int_type bufVal;
+		bool hasBufVal = false;
 
 		virtual char_type filter(char_type) = 0;
 		virtual void seek(off_type, std::ios::seekdir) = 0;

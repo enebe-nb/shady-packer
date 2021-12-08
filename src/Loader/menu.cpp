@@ -232,7 +232,7 @@ void ModMenu::updateView(int index) {
 			temp += "<color 404040>" + package->tags[i] + "</color>";
 		}
 	}
-	// TODO status
+
 	SokuLib::textureMgr.createTextTexture(&textureId, temp.c_str(), font, 220, 190, 0, 0);
 	if (viewContent.dxHandle) SokuLib::textureMgr.remove(viewContent.dxHandle);
 	viewContent.setTexture2(textureId, 0, 0, 220, 190);
@@ -276,36 +276,6 @@ void ModMenu::swap(int i, int j) {
 
 	std::list<ShadyCore::Package*> enabled;
 	{ std::unique_lock lock(ModPackage::descMutex);
-	// 	ModPackage* p;
-
-	// 	int l = min(i, j) + 1, r = max(i, j) - 1;
-	// 	p = ModPackage::descPackage[r+1];
-	// 	if (p->isEnabled()) {
-	// 		enabled.push_back(p);
-	// 		DisablePackage(p);
-	// 	}
-	// 	for (int k = l; k <= r; ++k) {
-	// 		p = ModPackage::descPackage[k];
-	// 		if (p->isEnabled()) {
-	// 			enabled.push_back(p);
-	// 			DisablePackage(p);
-	// 		}
-	// 	}
-	// 	p = ModPackage::descPackage[l-1];
-	// 	if (p->isEnabled()) {
-	// 		enabled.push_back(p);
-	// 		DisablePackage(p);
-	// 	}
-
-	// 	p = ModPackage::descPackage[i];
-	// 	ModPackage::descPackage[i] = ModPackage::descPackage[j];
-	// 	ModPackage::descPackage[j] = p;
-
-	// 	while(!enabled.empty()) {
-	// 		EnablePackage(enabled.front());
-	// 		enabled.pop_front();
-	// 	}
-
 		std::swap(ModPackage::descPackage[i], ModPackage::descPackage[j]);
 
 		for (; i <= j; ++i) if (ModPackage::descPackage[i]->isEnabled())

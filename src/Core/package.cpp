@@ -109,69 +109,88 @@ ShadyCore::Package::iterator ShadyCore::Package::alias(const std::string_view& n
 	return insert(name, newEntry);
 }
 
-void ShadyCore::Package::save(const std::filesystem::path& filename, Mode mode, Callback callback, void* userData) {
-	// TODO shared_lock?
-	if (mode == DIR_MODE) return saveDir(filename, callback, userData);
+void ShadyCore::Package::save(const std::filesystem::path& filename, Mode mode) {
+	if (mode == DIR_MODE) return saveDir(filename);
 
 	std::filesystem::path target = std::filesystem::absolute(filename);
 	if (!std::filesystem::exists(target.parent_path()))
 		std::filesystem::create_directories(target.parent_path());
 
 	std::filesystem::path tempFile = ShadyUtil::TempFile();
-	if (mode == DATA_MODE) saveData(tempFile, callback, userData);
-	if (mode == ZIP_MODE) saveZip(tempFile, callback, userData);
+	if (mode == DATA_MODE) saveData(tempFile);
+	if (mode == ZIP_MODE) saveZip(tempFile);
+	std::unique_lock lock(*this);
 	std::filesystem::rename(tempFile, target);
 }
 
 ShadyCore::FileType ShadyCore::Package::iterator::fileType() const {
-	// TODO cant lock?
 	FileType ft = operator*().first.fileType;
-    if (ft.format != FileType::FORMAT_UNKNOWN) return ft;
+	if (ft.format != FileType::FORMAT_UNKNOWN) return ft;
 
-    switch(ft.type) {
-        case FileType::TYPE_TEXT:
-            ft.format = ft.extValue == FileType::getExtValue(".cv0")
-				&& operator*().second->getStorage() != BasePackageEntry::TYPE_ZIP
-				? FileType::TEXT_GAME : FileType::TEXT_NORMAL;
-			break;
-        case FileType::TYPE_TABLE:
-            ft.format = ft.extValue == FileType::getExtValue(".cv1")
-				&& operator*().second->getStorage() != BasePackageEntry::TYPE_ZIP
-				? FileType::TABLE_GAME : FileType::TABLE_CSV;
-			break;
-        case FileType::TYPE_SCHEMA:
-            if (ft.extValue == FileType::getExtValue(".dat")) {
-                std::istream& input = operator*().second->open();
-		        uint32_t version; input.read((char*)&version, 4);
-		        operator*().second->close();
-                if (version == 4) ft.format = FileType::SCHEMA_GAME_GUI;
-            } else if(ft.extValue == FileType::getExtValue(".pat")) {
-                std::istream& input = operator*().second->open();
-		        uint8_t version; input.read((char*)&version, 1);
-		        operator*().second->close();
-                if (version != 5) break;
-				auto& name = operator*().first.name;
-                if (name.size() >= 6 && name.ends_with("effect")
-                    || name.size() >= 5 && name.ends_with("stand"))
-                    ft.format = FileType::SCHEMA_GAME_ANIM;
-                else ft.format = FileType::SCHEMA_GAME_PATTERN;
-            } else if(ft.extValue == FileType::getExtValue(".xml")) {
-                std::istream& input = operator*().second->open();
-                char buffer[128];
-                while (input.get(buffer[0]) && input.gcount()) {
-                    if (buffer[0] == '<') {
-                        int j = 0;
-                        for (input.get(buffer[0]); buffer[j] && !strchr(" />", buffer[j]); input.get(buffer[++j]));
-                        buffer[j] = '\0';
-                        if (strcmp(buffer, "movepattern") == 0) { ft.format = FileType::SCHEMA_XML_PATTERN; break; }
-                        if (strcmp(buffer, "animpattern") == 0) { ft.format = FileType::SCHEMA_XML_ANIM; break; }
-                        if (strcmp(buffer, "layout") == 0) { ft.format = FileType::SCHEMA_XML_GUI; break; }
-                        if (!strchr("?", buffer[0])) break;
-                    }
-                }
-                operator*().second->close();
-            }
-    }
+	switch(ft.type) {
+	case FileType::TYPE_TEXT:
+		ft.format = ft.extValue == FileType::getExtValue(".cv0")
+			&& this->entry().getStorage() != BasePackageEntry::TYPE_ZIP
+			? FileType::TEXT_GAME : FileType::TEXT_NORMAL;
+		break;
+	case FileType::TYPE_TABLE:
+		ft.format = ft.extValue == FileType::getExtValue(".cv1")
+			&& this->entry().getStorage() != BasePackageEntry::TYPE_ZIP
+			? FileType::TABLE_GAME : FileType::TABLE_CSV;
+		break;
+	case FileType::TYPE_LABEL:
+		ft.format = ft.extValue == FileType::getExtValue(".sfl")
+			? FileType::LABEL_RIFF : FileType::LABEL_LBL;
+		break;
+	case FileType::TYPE_IMAGE:
+		ft.format = ft.extValue == FileType::getExtValue(".cv2")
+			? FileType::IMAGE_GAME : FileType::IMAGE_PNG;
+		break;
+	case FileType::TYPE_PALETTE:
+		ft.format = ft.extValue == FileType::getExtValue(".pal")
+			? FileType::PALETTE_PAL : FileType::PALETTE_ACT;
+		break;
+	case FileType::TYPE_SFX:
+		ft.format = ft.extValue == FileType::getExtValue(".cv3")
+			? FileType::SFX_GAME : FileType::SFX_GAME;
+		break;
+	case FileType::TYPE_BGM:
+		ft.format = FileType::BGM_OGG;
+		break;
+	case FileType::TYPE_SCHEMA:
+		if (ft.extValue == FileType::getExtValue(".dat")) {
+			std::istream& input = this->open();
+			uint32_t version; input.read((char*)&version, 4);
+			this->close();
+			if (version == 4) ft.format = FileType::SCHEMA_GAME_GUI;
+		} else if(ft.extValue == FileType::getExtValue(".pat")) {
+			std::istream& input = this->open();
+			uint8_t version; input.read((char*)&version, 1);
+			this->close();
+			if (version != 5) break;
+			auto& name = this->name();
+			if (name.size() >= 6 && name.ends_with("effect")
+				|| name.size() >= 5 && name.ends_with("stand"))
+				ft.format = FileType::SCHEMA_GAME_ANIM;
+			else ft.format = FileType::SCHEMA_GAME_PATTERN;
+		} else if(ft.extValue == FileType::getExtValue(".xml")) {
+			std::istream& input = this->open();
+			char buffer[128];
+			while (input.get(buffer[0]) && input.gcount()) {
+				if (buffer[0] == '<') {
+					int j = 0;
+					for (input.get(buffer[0]); buffer[j] && !strchr(" />", buffer[j]); input.get(buffer[++j]));
+					buffer[j] = '\0';
+					if (strcmp(buffer, "movepattern") == 0) { ft.format = FileType::SCHEMA_XML_PATTERN; break; }
+					if (strcmp(buffer, "animpattern") == 0) { ft.format = FileType::SCHEMA_XML_ANIM; break; }
+					if (strcmp(buffer, "layout") == 0) { ft.format = FileType::SCHEMA_XML_GUI; break; }
+					if (!strchr("?", buffer[0])) break;
+				}
+			}
+			this->close();
+		}
+		break;
+	}
 
 	return ft;
 }
@@ -203,26 +222,6 @@ ShadyCore::Package* ShadyCore::PackageEx::demerge(Package* child) {
 	}
 
 	return child;
-}
-
-ShadyCore::Package::iterator ShadyCore::PackageEx::insert(const std::filesystem::path& filename) {
-	return Package::insert(
-		std::filesystem::proximate(filename).string(), // TODO convert to shiftjis?
-		new FilePackageEntry(this, filename.is_relative() ? basePath / filename : filename)
-	);
-}
-
-ShadyCore::Package::iterator ShadyCore::PackageEx::insert(const std::string_view& name, const std::filesystem::path& filename) {
-	return Package::insert(name, new FilePackageEntry(this, filename.is_relative() ? (basePath / filename) : filename));
-}
-
-ShadyCore::Package::iterator ShadyCore::PackageEx::insert(const std::string_view& name, std::istream& data) {
-	std::filesystem::path tempFile = ShadyUtil::TempFile();
-	std::ofstream output(tempFile, std::ios::binary);
-
-	output << data.rdbuf();
-
-	return Package::insert(name, new FilePackageEntry(this, tempFile, true));
 }
 
 // ShadyCore::Package::iterator ShadyCore::PackageEx::erase(iterator i) {
@@ -277,7 +276,6 @@ void ShadyCore::PackageEx::clear() {
 		delete entry.second;
 	} entries.clear();
 	for (auto group : groups) {
-		// TODO lock?
 		delete group;
 	} groups.clear();
 }

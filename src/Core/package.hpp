@@ -34,8 +34,6 @@ namespace ShadyCore {
 		};
 
 		using MapType = std::unordered_map<Key, BasePackageEntry*, Key::hash>;
-		using Callback = void (*)(void*, const char*, unsigned int, unsigned int);
-
 		// --- DATA ---
 		MapType entries;
 		std::filesystem::path basePath;
@@ -46,13 +44,11 @@ namespace ShadyCore {
 		void loadData(const std::filesystem::path&);
 		void loadDir(const std::filesystem::path&);
 		void loadZip(const std::filesystem::path&);
-		void saveData(const std::filesystem::path&, Callback, void*);
-		void saveDir(const std::filesystem::path&, Callback, void*);
-		void saveZip(const std::filesystem::path&, Callback, void*);
+		void saveData(const std::filesystem::path&);
+		void saveDir(const std::filesystem::path&);
+		void saveZip(const std::filesystem::path&);
 
 	public:
-		enum Mode { DATA_MODE, ZIP_MODE, DIR_MODE };
-		//using iterator = MapType::iterator;
 		class iterator : public MapType::iterator {
 		public:
 			inline iterator() : MapType::iterator() {}
@@ -60,8 +56,8 @@ namespace ShadyCore {
 			inline const std::string_view& name() const { return operator*().first.name; }
 			inline BasePackageEntry& entry() const { return *operator*().second; }
 			FileType fileType() const;
-			inline std::istream& open() { return operator*().second->open(); }
-			inline void close() { return operator*().second->close(); }
+			inline std::istream& open() const { return operator*().second->open(); }
+			inline void close() const { return operator*().second->close(); }
 		};
 
 		Package(const std::filesystem::path& basePath);
@@ -79,7 +75,8 @@ namespace ShadyCore {
 		//iterator rename(iterator i, const std::string_view& name);
 		iterator alias(const std::string_view& name, BasePackageEntry& entry);
 
-		void save(const std::filesystem::path&, Mode, Callback, void*);
+		enum Mode { DATA_MODE, ZIP_MODE, DIR_MODE };
+		void save(const std::filesystem::path&, Mode);
 		static void underlineToSlash(std::string&);
 	};
 
@@ -107,8 +104,8 @@ namespace ShadyCore {
 
 		template<class Iterator>
 		void reorder(const Iterator begin, const Iterator end) {
-			for (Iterator i = begin, i != end; ++i) demerge(*i);
-			for (Iterator i = begin, i != end; ++i) merge(*i);
+			for (Iterator i = begin; i != end; ++i) demerge(*i);
+			for (Iterator i = begin; i != end; ++i) merge(*i);
 		}
 	};
 }

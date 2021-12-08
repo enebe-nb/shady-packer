@@ -9,10 +9,10 @@
 
 std::streamsize ShadyCore::StreamFilter::xsgetn(char_type* buffer, std::streamsize count) {
 	int buffered = 0;
-	while (!pool.empty() && count) {
+	if (hasBufVal && count) {
 		--count;
-		buffer[buffered++] = pool.top();
-		pool.pop();
+		buffer[buffered++] = bufVal;
+		hasBufVal = false;
 	}
 	pos += buffered;
 
@@ -26,22 +26,21 @@ std::streamsize ShadyCore::StreamFilter::xsgetn(char_type* buffer, std::streamsi
 }
 
 std::streambuf::int_type ShadyCore::StreamFilter::underflow() {
-	if (!pool.empty()) return pool.top();
+	if (hasBufVal) return bufVal;
 
 	int_type value = base->sbumpc();
 	if (traits_type::eq_int_type(value, traits_type::eof())) return value;
 	if (pos >= size) return traits_type::eof();
-	pool.push(traits_type::to_int_type(filter(traits_type::to_char_type(value))));
-	return pool.top();
+	hasBufVal = true;
+	return bufVal = traits_type::to_int_type(filter(traits_type::to_char_type(value)));
 }
 
 std::streambuf::int_type ShadyCore::StreamFilter::uflow() {
 	int_type value;
-	if (!pool.empty()) {
+	if (hasBufVal) {
 		++pos;
-		value = pool.top();
-		pool.pop();
-		return value;
+		hasBufVal = false;
+		return bufVal;
 	}
 
 	value = base->sbumpc();
@@ -76,7 +75,7 @@ std::streambuf::pos_type ShadyCore::StreamFilter::seekoff(off_type spos, std::io
 	if (sdir == std::ios::beg) pos = spos;
 	if (sdir == std::ios::end) pos = size + spos;
 	if (sdir == std::ios::cur) pos += spos;
-	while (!pool.empty()) pool.pop();
+	hasBufVal = false;
 
 	return pos;
 }
@@ -154,7 +153,7 @@ void ShadyCore::DataListFilter::seek(off_type spos, std::ios::seekdir sdir) {
 
 void ShadyCore::DataFileFilter::seek(off_type spos, std::ios::seekdir sdir) {
 	if (sdir == std::ios::cur) {
-		spos -= pool.size();
+		if (hasBufVal) --spos;
 		base->pubseekoff(spos, sdir, std::ios::in);
 	} else if (sdir == std::ios::beg) {
 		base->pubseekoff(spos + offset, sdir, std::ios::in);
@@ -166,6 +165,7 @@ void ShadyCore::DataFileFilter::seek(off_type spos, std::ios::seekdir sdir) {
 //-------------------------------------------------------------
 
 std::istream& ShadyCore::DataPackageEntry::open() {
+	parent->lock_shared();
 	fileStream.clear();
 	std::filebuf* base = (std::filebuf*) fileFilter.getBaseBuffer();
 	if (!base) base = new std::filebuf();
@@ -184,6 +184,7 @@ void ShadyCore::DataPackageEntry::close() {
 		delete base;
 		fileFilter.setBaseBuffer(0);
 	}
+	parent->unlock_shared();
 }
 
 //-------------------------------------------------------------
@@ -226,16 +227,16 @@ namespace {
 	};
 }
 
-void ShadyCore::Package::saveData(const std::filesystem::path& filename, Callback callback, void* userData) {
+void ShadyCore::Package::saveData(const std::filesystem::path& filename) {
+	std::shared_lock lock(*this);
 	std::list<std::pair<std::string, std::filesystem::path> > tempFiles;
 	unsigned short fileCount = entries.size();
-	unsigned int listSize = 0, index = 0;
+	unsigned int listSize = 0;
 	for (auto i = begin(); i != end(); ++i) {
 		auto entry = i->second;
 		FileType inputType = i.fileType();
 		FileType targetType = outputTypes[i->first.fileType.type];
 		tempFiles.emplace_back(i->first.name, ShadyUtil::TempFile());
-		if (callback) callback(userData, i->first.name.data(), ++index, fileCount);
 
 		std::ofstream output(tempFiles.back().second, std::ios::binary);
 		std::istream& input = entry->open();

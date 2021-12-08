@@ -31,6 +31,7 @@ static void* __stdcall readerCreate(const char *filename, unsigned int *_size, u
 	__asm mov esi_value, esi
 
     ModPackage::CheckUpdates();
+    std::shared_lock lock(*ModPackage::basePackage);
     auto iter = ModPackage::basePackage->find(filename);
 
     void* result;

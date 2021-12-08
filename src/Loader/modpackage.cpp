@@ -70,10 +70,7 @@ namespace {
 					if (i->second->isDone()) {
 						ModPackage* p = i->first;
 						ModPackage::descMutex.lock();
-						bool wasEnabled = p->isEnabled();
-						if (wasEnabled) DisablePackage(p);
 
-						// TODO remake after fislesystem change check
 						std::filesystem::path filename(p->path);
 						filename += L".part";
 						if (std::filesystem::exists(filename)) {
@@ -88,11 +85,12 @@ namespace {
 								p->fileExists = true;
 							}
 
-							// TODO test remove
-							if (err) throw std::runtime_error(std::string("Failed to Rename: ") + err.message());
+							if (err) {
+								ModPackage::descMutex.unlock();
+								++i; continue;
+							}
 						}
 
-						if (wasEnabled) EnablePackage(p);
 						p->downloading = false;
 						ModPackage::descMutex.unlock();
 						SaveSettings();
@@ -159,7 +157,7 @@ namespace {
 			if (package->downloading) return;
 
 			package->downloading = true;
-			std::filesystem::path filename(package->name);
+			std::filesystem::path filename(package->path);
 			filename += ".part";
 			try {
 				std::filesystem::remove(filename);

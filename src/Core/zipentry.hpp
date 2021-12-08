@@ -13,6 +13,9 @@ namespace ShadyCore {
 		std::stack<int_type> pool;
 		std::streamoff pos = 0;
 		std::streamsize size;
+		int_type bufVal;
+		bool hasBufVal = false;
+
 	protected:
 		// DISALLOWED
 		int_type pbackfail(int_type) override { throw; }
@@ -30,7 +33,7 @@ namespace ShadyCore {
 		int_type uflow() override;
 	public:
 		inline bool isOpen() const { return pkgFile; }
-		void open(const char*, const char*);
+		void open(const std::filesystem::path&, const std::string&);
 		void close();
 	};
 
@@ -46,7 +49,7 @@ namespace ShadyCore {
 
 		inline StorageType getStorage() const override final { return TYPE_ZIP; }
 		inline bool isOpen() const override final { return zipBuffer.isOpen(); }
-		inline std::istream& open() override final { zipStream.clear(); zipBuffer.open(parent->getBasePath().string().c_str(), name.c_str()); return zipStream; }
-		inline void close() override final { zipBuffer.close(); }
+		inline std::istream& open() override final { parent->lock_shared(); zipStream.clear(); zipBuffer.open(parent->getBasePath(), name); return zipStream; }
+		inline void close() override final { zipBuffer.close(); parent->unlock_shared(); }
 	};
 }

@@ -9,16 +9,32 @@ namespace {
         ShadyCore::BasePackageEntry* entry;
         std::istream* input;
     };
+
+    struct _lua_loader {
+        ShadyCore::Package* base;
+        ShadyCore::Package* owner;
+    };
 }
 
-void* _lua_open(void* userdata, const char* filename) {
-    ShadyCore::Package* package = reinterpret_cast<ShadyCore::Package*>(userdata);
-    auto iter = package->find(filename);
-    if (iter == package->end()) return 0;
-    return new _lua_file{iter->second, &iter->second->open()};
+static ShadyCore::BasePackageEntry* _lua_find(void* userdata, const char* filename) {
+    _lua_loader* loader = reinterpret_cast<_lua_loader*>(userdata);
+    auto iter = loader->owner->find(filename);
+    if (iter == loader->owner->end()) {
+        iter = loader->base->find(filename);
+        if (iter == loader->base->end()) return 0;
+    }
+
+    if (iter.entry().getParent() != loader->owner) return 0;
+    else return &iter.entry();
 }
 
-size_t _lua_read(void* userdata, void* file, char* buffer, size_t size) {
+static void* _lua_open(void* userdata, const char* filename) {
+    ShadyCore::BasePackageEntry* entry = _lua_find(userdata, filename);
+    if (entry) return new _lua_file{entry, &entry->open()};
+    else return 0;
+}
+
+static size_t _lua_read(void* userdata, void* file, char* buffer, size_t size) {
     if (!file) return 0;
     _lua_file* luaFile = reinterpret_cast<_lua_file*>(file);
     luaFile->input->read(buffer, size);
@@ -29,33 +45,32 @@ size_t _lua_read(void* userdata, void* file, char* buffer, size_t size) {
     } return size;
 }
 
+static void _lua_destroy(void* userdata) {
+    delete reinterpret_cast<_lua_loader*>(userdata);
+}
+
 void EnablePackage(ModPackage* p) {
     if (!std::filesystem::is_directory(p->path) && !std::filesystem::is_regular_file(p->path)) return;
-
     p->package = ModPackage::basePackage->merge(p->path);
 
-    bool initFound = false;
-    auto iter = p->package->find("init.lua");
-    if (iter != p->package->end()) initFound = true;
-    else {
-        iter = ModPackage::basePackage->find("init.lua");
-        if (iter != ModPackage::basePackage->end()) initFound = true;
-    }
+    std::shared_lock l0(*ModPackage::basePackage, std::defer_lock);
+    std::shared_lock l1(*p->package, std::defer_lock);
+    std::scoped_lock lock(l0, l1);
+    auto loader = new _lua_loader{ModPackage::basePackage.get(), p->package};
 
-    if (initFound && iter.entry().getParent() == p->package) {
-        ShadyLua::LuaScript* script = new ShadyLua::LuaScript(ModPackage::basePackage.get(), _lua_open, _lua_read);
+    if (_lua_find(loader, "init.lua")) {
+        ShadyLua::LuaScript* script = new ShadyLua::LuaScript(loader, _lua_open, _lua_read, _lua_destroy);
         ShadyLua::LualibBase(script->L, ModPackage::basePath);
         ShadyLua::LualibMemory(script->L);
         ShadyLua::LualibResource(script->L);
         ShadyLua::LualibSoku(script->L);
-        // TODO this doesn't work right
         if (script->load("init.lua") != LUA_OK || !script->run()) {
             delete script;
             p->script = 0;
         } else {
             p->script = script;
         }
-    }
+    } else delete loader;
 }
 
 void DisablePackage(ModPackage* p) {
