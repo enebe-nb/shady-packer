@@ -190,9 +190,9 @@ namespace {
 }
 
 ModPackage::ModPackage(const std::string& name, const nlohmann::json::value_type& data)
-    : name(name), path(basePath / (name + ".zip")), data(data), fileExists(std::filesystem::exists(path)) {
+	: name(name), path(basePath / (name + ".zip")), data(data), fileExists(std::filesystem::exists(path)) {
 
-    if (data.count("tags") && data["tags"].is_array()) for (auto& tag : data["tags"]) {
+	if (data.count("tags") && data["tags"].is_array()) for (auto& tag : data["tags"]) {
 		tags.push_back(tag.get<std::string>());
 	};
 }
@@ -208,7 +208,7 @@ void ModPackage::merge(const nlohmann::json::value_type& remote) {
 	data["creator"] = remote.value("creator", "");
 	data["description"] = remote.value("description", "");
 	data["preview"] = remote.value("preview", "");
-    data["remoteVersion"] = remote.value("version", "");
+	data["remoteVersion"] = remote.value("version", "");
 	data["tags"].clear();
 	tags.clear();
 
@@ -237,12 +237,12 @@ void ModPackage::LoadFromLocalData() {
 
 void ModPackage::LoadFromFilesystem() {
 	for (std::filesystem::directory_iterator iter(basePath), end; iter != end; ++iter) {
-        bool isDir = std::filesystem::is_directory(iter->path());
-        auto ext = iter->path().extension();
-        if (isDir || ext == ".zip" || ext == ".dat") {
+		bool isDir = std::filesystem::is_directory(iter->path());
+		auto ext = iter->path().extension();
+		if (isDir || ext == ".zip" || ext == ".dat") {
 			if (iter->path().stem() == "shady-loader") continue;
 			std::unique_lock lock(descMutex);
-			if (!findPackage(iter->path().stem().string())) descPackage.push_back(new ModPackage(iter->path().filename()));
+			if (!findPackage(iter->path().stem().string())) descPackage.push_back(new ModPackage(iter->path()));
 		}
 	}
 }
@@ -264,6 +264,12 @@ void LoadPackage() {
 	}
 
 	if (iniAutoUpdate) ModPackage::LoadFromRemote();
+	std::filesystem::path loaderPack = ModPackage::basePath / L"shady-loader.dat";
+	if (std::filesystem::exists(loaderPack)
+		|| std::filesystem::exists(loaderPack.replace_extension(L".zip"))
+		|| std::filesystem::exists(loaderPack.replace_extension(L""))) {
+		ModPackage::basePackage->merge(loaderPack);
+	}
 }
 
 void UnloadPackage() {

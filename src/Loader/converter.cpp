@@ -119,8 +119,6 @@ static int _HookLoader() {
     if (__loader) __loader();
     curl_global_init(CURL_GLOBAL_DEFAULT);
 
-    ModPackage::basePackage->merge(ModPackage::basePath / L"shady-loader.dat");
-
     DWORD dwOldProtect;
     VirtualProtect((PVOID)TEXT_SECTION_OFFSET, TEXT_SECTION_SIZE, PAGE_EXECUTE_WRITECOPY, &dwOldProtect);
     __readerCreate = SokuLib::TamperNearJmpOpr(0x0040D227, readerCreate);

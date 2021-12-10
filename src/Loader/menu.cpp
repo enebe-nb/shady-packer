@@ -7,7 +7,7 @@ namespace {
 	ModPackage* selectedPackage = 0;
 	std::list<ModPackage*> downloads;
 
-	enum :int { OPTION_ENABLE_DISABLE, OPTION_DOWNLOAD };
+	enum :int { OPTION_ENABLE_DISABLE, OPTION_DOWNLOAD, OPTION_SHOW };
 }
 
 static void setPackageEnabled(ModPackage* package, bool value) {
@@ -158,6 +158,9 @@ int ModMenu::onProcess() {
 				package->downloadFile();
 				this->state = 0;
 				break;
+			case OPTION_SHOW:
+				ShellExecuteW(0, L"explore", package->path.c_str(), L"", 0, SW_NORMAL);
+				break;
 			}
 
 			this->updateView(modCursor.pos);
@@ -212,9 +215,9 @@ void ModMenu::updateView(int index) {
 	int textureId;
 
 	font.setIndirect(fontDesc);
-	SokuLib::textureMgr.createTextTexture(&textureId, package->name.c_str(), font, 220, 24, 0, 0);
+	SokuLib::textureMgr.createTextTexture(&textureId, package->name.c_str(), font, 330, 24, 0, 0);
 	if (viewTitle.dxHandle) SokuLib::textureMgr.remove(viewTitle.dxHandle);
-	viewTitle.setTexture2(textureId, 0, 0, 220, 24);
+	viewTitle.setTexture2(textureId, 0, 0, 330, 24);
 
 	fontDesc.weight = 300;
 	fontDesc.height = 14;
@@ -233,9 +236,9 @@ void ModMenu::updateView(int index) {
 		}
 	}
 
-	SokuLib::textureMgr.createTextTexture(&textureId, temp.c_str(), font, 220, 190, 0, 0);
+	SokuLib::textureMgr.createTextTexture(&textureId, temp.c_str(), font, 330, 190, 0, 0);
 	if (viewContent.dxHandle) SokuLib::textureMgr.remove(viewContent.dxHandle);
-	viewContent.setTexture2(textureId, 0, 0, 220, 190);
+	viewContent.setTexture2(textureId, 0, 0, 330, 190);
 
 	if (package->downloading) {
 		this->optionCount = 0;
@@ -243,21 +246,23 @@ void ModMenu::updateView(int index) {
 	} else if (package->fileExists) {
 		temp = (package->isEnabled() ? "Disable<br>" : "Enable<br>");
 		this->options[0] = OPTION_ENABLE_DISABLE;
+		temp += "Show Files<br>";
+		this->options[1] = OPTION_SHOW;
 		if (package->requireUpdate) {
 			temp += "Update";
-			this->options[1] = OPTION_DOWNLOAD;
-			this->optionCount = 2;
+			this->options[2] = OPTION_DOWNLOAD;
+			this->optionCount = 3;
 		} else {
-			this->optionCount = 1;
+			this->optionCount = 2;
 		}
 	} else {
 		temp = "Download";
 		this->options[0] = OPTION_DOWNLOAD;
 		this->optionCount = 1;
 	}
-	SokuLib::textureMgr.createTextTexture(&textureId, temp.c_str(), font, 220, 40, 0, 0);
+	SokuLib::textureMgr.createTextTexture(&textureId, temp.c_str(), font, 140, 120, 0, 0);
 	if (viewOption.dxHandle) SokuLib::textureMgr.remove(viewOption.dxHandle);
-	viewOption.setTexture2(textureId, 0, 0, 220, 40);
+	viewOption.setTexture2(textureId, 0, 0, 140, 120);
 
 	if (viewPreview.dxHandle) SokuLib::textureMgr.remove(viewPreview.dxHandle);
 	if (!package->previewName.empty()) {
