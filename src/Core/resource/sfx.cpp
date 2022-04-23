@@ -2,26 +2,10 @@
 #include "../util/iohelper.hpp"
 #include "../util/riffdocument.hpp"
 
-ShadyCore::Sfx::~Sfx() { if (data) delete[] data; }
+#include <string>
 
-void ShadyCore::Sfx::initialize(uint32_t s) {
-	size = s;
-
-	if (data) delete[] data;
-	data = new uint8_t[size];
-}
-
-ShadyCore::LabelResource::~LabelResource() { if (name) delete[] name; }
-
-void ShadyCore::LabelResource::initialize(const char* n) {
-    size_t length = strlen(n);
-
-    if (name) delete[] name;
-    name = new char[length + 1];
-    strcpy((char*)name, n);
-}
-
-void ShadyCore::ResourceDReader::accept(Sfx& resource) {
+namespace _private {
+void readerSfxWave(ShadyCore::Sfx& resource, std::istream& input) {
 	ShadyUtil::RiffDocument riff(input);
 
 	uint8_t buffer[16];
@@ -36,13 +20,13 @@ void ShadyCore::ResourceDReader::accept(Sfx& resource) {
 	riff.read("WAVEdata", resource.getData());
 }
 
-void ShadyCore::ResourceEReader::accept(Sfx& resource) {
+void readerSfxCv(ShadyCore::Sfx& resource, std::istream& input) {
 	input.ignore(2);
-	ShadyUtil::readS(input, resource, &Sfx::setChannels);
-	ShadyUtil::readS(input, resource, &Sfx::setSampleRate);
-	ShadyUtil::readS(input, resource, &Sfx::setByteRate);
-	ShadyUtil::readS(input, resource, &Sfx::setBlockAlign);
-	ShadyUtil::readS(input, resource, &Sfx::setBitsPerSample);
+	ShadyUtil::readS(input, resource, &ShadyCore::Sfx::setChannels);
+	ShadyUtil::readS(input, resource, &ShadyCore::Sfx::setSampleRate);
+	ShadyUtil::readS(input, resource, &ShadyCore::Sfx::setByteRate);
+	ShadyUtil::readS(input, resource, &ShadyCore::Sfx::setBlockAlign);
+	ShadyUtil::readS(input, resource, &ShadyCore::Sfx::setBitsPerSample);
 
 	uint32_t size;
 	input.ignore(2);
@@ -51,7 +35,7 @@ void ShadyCore::ResourceEReader::accept(Sfx& resource) {
 	input.read((char*)resource.getData(), size);
 }
 
-void ShadyCore::ResourceDWriter::accept(Sfx& resource) {
+void writerSfxWave(ShadyCore::Sfx& resource, std::ostream& output) {
 	uint32_t size = 36 + resource.getSize();
 	output.write("RIFF", 4);
 	ShadyUtil::writeS(output, size);
@@ -69,7 +53,7 @@ void ShadyCore::ResourceDWriter::accept(Sfx& resource) {
 	output.write((char*)resource.getData(), resource.getSize());
 }
 
-void ShadyCore::ResourceEWriter::accept(Sfx& resource) {
+void writerSfxCv(ShadyCore::Sfx& resource, std::ostream& output) {
 	output.write("\x01\0", 2);
 	ShadyUtil::writeS(output, resource.getChannels());
 	ShadyUtil::writeS(output, resource.getSampleRate());
@@ -82,53 +66,43 @@ void ShadyCore::ResourceEWriter::accept(Sfx& resource) {
 	output.write((char*)resource.getData(), resource.getSize());
 }
 
-void ShadyCore::ResourceDReader::accept(LabelResource& resource) {
-	char name[32]; name[0] = '\0';
+void readerLabel(ShadyCore::LabelResource& resource, std::istream& input) {
 	double offset, size;
 
 	input.setf(std::ios::skipws);
-	input >> offset >> size >> name;
+	input >> offset >> size;
 	input.unsetf(std::ios::skipws);
-	resource.initialize(name);
-	resource.setOffset(offset * 44100.);
-	resource.setSize(size * 44100.);
+	resource.setOffset(offset);
+	resource.setSize(size);
 }
 
-void ShadyCore::ResourceEReader::accept(LabelResource& resource) {
+void readerLabelSfl(ShadyCore::LabelResource& resource, std::istream& input) {
 	ShadyUtil::RiffDocument riff(input);
+	int offset, size;
 
-	uint8_t buffer[32];
-	if (riff.size("SFPLSFPI"))
-		riff.read("SFPLSFPI", buffer);
-	else
-		buffer[0] = '\0';
-	resource.initialize((char*)buffer);
-	riff.read("SFPLcue ", buffer, 8, 4);
-	resource.setOffset(*(uint32_t*)buffer);
-	riff.read("SFPLadtlltxt", buffer, 4, 4);
-	resource.setSize(*(uint32_t*)buffer);
+	riff.read("SFPLcue ", (uint8_t*)&offset, 8, 4);
+	resource.setOffset(offset / 44100.);
+	riff.read("SFPLadtlltxt", (uint8_t*)&size, 4, 4);
+	resource.setSize(size / 44100.);
 }
 
-void ShadyCore::ResourceDWriter::accept(LabelResource& resource) {
-	output << std::fixed << resource.getOffset() / 44100.0 << '\t' << resource.getSize() / 44100.0 << '\t' << resource.getName();
+void writerLabel(ShadyCore::LabelResource& resource, std::ostream& output) {
+	output << std::fixed << resource.getOffset() << '\t' << resource.getSize() << '\t' << "op2";
 }
 
-void ShadyCore::ResourceEWriter::accept(LabelResource& resource) {
-	uint32_t len = 0x59 + strlen(resource.getName());
+void writerLabelSfl(ShadyCore::LabelResource& resource, std::ostream& output) {
 	output.write("RIFF", 4);
-	ShadyUtil::writeS(output, len);
+	ShadyUtil::writeS(output, 0x5C);
 
 	output.write("SFPLcue \x1C\0\0\0\x01\0\0\0\x01\0\0\0", 20);
-	ShadyUtil::writeS(output, resource.getOffset());
+	ShadyUtil::writeS(output, (uint32_t)(resource.getOffset() * 44100.));
 	output.write("data\0\0\0\0\0\0\0\0", 12);
-	ShadyUtil::writeS(output, resource.getOffset());
+	ShadyUtil::writeS(output, (uint32_t)(resource.getOffset() * 44100.));
 
 	output.write("LIST\x20\0\0\0adtlltxt\x14\0\0\0\x01\0\0\0", 24);
-	ShadyUtil::writeS(output, resource.getSize());
+	ShadyUtil::writeS(output, (uint32_t)(resource.getSize() * 44100.));
 
 	output.write("rgn \0\0\0\0\0\0\0\0SFPI", 16);
-	len = strlen(resource.getName()) + 1;
-	ShadyUtil::writeS(output, len);
-	output.write(resource.getName(), len);
+	output.write("\4\0\0\0op2\0", 8);
 }
-
+}

@@ -1,15 +1,7 @@
 #include "readerwriter.hpp"
 #include <png.h>
 #include <math.h>
-
-ShadyCore::Image::~Image() { if (raw) delete[] raw; }
-
-void ShadyCore::Image::initialize(uint32_t w, uint32_t h, uint32_t p, uint8_t b) {
-	width = w; height = h; paddedWidth = p; bitsPerPixel = b;
-
-	if (raw) delete[] raw;
-	raw = new uint8_t[width * height * (bitsPerPixel == 8 ? 1 : 4)];
-}
+#include <string>
 
 // TODO review
 uint16_t ShadyCore::Palette::packColor(uint32_t color, bool transparent) {
@@ -38,6 +30,36 @@ uint32_t ShadyCore::Palette::unpackColor(uint16_t color) {
 	return ucolor;
 }
 
+// TODO fix tranparency
+void ShadyCore::Palette::pack() {
+	if (bitsPerPixel <= 16) return;
+
+	uint16_t* newData = (uint16_t*)ShadyAllocate(256 * 2);
+	for (int i = 0; i < 256; ++i) {
+		uint32_t* _data = (uint32_t*)data;
+		newData[i] = packColor(_data[i]);
+	}
+
+	destroy();
+	bitsPerPixel = 16;
+	data = (uint8_t*)newData;
+}
+
+// TODO fix tranparency
+void ShadyCore::Palette::unpack() {
+	if (bitsPerPixel > 16) return;
+
+	uint32_t* newData = (uint32_t*)ShadyAllocate(256 * 4);
+	for (int i = 0; i < 256; ++i) {
+		uint16_t* _data = (uint16_t*)data;
+		newData[i] = unpackColor(_data[i]);
+	}
+
+	destroy();
+	bitsPerPixel = 32;
+	data = (uint8_t*)newData;
+}
+
 static void pngRead(png_structp pngData, png_bytep buffer, png_size_t length) {
 	std::istream* input = (std::istream*) png_get_io_ptr(pngData);
 	input->read((char*)buffer, length);
@@ -64,7 +86,8 @@ static void pngWarning(png_structp pngData, png_const_charp message) {
 
 const static png_color emptyPalette[256 * 3] = { 0 };
 
-void ShadyCore::ResourceDReader::accept(Image& resource) {
+namespace _private {
+void readerImagePng(ShadyCore::Image& resource, std::istream& input) {
 	png_structp pngData = png_create_read_struct(PNG_LIBPNG_VER_STRING, 0, pngError, pngWarning);
 	png_infop pngInfo = png_create_info_struct(pngData);
 	png_set_read_fn(pngData, &input, pngRead);
@@ -90,10 +113,12 @@ void ShadyCore::ResourceDReader::accept(Image& resource) {
 		if (!(colorType & PNG_COLOR_MASK_ALPHA)) png_set_filler(pngData, 0xff, PNG_FILLER_AFTER);
 		png_set_bgr(pngData);
 	} png_read_update_info(pngData, pngInfo);
-	resource.initialize(width, height, paddedWidth, bitsPerPixel);
+	resource.initialize(bitsPerPixel, width, height, paddedWidth);
+	memset(resource.getRawImage(), 0, resource.getRawSize());
 
 	// Read Image
-	int rowSize = png_get_rowbytes(pngData, pngInfo);
+	//int rowSize = png_get_rowbytes(pngData, pngInfo);
+	int rowSize = paddedWidth * (bitsPerPixel == 8 ? 1 : 4);
 	uint8_t ** pointers = new uint8_t*[height];
 	for (int i = 0; i < height; ++i) {
 		pointers[i] = resource.getRawImage() + i * rowSize;
@@ -105,29 +130,21 @@ void ShadyCore::ResourceDReader::accept(Image& resource) {
 	png_destroy_read_struct(&pngData, &pngInfo, 0);
 }
 
-void ShadyCore::ResourceEReader::accept(Image& resource) {
-	uint32_t width, height, paddedWidth;
+void readerImageCv(ShadyCore::Image& resource, std::istream& input) {
+	uint32_t width, height, paddedWidth, altSize;
 	uint8_t bitsPerPixel;
 	input.read((char*)&bitsPerPixel, 1);
 	input.read((char*)&width, 4);
 	input.read((char*)&height, 4);
 	input.read((char*)&paddedWidth, 4);
+	input.read((char*)&altSize, 4);
+
 	if (bitsPerPixel == 16) throw; // TODO 16bits unused
-	resource.initialize(width, height, paddedWidth, bitsPerPixel);
-
-	uint32_t lineSize = width * (bitsPerPixel == 8 ? 1 : 4);
-	int padSize = (paddedWidth - width) * (bitsPerPixel == 8 ? 1 : 4);
-
-	input.ignore(4);
-
-	uint8_t* data = resource.getRawImage();
-	for (uint32_t i = 0; i < height; i++, data += lineSize) {
-		input.read((char*)data, lineSize);
-		input.ignore(padSize);
-	}
+	resource.initialize(bitsPerPixel, width, height, paddedWidth, altSize);
+	input.read((char*)resource.getRawImage(), resource.getRawSize());
 }
 
-void ShadyCore::ResourceDWriter::accept(Image& resource) {
+void writerImagePng(ShadyCore::Image& resource, std::ostream& output) {
 	// Initialize
 	png_structp pngData = png_create_write_struct(PNG_LIBPNG_VER_STRING, 0, pngError, pngWarning);
 	png_infop pngInfo = png_create_info_struct(pngData);
@@ -149,7 +166,7 @@ void ShadyCore::ResourceDWriter::accept(Image& resource) {
 	if (colorType != PNG_COLOR_TYPE_PALETTE) png_set_bgr(pngData);
 
 	// Write Image
-	int rowSize = resource.getWidth() * (resource.getBitsPerPixel() == 8 ? 1 : 4);
+	int rowSize = resource.getPaddedWidth() * (resource.getBitsPerPixel() == 8 ? 1 : 4);
 	const uint8_t ** pointers = new const uint8_t*[resource.getHeight()];
 	for (int i = 0; i < resource.getHeight(); ++i) {
 		pointers[i] = resource.getRawImage() + i * rowSize;
@@ -161,50 +178,51 @@ void ShadyCore::ResourceDWriter::accept(Image& resource) {
 	png_destroy_write_struct(&pngData, &pngInfo);
 }
 
-void ShadyCore::ResourceEWriter::accept(Image& resource) {
+void writerImageCv(ShadyCore::Image& resource, std::ostream& output) {
 	output.write((char*)&resource.getBitsPerPixel(), 1);
 	output.write((char*)&resource.getWidth(), 4);
 	output.write((char*)&resource.getHeight(), 4);
 	output.write((char*)&resource.getPaddedWidth(), 4);
+	output.write((char*)&resource.getAltSize(), 4);
+
 	if (resource.getBitsPerPixel() == 16) throw; // TODO 16bits unused
-
-	uint32_t lineSize = resource.getWidth() * (resource.getBitsPerPixel() == 8 ? 1 : 4);
-	int padSize = (resource.getPaddedWidth() - resource.getWidth()) * (resource.getBitsPerPixel() == 8 ? 1 : 4);
-
-	output.write("\0\0\0\0", 4);
-	const uint8_t* data = resource.getRawImage();
-	for (uint32_t i = 0; i < resource.getHeight(); i++, data += lineSize) {
-		output.write((const char*)data, lineSize);
-		for (int j = 0; j < padSize; ++j) output.put(0);
-	}
+	output.write((char*)resource.getRawImage(), resource.getRawSize());
 }
 
-void ShadyCore::ResourceDReader::accept(Palette& resource) {
-	input.read((char*)resource.getData(), 256 * 3);
-}
-
-void ShadyCore::ResourceEReader::accept(Palette& resource) {
-	uint16_t pcolor;
-
-	input.ignore(1);
-
+void readerPaletteAct(ShadyCore::Palette& resource, std::istream& input) {
+	resource.initialize(16);
+	uint16_t* data = (uint16_t*)resource.getData();
 	for (int i = 0; i < 256; ++i) {
-		input.read((char*)&pcolor, 2);
-		resource.setColor(i, Palette::unpackColor(pcolor));
+		uint32_t color = 0;
+		input.read((char*)&color, 3);
+		data[i] = ShadyCore::Palette::packColor(color, i == 0);
 	}
 }
 
-void ShadyCore::ResourceDWriter::accept(Palette& resource) {
-	output.write((char*)resource.getData(), 256 * 3);
+void readerPalette(ShadyCore::Palette& resource, std::istream& input) {
+	uint8_t bitsPerPixel;
+	input.read((char*)&bitsPerPixel, 1);
+	resource.initialize(bitsPerPixel);
+	input.read((char*)resource.getData(), resource.getSize());
 }
 
-void ShadyCore::ResourceEWriter::accept(Palette& resource) {
-	uint16_t pcolor;
-
-	output.put(0x10);
-
-	for (int i = 0; i < 256; ++i) {
-		pcolor = Palette::packColor(resource.getColor(i), i == 0);
-		output.write((char*)&pcolor, 2);
+void writerPaletteAct(ShadyCore::Palette& resource, std::ostream& output) {
+	if (resource.getBitsPerPixel() <= 16) {
+		for (int i = 0; i < 256; ++i) {
+			uint16_t* data = (uint16_t*)resource.getData();
+			uint32_t color = resource.unpackColor(data[i]);
+			output.write((char*)&color, 3);
+		}
+	} else {
+		for (int i = 0; i < 256; ++i) {
+			uint32_t* data = (uint32_t*)resource.getData();
+			output.write((char*)&data[i], 3);
+		}
 	}
+}
+
+void writerPalette(ShadyCore::Palette& resource, std::ostream& output) {
+	output.put(resource.getBitsPerPixel());
+	output.write((char*)resource.getData(), resource.getSize());
+}
 }

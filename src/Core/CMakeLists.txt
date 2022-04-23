@@ -4,6 +4,7 @@ set(SRC_CORE_Resource
 	resource/pattern.cpp
 	resource/sfx.cpp
 	resource/text.cpp
+	resource/xml.cpp
 	resource/readerwriter.hpp
 	resource/readerwriter.cpp )
 source_group("Source Files\\resource" FILES ${SRC_CORE_Resource})

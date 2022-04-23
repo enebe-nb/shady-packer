@@ -27,7 +27,7 @@ namespace {
         FT(FT::TYPE_SFX, FT::SFX_WAV, FT::getExtValue(".wav")),
         FT(FT::TYPE_SFX, FT::SFX_GAME, FT::getExtValue(".cv3")),
 
-        FT(FT::TYPE_SCHEMA, FT::FORMAT_UNKNOWN, FT::getExtValue(".xml")),
+        FT(FT::TYPE_SCHEMA, FT::SCHEMA_XML, FT::getExtValue(".xml")),
         FT(FT::TYPE_SCHEMA, FT::SCHEMA_GAME_GUI, FT::getExtValue(".dat")),
         FT(FT::TYPE_SCHEMA, FT::FORMAT_UNKNOWN, FT::getExtValue(".pat")),
     };
@@ -39,160 +39,124 @@ ShadyCore::FileType ShadyCore::FileType::get(uint32_t extValue) {
     return *i;
 }
 
-/*
-const ShadyCore::FileType& ShadyCore::FileType::get(const char* name, std::istream& input) {
-    const FileType& type = getSimple(name);
+namespace _private {
+    void readerText(ShadyCore::TextResource& resource, std::istream& input);
+    void readerTextCv(ShadyCore::TextResource& resource, std::istream& input);
+    void writerText(ShadyCore::TextResource& resource, std::ostream& output);
+    void writerTextCv(ShadyCore::TextResource& resource, std::ostream& output);
 
-    if (type.isEncrypted && type == TYPE_GUI) {
-        uint32_t version; input.read((char*)&version, 4);
-        input.seekg(0);
-        if (version != 4) return typePackage;
-    } else if (type.isEncrypted && type == TYPE_PATTERN) {
-        uint8_t version; input.read((char*)&version, 1);
-        input.seekg(0);
-        if (version != 5) return typeUnknown;
-        size_t len = strlen(name);
-        if (len >= 10 && strcmp(name + len - 10, "effect.pat") == 0
-            || len >= 9 && strcmp(name + len - 9, "stand.pat") == 0)
-            return typeEAnimation;
-    } else if (!type.isEncrypted && type == TYPE_PATTERN) {
-        char buffer[128];
-        while (input.get(buffer[0]) && input.gcount()) {
-            if (buffer[0] == '<') {
-                int i = 0;
-                for (input.get(buffer[0]); buffer[i] && !strchr(" />", buffer[i]); input.get(buffer[++i]));
-                buffer[i] = '\0';
-				if (strcmp(buffer, "movepattern") == 0) { input.seekg(0); return typeDPattern; }
-                if (strcmp(buffer, "animpattern") == 0) { input.seekg(0); return typeDAnimation; }
-				if (strcmp(buffer, "layout") == 0) { input.seekg(0); return typeDGui; }
-                if (!strchr("?", buffer[0])) break;
-            }
-        }
-		input.seekg(0);
-		return typeUnknown;
+    void readerLabel(ShadyCore::LabelResource& resource, std::istream& input);
+    void readerLabelSfl(ShadyCore::LabelResource& resource, std::istream& input);
+    void writerLabel(ShadyCore::LabelResource& resource, std::ostream& output);
+    void writerLabelSfl(ShadyCore::LabelResource& resource, std::ostream& output);
+
+    void readerImagePng(ShadyCore::Image& resource, std::istream& input);
+    void readerImageCv(ShadyCore::Image& resource, std::istream& input);
+    void writerImagePng(ShadyCore::Image& resource, std::ostream& output);
+    void writerImageCv(ShadyCore::Image& resource, std::ostream& output);
+
+    void readerPaletteAct(ShadyCore::Palette& resource, std::istream& input);
+    void readerPalette(ShadyCore::Palette& resource, std::istream& input);
+    void writerPaletteAct(ShadyCore::Palette& resource, std::ostream& output);
+    void writerPalette(ShadyCore::Palette& resource, std::ostream& output);
+
+    void readerSfxWave(ShadyCore::Sfx& resource, std::istream& input);
+    void readerSfxCv(ShadyCore::Sfx& resource, std::istream& input);
+    void writerSfxWave(ShadyCore::Sfx& resource, std::ostream& output);
+    void writerSfxCv(ShadyCore::Sfx& resource, std::ostream& output);
+
+    void readerSchemaXml(ShadyCore::Schema& resource, std::istream& input);
+    void readerSchemaGui(ShadyCore::Schema& resource, std::istream& input);
+    void readerSchemaAnim(ShadyCore::Schema& resource, std::istream& input);
+    void readerSchemaMove(ShadyCore::Schema& resource, std::istream& input);
+    void writerSchemaXml(ShadyCore::Schema& resource, std::ostream& output);
+    void writerSchemaGui(ShadyCore::Schema& resource, std::ostream& output);
+    void writerSchemaAnim(ShadyCore::Schema& resource, std::ostream& output);
+    void writerSchemaMove(ShadyCore::Schema& resource, std::ostream& output);
+}
+
+static constexpr uint32_t _pack(ShadyCore::FileType::Type type, ShadyCore::FileType::Format format)
+    { return (type << 16) | format; }
+
+ShadyCore::ResourceReader_t ShadyCore::getResourceReader(const ShadyCore::FileType& type) {
+    switch (_pack(type.type, type.format)) {
+        case _pack(FileType::TYPE_TEXT, FileType::TEXT_GAME): return (ShadyCore::ResourceReader_t)_private::readerTextCv;
+        case _pack(FileType::TYPE_TEXT, FileType::TEXT_NORMAL): return (ShadyCore::ResourceReader_t)_private::readerText;
+        case _pack(FileType::TYPE_TABLE, FileType::TABLE_GAME): return (ShadyCore::ResourceReader_t)_private::readerTextCv;
+        case _pack(FileType::TYPE_TABLE, FileType::TABLE_CSV): return (ShadyCore::ResourceReader_t)_private::readerText;
+        case _pack(FileType::TYPE_LABEL, FileType::LABEL_RIFF): return (ShadyCore::ResourceReader_t)_private::readerLabelSfl;
+        case _pack(FileType::TYPE_LABEL, FileType::LABEL_LBL): return (ShadyCore::ResourceReader_t)_private::readerLabel;
+        case _pack(FileType::TYPE_IMAGE, FileType::IMAGE_GAME): return (ShadyCore::ResourceReader_t)_private::readerImageCv;
+        case _pack(FileType::TYPE_IMAGE, FileType::IMAGE_PNG): return (ShadyCore::ResourceReader_t)_private::readerImagePng;
+        case _pack(FileType::TYPE_PALETTE, FileType::PALETTE_PAL): return (ShadyCore::ResourceReader_t)_private::readerPalette;
+        case _pack(FileType::TYPE_PALETTE, FileType::PALETTE_ACT): return (ShadyCore::ResourceReader_t)_private::readerPaletteAct;
+        case _pack(FileType::TYPE_SFX, FileType::SFX_GAME): return (ShadyCore::ResourceReader_t)_private::readerSfxCv;
+        case _pack(FileType::TYPE_SFX, FileType::SFX_WAV): return (ShadyCore::ResourceReader_t)_private::readerSfxWave;
+        case _pack(FileType::TYPE_SCHEMA, FileType::SCHEMA_XML): return (ShadyCore::ResourceReader_t)_private::readerSchemaXml;
+        case _pack(FileType::TYPE_SCHEMA, FileType::SCHEMA_GAME_GUI): return (ShadyCore::ResourceReader_t)_private::readerSchemaGui;
+        case _pack(FileType::TYPE_SCHEMA, FileType::SCHEMA_GAME_ANIM): return (ShadyCore::ResourceReader_t)_private::readerSchemaAnim;
+        case _pack(FileType::TYPE_SCHEMA, FileType::SCHEMA_GAME_PATTERN): return (ShadyCore::ResourceReader_t)_private::readerSchemaMove;
+
+        case _pack(FileType::TYPE_BGM, FileType::BGM_OGG): //return (ShadyCore::ResourceReader_t)_private::readerText;
+        default: throw std::runtime_error("Trying to get the reader of an unknown resource."); // TODO maybe use a messagebox
     }
-
-    return type;
 }
 
-const ShadyCore::FileType& ShadyCore::FileType::get(BasePackageEntry& entry) {
-	const FileType& type = getSimple(entry.getName());
+ShadyCore::ResourceWriter_t ShadyCore::getResourceWriter(const ShadyCore::FileType& type) {
+    switch (_pack(type.type, type.format)) {
+        case _pack(FileType::TYPE_TEXT, FileType::TEXT_GAME): return (ShadyCore::ResourceWriter_t)_private::writerTextCv;
+        case _pack(FileType::TYPE_TEXT, FileType::TEXT_NORMAL): return (ShadyCore::ResourceWriter_t)_private::writerText;
+        case _pack(FileType::TYPE_TABLE, FileType::TABLE_GAME): return (ShadyCore::ResourceWriter_t)_private::writerTextCv;
+        case _pack(FileType::TYPE_TABLE, FileType::TABLE_CSV): return (ShadyCore::ResourceWriter_t)_private::writerText;
+        case _pack(FileType::TYPE_LABEL, FileType::LABEL_RIFF): return (ShadyCore::ResourceWriter_t)_private::writerLabelSfl;
+        case _pack(FileType::TYPE_LABEL, FileType::LABEL_LBL): return (ShadyCore::ResourceWriter_t)_private::writerLabel;
+        case _pack(FileType::TYPE_IMAGE, FileType::IMAGE_GAME): return (ShadyCore::ResourceWriter_t)_private::writerImageCv;
+        case _pack(FileType::TYPE_IMAGE, FileType::IMAGE_PNG): return (ShadyCore::ResourceWriter_t)_private::writerImagePng;
+        case _pack(FileType::TYPE_PALETTE, FileType::PALETTE_PAL): return (ShadyCore::ResourceWriter_t)_private::writerPalette;
+        case _pack(FileType::TYPE_PALETTE, FileType::PALETTE_ACT): return (ShadyCore::ResourceWriter_t)_private::writerPaletteAct;
+        case _pack(FileType::TYPE_SFX, FileType::SFX_GAME): return (ShadyCore::ResourceWriter_t)_private::writerSfxCv;
+        case _pack(FileType::TYPE_SFX, FileType::SFX_WAV): return (ShadyCore::ResourceWriter_t)_private::writerSfxWave;
+        case _pack(FileType::TYPE_SCHEMA, FileType::SCHEMA_XML): return (ShadyCore::ResourceWriter_t)_private::writerSchemaXml;
+        case _pack(FileType::TYPE_SCHEMA, FileType::SCHEMA_GAME_GUI): return (ShadyCore::ResourceWriter_t)_private::writerSchemaGui;
+        case _pack(FileType::TYPE_SCHEMA, FileType::SCHEMA_GAME_ANIM): return (ShadyCore::ResourceWriter_t)_private::writerSchemaAnim;
+        case _pack(FileType::TYPE_SCHEMA, FileType::SCHEMA_GAME_PATTERN): return (ShadyCore::ResourceWriter_t)_private::writerSchemaMove;
 
-	if (type.isEncrypted && type == TYPE_GUI) {
-		std::istream& input = entry.open();
-		uint32_t version; input.read((char*)&version, 4);
-		entry.close();
-		if (version != 4) return typePackage;
-	} else if (type.isEncrypted && type == TYPE_PATTERN) {
-		std::istream& input = entry.open();
-		uint8_t version; input.read((char*)&version, 1);
-		entry.close();
-		if (version != 5) return typeUnknown;
-        size_t len = strlen(entry.getName());
-        if (len >= 10 && strcmp(entry.getName() + len - 10, "effect.pat") == 0
-            || len >= 9 && strcmp(entry.getName() + len - 9, "stand.pat") == 0)
-            return typeEAnimation;
-    } else if (!type.isEncrypted && type == TYPE_PATTERN) {
-        std::istream& input = entry.open();
-        char buffer[128];
-        while (input.get(buffer[0]) && input.gcount()) {
-            if (buffer[0] == '<') {
-                int i = 0;
-                for (input.get(buffer[0]); buffer[i] && !strchr(" />", buffer[i]); input.get(buffer[++i]));
-                buffer[i] = '\0';
-				if (strcmp(buffer, "movepattern") == 0) { entry.close(); return typeDPattern; }
-				if (strcmp(buffer, "animpattern") == 0) { entry.close(); return typeDAnimation; }
-				if (strcmp(buffer, "layout") == 0) { entry.close(); return typeDGui; }
-                if (!strchr("?", buffer[0])) break;
-            }
-        }
-		entry.close();
-		return typeUnknown;
-	}
-
-	return type;
+        case _pack(FileType::TYPE_BGM, FileType::BGM_OGG): //return (ShadyCore::ResourceWriter_t)_private::readerText;
+        default: throw std::runtime_error("Trying to get the writer of an unknown resource."); // TODO maybe use a messagebox
+    }
 }
-*/
 
-ShadyCore::Resource* ShadyCore::createResource(const FileType::Type type, const FileType::Format format) {
+ShadyCore::Resource* ShadyCore::createResource(const ShadyCore::FileType::Type type) {
     switch(type) {
-	case FileType::TYPE_TEXT: return new TextResource();
-    case FileType::TYPE_TABLE: return new TextResource();
-	case FileType::TYPE_LABEL: return new LabelResource();
-	case FileType::TYPE_PALETTE: return new Palette();
-    case FileType::TYPE_IMAGE: return new Image();
-	case FileType::TYPE_SFX: return new Sfx();
-    case FileType::TYPE_SCHEMA:
-        // TODO simplify schema selection
-        if (format == FileType::SCHEMA_GAME_GUI
-            || format == FileType::SCHEMA_XML_GUI) return new GuiRoot();
-        if (format == FileType::SCHEMA_GAME_ANIM
-            || format == FileType::SCHEMA_XML_ANIM) return new Pattern(true);
-        if (format == FileType::SCHEMA_GAME_PATTERN
-            || format == FileType::SCHEMA_XML_PATTERN) return new Pattern(false);
-        throw std::runtime_error("Unknown Format ID: " + std::to_string(format));
-	default: return 0;
+        case FileType::TYPE_TEXT:
+        case FileType::TYPE_TABLE: return new TextResource;
+        case FileType::TYPE_LABEL: return new LabelResource;
+        case FileType::TYPE_IMAGE: return new Image;
+        case FileType::TYPE_PALETTE: return new Palette;
+        case FileType::TYPE_SFX: return new Sfx;
+        case FileType::TYPE_SCHEMA: return new Schema;
+        default: throw std::runtime_error("Trying to create unknown resource."); // TODO maybe use a messagebox
     }
 }
 
-ShadyCore::Resource* ShadyCore::readResource(const FileType::Type type, const FileType::Format format, std::istream& input) {
-	Resource* resource = createResource(type, format);
-	if (resource) {
-        // TODO remake readers for any format
-		if (format == 0 || format >= 4) ResourceEReader(resource, input);
-		else ResourceDReader(resource, input);
-	} return resource;
-}
-
-void ShadyCore::readResource(Resource* resource, const FileType::Format format, std::istream& input) {
-    // TODO remake readers for any format
-	if (format == 0 || format >= 4) ResourceEReader(resource, input);
-    else ResourceDReader(resource, input);
-}
-
-void ShadyCore::writeResource(Resource* resource, const FileType::Format format, std::ostream& output) {
-    // TODO remake readers for any format
-	if (format == 0 || format >= 4) ResourceEWriter(resource, output);
-	else ResourceDWriter(resource, output);
+void ShadyCore::destroyResource(const ShadyCore::FileType::Type type, ShadyCore::Resource* resource) {
+    switch(type) {
+        case FileType::TYPE_TEXT:
+        case FileType::TYPE_TABLE: reinterpret_cast<TextResource*>(resource)->destroy(); break;
+        case FileType::TYPE_LABEL: break; // no destroy
+        case FileType::TYPE_IMAGE: reinterpret_cast<Image*>(resource)->destroy(); break;
+        case FileType::TYPE_PALETTE: reinterpret_cast<Palette*>(resource)->destroy(); break;
+        case FileType::TYPE_SFX: reinterpret_cast<Sfx*>(resource)->destroy(); break;
+        case FileType::TYPE_SCHEMA: reinterpret_cast<Schema*>(resource)->destroy(); break;
+    } delete resource;
 }
 
 void ShadyCore::convertResource(const FileType::Type type, const FileType::Format inputFormat, std::istream& input, const FileType::Format outputFormat, std::ostream& output) {
     if (inputFormat == outputFormat) { output << input.rdbuf(); return; }
 
-	Resource* resource = createResource(type, inputFormat);
-	if (!resource) throw; // TODO Error Handling
-    // TODO remake readers for any format
-	if (inputFormat == 0 || inputFormat >= 4) {
-		ResourceEReader(resource, input);
-		ResourceDWriter(resource, output);
-	} else {
-		ResourceDReader(resource, input);
-		ResourceEWriter(resource, output);
-	} delete resource;
+    Resource* resource = createResource(type);
+    getResourceReader(FileType(type, inputFormat))(resource, input);
+    getResourceWriter(FileType(type, outputFormat))(resource, output);
+    destroyResource(type, resource);
 }
 
-void ShadyCore::TextResource::visit(ResourceVisitor* visitor) { visitor->accept(*this); }
-void ShadyCore::LabelResource::visit(ResourceVisitor* visitor) { visitor->accept(*this); }
-void ShadyCore::Image::visit(ResourceVisitor* visitor) { visitor->accept(*this); }
-void ShadyCore::Palette::visit(ResourceVisitor* visitor) { visitor->accept(*this); }
-void ShadyCore::Sfx::visit(ResourceVisitor* visitor) { visitor->accept(*this); }
-
-void ShadyCore::GuiRoot::visit(ResourceVisitor* visitor) { visitor->accept(*this); }
-void ShadyCore::GuiImage::visit(ResourceVisitor* visitor) { visitor->accept(*this); }
-void ShadyCore::GuiView::visit(ResourceVisitor* visitor) { visitor->accept(*this); impl->visit(visitor); }
-void ShadyCore::GuiView::Static::visit(ResourceVisitor* visitor) { visitor->accept(*this); }
-void ShadyCore::GuiView::Mutable::visit(ResourceVisitor* visitor) { visitor->accept(*this); }
-void ShadyCore::GuiView::Number::visit(ResourceVisitor* visitor) { visitor->accept(*this); }
-
-void ShadyCore::Pattern::visit(ResourceVisitor* visitor) { visitor->accept(*this); }
-void ShadyCore::Sequence::visit(ResourceVisitor* visitor) { visitor->accept(*this); if(impl) impl->visit(visitor); }
-void ShadyCore::Sequence::Clone::visit(ResourceVisitor* visitor) { visitor->accept(*this); }
-void ShadyCore::Sequence::Animation::visit(ResourceVisitor* visitor) { visitor->accept(*this); }
-void ShadyCore::Sequence::Move::visit(ResourceVisitor* visitor) { visitor->accept(*this); }
-void ShadyCore::Frame::visit(ResourceVisitor* visitor) { visitor->accept(*this); impl->visit(visitor); }
-void ShadyCore::Frame::Animation::visit(ResourceVisitor* visitor) { visitor->accept(*this); }
-void ShadyCore::Frame::Move::visit(ResourceVisitor* visitor) { visitor->accept(*this); }
-void ShadyCore::BlendOptions::visit(ResourceVisitor* visitor) { visitor->accept(*this); }
-void ShadyCore::MoveTraits::visit(ResourceVisitor* visitor) { visitor->accept(*this); }
-void ShadyCore::BBoxList::visit(ResourceVisitor* visitor) { visitor->accept(*this); }
-void ShadyCore::MoveEffect::visit(ResourceVisitor* visitor) { visitor->accept(*this); }

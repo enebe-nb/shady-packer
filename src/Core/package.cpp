@@ -119,7 +119,6 @@ void ShadyCore::Package::save(const std::filesystem::path& filename, Mode mode) 
 	std::filesystem::path tempFile = ShadyUtil::TempFile();
 	if (mode == DATA_MODE) saveData(tempFile);
 	if (mode == ZIP_MODE) saveZip(tempFile);
-	std::unique_lock lock(*this);
 	std::filesystem::rename(tempFile, target);
 }
 
@@ -159,35 +158,30 @@ ShadyCore::FileType ShadyCore::Package::iterator::fileType() const {
 		break;
 	case FileType::TYPE_SCHEMA:
 		if (ft.extValue == FileType::getExtValue(".dat")) {
-			std::istream& input = this->open();
-			uint32_t version; input.read((char*)&version, 4);
-			this->close();
-			if (version == 4) ft.format = FileType::SCHEMA_GAME_GUI;
+			ft.format = FileType::SCHEMA_GAME_GUI;
 		} else if(ft.extValue == FileType::getExtValue(".pat")) {
-			std::istream& input = this->open();
-			uint8_t version; input.read((char*)&version, 1);
-			this->close();
-			if (version != 5) break;
 			auto& name = this->name();
 			if (name.size() >= 6 && name.ends_with("effect")
 				|| name.size() >= 5 && name.ends_with("stand"))
 				ft.format = FileType::SCHEMA_GAME_ANIM;
 			else ft.format = FileType::SCHEMA_GAME_PATTERN;
 		} else if(ft.extValue == FileType::getExtValue(".xml")) {
-			std::istream& input = this->open();
-			char buffer[128];
-			while (input.get(buffer[0]) && input.gcount()) {
-				if (buffer[0] == '<') {
-					int j = 0;
-					for (input.get(buffer[0]); buffer[j] && !strchr(" />", buffer[j]); input.get(buffer[++j]));
-					buffer[j] = '\0';
-					if (strcmp(buffer, "movepattern") == 0) { ft.format = FileType::SCHEMA_XML_PATTERN; break; }
-					if (strcmp(buffer, "animpattern") == 0) { ft.format = FileType::SCHEMA_XML_ANIM; break; }
-					if (strcmp(buffer, "layout") == 0) { ft.format = FileType::SCHEMA_XML_GUI; break; }
-					if (!strchr("?", buffer[0])) break;
-				}
-			}
-			this->close();
+			ft.format = FileType::SCHEMA_XML;
+			// TODO delete comments
+			// std::istream& input = this->open();
+			// char buffer[128];
+			// while (input.get(buffer[0]) && input.gcount()) {
+			// 	if (buffer[0] == '<') {
+			// 		int j = 0;
+			// 		for (input.get(buffer[0]); buffer[j] && !strchr(" />", buffer[j]); input.get(buffer[++j]));
+			// 		buffer[j] = '\0';
+			// 		if (strcmp(buffer, "movepattern") == 0) { ft.format = FileType::SCHEMA_XML_PATTERN; break; }
+			// 		if (strcmp(buffer, "animpattern") == 0) { ft.format = FileType::SCHEMA_XML_ANIM; break; }
+			// 		if (strcmp(buffer, "layout") == 0) { ft.format = FileType::SCHEMA_XML_GUI; break; }
+			// 		if (!strchr("?", buffer[0])) break;
+			// 	}
+			// }
+			// this->close();
 		}
 		break;
 	}

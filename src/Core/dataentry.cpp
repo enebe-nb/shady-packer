@@ -222,9 +222,28 @@ namespace {
 		FT(FT::TYPE_PALETTE, FT::PALETTE_PAL, FT::getExtValue(".pal")),
 		FT(FT::TYPE_SFX, FT::SFX_GAME, FT::getExtValue(".cv3")),
 		FT(FT::TYPE_BGM, FT::BGM_OGG, FT::getExtValue(".ogg")),
-		// TODO TYPE_SCHEMA
-		FT(FT::TYPE_SCHEMA, FT::FORMAT_UNKNOWN, FT::getExtValue(".pat")),
 	};
+
+	static inline FT findTargetType(const FT& inputType, ShadyCore::BasePackageEntry* entry) {
+		if (inputType == FT::TYPE_SCHEMA) {
+			FT::Format format = FT::FORMAT_UNKNOWN;
+			if (inputType.format == FT::SCHEMA_XML) {
+				char buffer[16];
+				std::istream& input = entry->open();
+				while (input.get(buffer[0]) && input.gcount()) if (buffer[0] == '<') {
+					int j = 0;
+					for (input.get(buffer[0]); j < 16 && buffer[j] && !strchr(" />", buffer[j]); input.get(buffer[++j]));
+					buffer[j] = '\0';
+					if (strcmp(buffer, "movepattern") == 0) { format = FT::SCHEMA_GAME_PATTERN; break; }
+					if (strcmp(buffer, "animpattern") == 0) { format = FT::SCHEMA_GAME_ANIM; break; }
+					if (strcmp(buffer, "layout") == 0) { format = FT::SCHEMA_GAME_GUI; break; }
+					if (!strchr("?", buffer[0])) break;
+				}
+				entry->close();
+			} else format = inputType.format;
+			return FT(FT::TYPE_SCHEMA, format, format == FT::SCHEMA_GAME_GUI ? FT::getExtValue(".dat") : FT::getExtValue(".pat"));
+		} return outputTypes[inputType.type];
+	}
 }
 
 void ShadyCore::Package::saveData(const std::filesystem::path& filename) {
@@ -235,28 +254,13 @@ void ShadyCore::Package::saveData(const std::filesystem::path& filename) {
 	for (auto i = begin(); i != end(); ++i) {
 		auto entry = i->second;
 		FileType inputType = i.fileType();
-		FileType targetType = outputTypes[i->first.fileType.type];
+		FileType targetType = findTargetType(inputType, entry);
 		tempFiles.emplace_back(i->first.name, ShadyUtil::TempFile());
 
 		std::ofstream output(tempFiles.back().second, std::ios::binary);
 		std::istream& input = entry->open();
 
-		if (targetType != FileType::TYPE_SCHEMA) ShadyCore::convertResource(inputType.type, inputType.format, input, targetType.format, output);
-		// TODO fix TYPE_SCHEMA
-		else switch(inputType.format) {
-			case FileType::SCHEMA_XML_ANIM:
-				ShadyCore::convertResource(inputType.type, inputType.format, input, FileType::SCHEMA_GAME_ANIM, output); break;
-			case FileType::SCHEMA_XML_GUI:
-				targetType.extValue = FileType::getExtValue(".dat");
-				ShadyCore::convertResource(inputType.type, inputType.format, input, FileType::SCHEMA_GAME_GUI, output); break;
-			case FileType::SCHEMA_XML_PATTERN:
-				ShadyCore::convertResource(inputType.type, inputType.format, input, FileType::SCHEMA_GAME_PATTERN, output); break;
-
-			case FileType::SCHEMA_GAME_ANIM:
-			case FileType::SCHEMA_GAME_GUI:
-			case FileType::SCHEMA_GAME_PATTERN:
-				ShadyCore::convertResource(inputType.type, inputType.format, input, inputType.format, output); break;
-		}
+		ShadyCore::convertResource(inputType.type, inputType.format, input, targetType.format, output);
 
 		entry->close();
 		Package::underlineToSlash(tempFiles.back().first);

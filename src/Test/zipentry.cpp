@@ -5,10 +5,9 @@
 #include <fstream>
 #include <gtest/gtest.h>
 
-class ZipEntrySuite : public testing::Test {
+class ZipEntrySuite : public ::testing::Test {
 public:
 	static const char* dataArray[];
-	//void testStreamWrite(); // TODO write into zip (maybe?)
 };
 
 const char* ZipEntrySuite::dataArray[] = {
@@ -98,13 +97,13 @@ TEST_F(ZipEntrySuite, PackageRead) {
 	ShadyCore::Package package("test-data/zip-package.dat");
 
 	for (const char* data : dataArray) {
-		std::istream& input = package.find(data)->second->open();
+		std::istream& input = package.find(data).open();
 		std::filesystem::path fileName("test-data/zip-extracted"); fileName /= data;
 		std::ifstream expected(fileName, std::ios::binary);
 
 		EXPECT_TRUE(testing::isSameData(input, expected)) << "filename: " << data;
 
-		package.find(data)->second->close();
+		package.find(data).close();
 		expected.close();
 	}
 }
@@ -130,13 +129,13 @@ TEST_F(ZipEntrySuite, PackageWrite) {
 			std::string filename(entry.first.name);
 			entry.first.fileType.appendExtValue(filename);
 			auto i = input->find(filename);
-			ASSERT_TRUE(i != input->end());
+			ASSERT_TRUE(i != input->end()) << "filename: " << filename;
 
-			std::istream& inputS = i->second->open();
+			std::istream& inputS = i.open();
 			std::istream& expectedS = entry.second->open();
 			EXPECT_TRUE(testing::isSameData(inputS, expectedS)) << "filename: " << filename << ", package: " << packageName;
 			entry.second->close();
-			i->second->close();
+			i.close();
 		}
 
 		delete input;

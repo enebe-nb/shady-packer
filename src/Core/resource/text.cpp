@@ -1,24 +1,14 @@
 #include "readerwriter.hpp"
-#include "../util/riffdocument.hpp"
-#include <stack>
 
-ShadyCore::TextResource::~TextResource() { if (data) delete[] data; }
-
-void ShadyCore::TextResource::initialize(size_t l) {
-	length = l;
-
-	if (data) delete[] data;
-	data = new char[length];
-}
-
-void ShadyCore::ResourceDReader::accept(TextResource& resource) {
+namespace _private {
+void readerText(ShadyCore::TextResource& resource, std::istream& input) {
 	input.seekg(0, std::ios::end);
 	resource.initialize(input.tellg());
 	input.seekg(0);
 	input.read(resource.getData(), resource.getLength());
 }
 
-void ShadyCore::ResourceEReader::accept(TextResource& resource) {
+void readerTextCv(ShadyCore::TextResource& resource, std::istream& input) {
 	char* data; size_t len;
 	input.seekg(0, std::ios::end);
 	resource.initialize(input.tellg());
@@ -34,11 +24,11 @@ void ShadyCore::ResourceEReader::accept(TextResource& resource) {
 	}
 }
 
-void ShadyCore::ResourceDWriter::accept(TextResource& resource) {
+void writerText(ShadyCore::TextResource& resource, std::ostream& output) {
 	output.write(resource.getData(), resource.getLength());
 }
 
-void ShadyCore::ResourceEWriter::accept(TextResource& resource) {
+void writerTextCv(ShadyCore::TextResource& resource, std::ostream& output) {
 	char* data = new char[resource.getLength()];
 	
 	// Encrypt
@@ -51,4 +41,5 @@ void ShadyCore::ResourceEWriter::accept(TextResource& resource) {
 	
 	output.write(data, resource.getLength());
 	delete[] data;
+}
 }

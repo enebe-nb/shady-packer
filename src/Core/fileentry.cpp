@@ -48,40 +48,25 @@ namespace {
 		FT(FT::TYPE_PALETTE, FT::PALETTE_ACT, FT::getExtValue(".act")),
 		FT(FT::TYPE_SFX, FT::SFX_WAV, FT::getExtValue(".wav")),
 		FT(FT::TYPE_BGM, FT::BGM_OGG, FT::getExtValue(".ogg")),
-		// TODO TYPE_SCHEMA
-		FT(FT::TYPE_SCHEMA, FT::FORMAT_UNKNOWN, FT::getExtValue(".xml")),
+		FT(FT::TYPE_SCHEMA, FT::SCHEMA_XML, FT::getExtValue(".xml")),
 	};
 }
 
 void ShadyCore::Package::saveDir(const std::filesystem::path& directory) {
-	std::unique_lock lock(*this);
+	std::shared_lock lock(*this);
 	if (!std::filesystem::exists(directory)) std::filesystem::create_directories(directory);
 	else if (!std::filesystem::is_directory(directory)) return;
 
 	std::filesystem::path target = std::filesystem::absolute(directory);
 	for (auto i = begin(); i != end(); ++i) {
 		FileType inputType = i.fileType();
-		FileType targetType = outputTypes[i->first.fileType.type];
+		FileType targetType = outputTypes[inputType.type];
 
 		std::filesystem::path tempFile = ShadyUtil::TempFile();
 		std::ofstream output(tempFile, std::ios::binary);
 		std::istream& input = i.open();
 
-		if (targetType != FileType::TYPE_SCHEMA) ShadyCore::convertResource(targetType.type, inputType.format, input, targetType.format, output);
-		// TODO fix TYPE_SCHEMA
-		else switch(inputType.format) {
-			case FileType::SCHEMA_XML_ANIM:
-			case FileType::SCHEMA_XML_GUI:
-			case FileType::SCHEMA_XML_PATTERN:
-				ShadyCore::convertResource(inputType.type, inputType.format, input, inputType.format, output); break;
-
-			case FileType::SCHEMA_GAME_ANIM:
-				ShadyCore::convertResource(inputType.type, inputType.format, input, FileType::SCHEMA_XML_ANIM, output); break;
-			case FileType::SCHEMA_GAME_GUI:
-				ShadyCore::convertResource(inputType.type, inputType.format, input, FileType::SCHEMA_XML_GUI, output); break;
-			case FileType::SCHEMA_GAME_PATTERN:
-				ShadyCore::convertResource(inputType.type, inputType.format, input, FileType::SCHEMA_XML_PATTERN, output); break;
-		}
+		ShadyCore::convertResource(targetType.type, inputType.format, input, targetType.format, output);
 
 		i.close();
 		output.close();

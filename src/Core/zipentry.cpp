@@ -5,15 +5,18 @@
 #include <zip.h>
 #include <filesystem>
 #include <fstream>
+#include <iostream>
 
 std::streambuf::int_type ShadyCore::ZipStream::underflow() {
 	if (hasBufVal) return bufVal;
 
 	char value;
-	if (zip_fread((zip_file_t*)innerFile, &value, 1)) {
+	int read = zip_fread((zip_file_t*)innerFile, &value, 1);
+	if (read > 0) {
 		hasBufVal = true;
 		return bufVal = traits_type::to_int_type(value);
-	} return traits_type::eof();
+	} else if (read < 0) throw std::runtime_error("You probably did open this file twice!");
+	return traits_type::eof();
 }
 
 std::streamsize ShadyCore::ZipStream::xsgetn(char_type* buffer, std::streamsize size) {
@@ -38,10 +41,12 @@ std::streambuf::int_type ShadyCore::ZipStream::uflow() {
 	}
 
 	char value;
-	if (zip_fread((zip_file_t*)innerFile, &value, 1)) {
+	int read = zip_fread((zip_file_t*)innerFile, &value, 1);
+	if (read > 0) {
 		++pos;
 		return traits_type::to_int_type(value);
-	} return traits_type::eof();
+	} else if (read < 0) throw std::runtime_error("You probably did open this file twice!");
+	return traits_type::eof();
 }
 
 std::streambuf::pos_type ShadyCore::ZipStream::seekoff(off_type spos, std::ios::seekdir sdir, std::ios::openmode mode) {
@@ -226,9 +231,28 @@ namespace {
 		FT(FT::TYPE_PALETTE, FT::PALETTE_PAL, FT::getExtValue(".pal")),
 		FT(FT::TYPE_SFX, FT::SFX_GAME, FT::getExtValue(".cv3")),
 		FT(FT::TYPE_BGM, FT::BGM_OGG, FT::getExtValue(".ogg")),
-		// TODO TYPE_SCHEMA
-		FT(FT::TYPE_SCHEMA, FT::FORMAT_UNKNOWN, FT::getExtValue(".pat")),
 	};
+
+	static inline FT findTargetType(const FT& inputType, ShadyCore::BasePackageEntry* entry) {
+		if (inputType == FT::TYPE_SCHEMA) {
+			FT::Format format = FT::FORMAT_UNKNOWN;
+			if (inputType.format == FT::SCHEMA_XML) {
+				char buffer[16];
+				std::istream& input = entry->open();
+				while (input.get(buffer[0]) && input.gcount()) if (buffer[0] == '<') {
+					int j = 0;
+					for (input.get(buffer[0]); j < 16 && buffer[j] && !strchr(" />", buffer[j]); input.get(buffer[++j]));
+					buffer[j] = '\0';
+					if (strcmp(buffer, "movepattern") == 0) { format = FT::SCHEMA_GAME_PATTERN; break; }
+					if (strcmp(buffer, "animpattern") == 0) { format = FT::SCHEMA_GAME_ANIM; break; }
+					if (strcmp(buffer, "layout") == 0) { format = FT::SCHEMA_GAME_GUI; break; }
+					if (!strchr("?", buffer[0])) break;
+				}
+				entry->close();
+			} else format = inputType.format;
+			return FT(FT::TYPE_SCHEMA, format, format == FT::SCHEMA_GAME_GUI ? FT::getExtValue(".dat") : FT::getExtValue(".pat"));
+		} return outputTypes[inputType.type];
+	}
 }
 
 void ShadyCore::Package::saveZip(const std::filesystem::path& filename) {
@@ -236,39 +260,27 @@ void ShadyCore::Package::saveZip(const std::filesystem::path& filename) {
 	std::ofstream output(filename, std::ios::binary);
 	zip_source_t* outputSource = zip_source_function_create(zipOutputFunc, &output, 0);
 	zip_t* file = zip_open_from_source(outputSource, ZIP_CREATE | ZIP_TRUNCATE | ZIP_CHECKCONS, 0);
+	std::vector<std::filesystem::path> convertedFiles;
 
 	for (auto i = begin(); i != end(); ++i) {
 		auto entry = i->second;
 
 		zip_source_t* inputSource;
 		FileType inputType = i.fileType();
-		FileType targetType = outputTypes[i->first.fileType.type];
+		FileType targetType = findTargetType(inputType, entry);
 
 		if (inputType.format == targetType.format) {
 			inputSource = zip_source_function_create(zipInputFunc, createZipReader(entry), 0);
 		} else {
-			std::filesystem::path tempFile = ShadyUtil::TempFile();
-			std::ofstream output(tempFile, std::ios::binary);
+			convertedFiles.push_back(ShadyUtil::TempFile());
+			std::ofstream output(convertedFiles.back(), std::ios::binary);
 			std::istream& input = entry->open();
 
-			if (targetType != FileType::TYPE_SCHEMA) ShadyCore::convertResource(targetType.type, inputType.format, input, targetType.format, output);
-			// TODO fix TYPE_SCHEMA
-			else switch(inputType.format) {
-				case FileType::SCHEMA_XML_ANIM:
-					ShadyCore::convertResource(inputType.type, inputType.format, input, FileType::SCHEMA_GAME_ANIM, output); break;
-				case FileType::SCHEMA_XML_GUI:
-					targetType.extValue = FileType::getExtValue(".dat");
-					ShadyCore::convertResource(inputType.type, inputType.format, input, FileType::SCHEMA_GAME_GUI, output); break;
-				case FileType::SCHEMA_XML_PATTERN:
-					ShadyCore::convertResource(inputType.type, inputType.format, input, FileType::SCHEMA_GAME_PATTERN, output); break;
+			ShadyCore::convertResource(inputType.type, inputType.format, input, targetType.format, output);
+			output.close();
 
-				case FileType::SCHEMA_GAME_ANIM:
-				case FileType::SCHEMA_GAME_GUI:
-				case FileType::SCHEMA_GAME_PATTERN:
-					ShadyCore::convertResource(inputType.type, inputType.format, input, inputType.format, output); break;
-			}
-
-			inputSource = zip_source_file_create(tempFile.string().c_str(), 0, 0, 0);
+			inputSource = zip_source_file_create(convertedFiles.back().string().c_str(), 0, 0, 0);
+			entry->close();
 		}
 
 		std::string filename(i->first.name);
@@ -276,5 +288,6 @@ void ShadyCore::Package::saveZip(const std::filesystem::path& filename) {
 	}
 
 	zip_close(file);
+	for (auto& file : convertedFiles) std::filesystem::remove(file);
 }
 

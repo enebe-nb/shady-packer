@@ -6,55 +6,74 @@
 #include <gtest/gtest.h>
 #include <benchmark/benchmark.h>
 
-using filePair = std::pair<const char*, const char*>;
-
-class ReaderWriterSuite : public ::testing::TestWithParam<filePair> {
-public:
-	static filePair dataArray[];
+using FT = ShadyCore::FileType;
+struct ConvertionData {
+	FT::Type type;
+	const std::vector<std::pair<FT::Format, const std::filesystem::path> > files;
 };
 
-filePair ReaderWriterSuite::dataArray[] = {
-	{ "test-data/encrypted/data/my-text.cv0", "test-data/decrypted/data/my-text.txt" },
-	{ "test-data/encrypted/data/my-text.cv1", "test-data/decrypted/data/my-text.csv" },
-	{ "test-data/encrypted/data/my-label.sfl", "test-data/decrypted/data/my-label.lbl" },
-	{ "test-data/encrypted/data/my-image.cv2", "test-data/decrypted/data/my-image.png" },
-	{ "test-data/encrypted/data/my-image-indexed.cv2", "test-data/decrypted/data/my-image-indexed.png" },
-	{ "test-data/encrypted/data/my-palette.pal", "test-data/decrypted/data/my-palette.act" },
-	{ "test-data/encrypted/data/my-sfx.cv3", "test-data/decrypted/data/my-sfx.wav" },
-	{ "test-data/encrypted/data/my-gui.dat", "test-data/decrypted/data/my-gui.xml" },
-	{ "test-data/encrypted/data/my-pattern.pat", "test-data/decrypted/data/my-pattern.xml" },
-	{ "test-data/encrypted/data/my-effect.pat", "test-data/decrypted/data/my-effect.xml" }
+class ReaderWriterSuite : public ::testing::TestWithParam<ConvertionData> {
+public:
+	const static ConvertionData dataArray[];
+};
+
+const ConvertionData ReaderWriterSuite::dataArray[] = {
+	{ FT::TYPE_TEXT, {
+		{FT::TEXT_GAME, "test-data/encrypted/data/my-text.cv0"},
+		{FT::TEXT_NORMAL, "test-data/decrypted/data/my-text.txt"},
+	}},
+	{ FT::TYPE_TABLE, {
+		{FT::TABLE_GAME, "test-data/encrypted/data/my-text.cv1"},
+		{FT::TABLE_CSV, "test-data/decrypted/data/my-text.csv"},
+	}},
+	{ FT::TYPE_LABEL, {
+		{FT::LABEL_RIFF, "test-data/encrypted/data/my-label.sfl"},
+		{FT::LABEL_LBL, "test-data/decrypted/data/my-label.lbl"},
+	}},
+	{ FT::TYPE_IMAGE, {
+		{FT::IMAGE_GAME, "test-data/encrypted/data/my-image.cv2"},
+		{FT::IMAGE_PNG, "test-data/decrypted/data/my-image.png"},
+	}},
+	{ FT::TYPE_IMAGE, {
+		{FT::IMAGE_GAME, "test-data/encrypted/data/my-image-indexed.cv2"},
+		{FT::IMAGE_PNG, "test-data/decrypted/data/my-image-indexed.png"},
+	}},
+	{ FT::TYPE_PALETTE, {
+		{FT::PALETTE_PAL, "test-data/encrypted/data/my-palette.pal"},
+		{FT::PALETTE_ACT, "test-data/decrypted/data/my-palette.act"},
+	}},
+	{ FT::TYPE_SFX, {
+		{FT::SFX_GAME, "test-data/encrypted/data/my-sfx.cv3"},
+		{FT::SFX_WAV, "test-data/decrypted/data/my-sfx.wav"},
+	}},
+	{ FT::TYPE_SCHEMA, {
+		{FT::SCHEMA_GAME_GUI, "test-data/encrypted/data/my-gui.dat"},
+		{FT::SCHEMA_XML, "test-data/decrypted/data/my-gui.xml"},
+	}},
+	{ FT::TYPE_SCHEMA, {
+		{FT::SCHEMA_GAME_PATTERN, "test-data/encrypted/data/my-pattern.pat"},
+		{FT::SCHEMA_XML, "test-data/decrypted/data/my-pattern.xml"},
+	}},
+	{ FT::TYPE_SCHEMA, {
+		{FT::SCHEMA_GAME_ANIM, "test-data/encrypted/data/my-effect.pat"},
+		{FT::SCHEMA_XML, "test-data/decrypted/data/my-effect.xml"},
+	}},
 };
 
 TEST_P(ReaderWriterSuite, Convertion) {
 	auto data = GetParam();
-	for (int i = 0; i < 2; ++i) {
-		const char* current = i==0 ? data.first : data.second;
-		std::ifstream input(current, std::ios::binary), expected;
-		// TODO better input
-		ShadyCore::PackageEx package;
-		ShadyCore::FileType type = package.insert(current).fileType();
-		ShadyCore::Resource* resource = ShadyCore::createResource(type.type, type.format);
-		ShadyCore::readResource(resource, type.format, input);
-
-		// TODO it's wrong but it's works (unexpected hack)
-		std::stringstream output;
-		ShadyCore::writeResource(resource, ShadyCore::FileType::TEXT_GAME, output);
-		expected.open(data.first, std::ios::binary);
-		EXPECT_TRUE(testing::isSameData(output, expected)) << "filename: " << data.first;
-		expected.close();
-
-		output.clear(); output.str("");
-		ShadyCore::writeResource(resource, ShadyCore::FileType::TEXT_NORMAL, output);
-		expected.open(data.second, std::ios::binary);
-		EXPECT_TRUE(testing::isSameData(output, expected)) << "filename: " << data.second;
-		expected.close();
-
-		delete resource;
-		input.close();
+	for (auto& inputData : data.files){
+		std::ifstream input(inputData.second, std::ios::binary);
+		for (auto& outputData : data.files) {
+			std::stringstream output;
+			ShadyCore::convertResource(data.type, inputData.first, input, outputData.first, output);
+			std::ifstream expected(outputData.second, std::ios::binary);
+			EXPECT_TRUE(testing::isSameData(output, expected)) << "in: " << inputData.second << ", out: " << outputData.second;
+			input.seekg(0);
+		}
 	}
 }
-/*
+
 TEST_P(ReaderWriterSuite, PackageRead) {
 	auto data = GetParam();
 
@@ -62,40 +81,35 @@ TEST_P(ReaderWriterSuite, PackageRead) {
 	std::filesystem::path dataFile = ShadyUtil::TempFile();
 	{
 		ShadyCore::PackageEx package;
-		package.insert(data.first, data.first);
-		package.insert(data.second, data.second);
-		package.save(zipFile, ShadyCore::Package::ZIP_MODE, 0, 0);
-		package.save(dataFile, ShadyCore::Package::DATA_MODE, 0, 0);
+		package.insert(data.files[0].second.filename().string(), data.files[0].second);
+		package.save(zipFile, ShadyCore::Package::ZIP_MODE);
+		package.save(dataFile, ShadyCore::Package::DATA_MODE);
 		package.clear();
 	}
 
 	for (auto file : { zipFile, dataFile }) {
 		ShadyCore::Resource* resource;
 		ShadyCore::Package package(file);
-		auto i = package.find(data.first);
-		EXPECT_TRUE(i != package.end());
-		EXPECT_EQ(i, package.find(data.second));
-		std::istream &input = i->second->open();
+		auto iter = package.find(data.files[0].second.filename().string());
+		ASSERT_TRUE(iter != package.end()) << "find(" << data.files[0].second.filename().string() << ")";
+		for (int i = 1; i < data.files.size(); ++i) {
+			ASSERT_EQ(iter, package.find(data.files[i].second.filename().string()))
+				<< "equal(" << data.files[i].second.filename().string() << ")";
+		}
 
-		std::stringstream output; std::ifstream expected;
-		ShadyCore::writeResource(resource = ShadyCore::readResource(type0, input0), output, type0.isEncrypted);
-		expected.open(data.first, std::ios::binary);
-		ASSERT_STREAM(output, expected);
-		expected.close();
-		delete resource;
-
-		output.clear(); output.str("");
-		ShadyCore::writeResource(resource = ShadyCore::readResource(type1, input1), output, type1.isEncrypted);
-		expected.open(data.second, std::ios::binary);
-		ASSERT_STREAM(output, expected);
-		expected.close();
-		delete resource;
-
-		i->second->close();
+		ShadyCore::FileType type = iter.fileType();
+		std::istream &input = iter.open();
+		for (int i = 0; i < data.files.size(); ++i) {
+			std::stringstream output;
+			ShadyCore::convertResource(type.type, type.format, input, data.files[i].first, output);
+			std::ifstream expected(data.files[i].second, std::ios::binary);
+			EXPECT_TRUE(testing::isSameData(output, expected))  << "package["<< data.files[i].second.filename() << "]";
+			input.seekg(0);
+		} iter.close();
 	}
 
 	std::filesystem::remove(zipFile);
 	std::filesystem::remove(dataFile);
 }
-*/
+
 INSTANTIATE_TEST_SUITE_P(FileList, ReaderWriterSuite, ::testing::ValuesIn(ReaderWriterSuite::dataArray) );
