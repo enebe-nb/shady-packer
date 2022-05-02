@@ -143,7 +143,8 @@ ShadyCore::FileType ShadyCore::Package::iterator::fileType() const {
 		break;
 	case FileType::TYPE_IMAGE:
 		ft.format = ft.extValue == FileType::getExtValue(".cv2")
-			? FileType::IMAGE_GAME : FileType::IMAGE_PNG;
+			? FileType::IMAGE_GAME : FileType::getExtValue(".png")
+			? FileType::IMAGE_PNG : FileType::IMAGE_BMP;
 		break;
 	case FileType::TYPE_PALETTE:
 		ft.format = ft.extValue == FileType::getExtValue(".pal")
@@ -156,6 +157,9 @@ ShadyCore::FileType ShadyCore::Package::iterator::fileType() const {
 	case FileType::TYPE_BGM:
 		ft.format = FileType::BGM_OGG;
 		break;
+	case FileType::TYPE_TEXTURE:
+		ft.format = FileType::TEXTURE_DDS;
+		break;
 	case FileType::TYPE_SCHEMA:
 		if (ft.extValue == FileType::getExtValue(".dat")) {
 			ft.format = FileType::SCHEMA_GAME_GUI;
@@ -167,21 +171,6 @@ ShadyCore::FileType ShadyCore::Package::iterator::fileType() const {
 			else ft.format = FileType::SCHEMA_GAME_PATTERN;
 		} else if(ft.extValue == FileType::getExtValue(".xml")) {
 			ft.format = FileType::SCHEMA_XML;
-			// TODO delete comments
-			// std::istream& input = this->open();
-			// char buffer[128];
-			// while (input.get(buffer[0]) && input.gcount()) {
-			// 	if (buffer[0] == '<') {
-			// 		int j = 0;
-			// 		for (input.get(buffer[0]); buffer[j] && !strchr(" />", buffer[j]); input.get(buffer[++j]));
-			// 		buffer[j] = '\0';
-			// 		if (strcmp(buffer, "movepattern") == 0) { ft.format = FileType::SCHEMA_XML_PATTERN; break; }
-			// 		if (strcmp(buffer, "animpattern") == 0) { ft.format = FileType::SCHEMA_XML_ANIM; break; }
-			// 		if (strcmp(buffer, "layout") == 0) { ft.format = FileType::SCHEMA_XML_GUI; break; }
-			// 		if (!strchr("?", buffer[0])) break;
-			// 	}
-			// }
-			// this->close();
 		}
 		break;
 	}

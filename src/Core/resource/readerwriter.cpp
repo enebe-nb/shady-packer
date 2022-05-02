@@ -20,6 +20,7 @@ namespace {
         FT(FT::TYPE_TABLE, FT::FORMAT_UNKNOWN, FT::getExtValue(".cv1")),
         FT(FT::TYPE_LABEL, FT::LABEL_LBL, FT::getExtValue(".lbl")),
         FT(FT::TYPE_LABEL, FT::LABEL_RIFF, FT::getExtValue(".sfl")),
+        FT(FT::TYPE_IMAGE, FT::IMAGE_BMP, FT::getExtValue(".bmp")),
         FT(FT::TYPE_IMAGE, FT::IMAGE_PNG, FT::getExtValue(".png")),
         FT(FT::TYPE_IMAGE, FT::IMAGE_GAME, FT::getExtValue(".cv2")),
         FT(FT::TYPE_PALETTE, FT::PALETTE_ACT, FT::getExtValue(".act")),
@@ -30,6 +31,9 @@ namespace {
         FT(FT::TYPE_SCHEMA, FT::SCHEMA_XML, FT::getExtValue(".xml")),
         FT(FT::TYPE_SCHEMA, FT::SCHEMA_GAME_GUI, FT::getExtValue(".dat")),
         FT(FT::TYPE_SCHEMA, FT::FORMAT_UNKNOWN, FT::getExtValue(".pat")),
+
+        FT(FT::TYPE_TEXTURE, FT::TEXTURE_DDS, FT::getExtValue(".dds")),
+        FT(FT::TYPE_BGM, FT::FORMAT_UNKNOWN, FT::getExtValue(".ogg")),
     };
 }
 
@@ -52,8 +56,10 @@ namespace _private {
 
     void readerImagePng(ShadyCore::Image& resource, std::istream& input);
     void readerImageCv(ShadyCore::Image& resource, std::istream& input);
+    void readerImageBmp(ShadyCore::Image& resource, std::istream& input);
     void writerImagePng(ShadyCore::Image& resource, std::ostream& output);
     void writerImageCv(ShadyCore::Image& resource, std::ostream& output);
+    void writerImageBmp(ShadyCore::Image& resource, std::ostream& output);
 
     void readerPaletteAct(ShadyCore::Palette& resource, std::istream& input);
     void readerPalette(ShadyCore::Palette& resource, std::istream& input);
@@ -88,6 +94,7 @@ ShadyCore::ResourceReader_t ShadyCore::getResourceReader(const ShadyCore::FileTy
         case _pack(FileType::TYPE_LABEL, FileType::LABEL_LBL): return (ShadyCore::ResourceReader_t)_private::readerLabel;
         case _pack(FileType::TYPE_IMAGE, FileType::IMAGE_GAME): return (ShadyCore::ResourceReader_t)_private::readerImageCv;
         case _pack(FileType::TYPE_IMAGE, FileType::IMAGE_PNG): return (ShadyCore::ResourceReader_t)_private::readerImagePng;
+        case _pack(FileType::TYPE_IMAGE, FileType::IMAGE_BMP): return (ShadyCore::ResourceReader_t)_private::readerImageBmp;
         case _pack(FileType::TYPE_PALETTE, FileType::PALETTE_PAL): return (ShadyCore::ResourceReader_t)_private::readerPalette;
         case _pack(FileType::TYPE_PALETTE, FileType::PALETTE_ACT): return (ShadyCore::ResourceReader_t)_private::readerPaletteAct;
         case _pack(FileType::TYPE_SFX, FileType::SFX_GAME): return (ShadyCore::ResourceReader_t)_private::readerSfxCv;
@@ -112,6 +119,7 @@ ShadyCore::ResourceWriter_t ShadyCore::getResourceWriter(const ShadyCore::FileTy
         case _pack(FileType::TYPE_LABEL, FileType::LABEL_LBL): return (ShadyCore::ResourceWriter_t)_private::writerLabel;
         case _pack(FileType::TYPE_IMAGE, FileType::IMAGE_GAME): return (ShadyCore::ResourceWriter_t)_private::writerImageCv;
         case _pack(FileType::TYPE_IMAGE, FileType::IMAGE_PNG): return (ShadyCore::ResourceWriter_t)_private::writerImagePng;
+        case _pack(FileType::TYPE_IMAGE, FileType::IMAGE_BMP): return (ShadyCore::ResourceWriter_t)_private::writerImageBmp;
         case _pack(FileType::TYPE_PALETTE, FileType::PALETTE_PAL): return (ShadyCore::ResourceWriter_t)_private::writerPalette;
         case _pack(FileType::TYPE_PALETTE, FileType::PALETTE_ACT): return (ShadyCore::ResourceWriter_t)_private::writerPaletteAct;
         case _pack(FileType::TYPE_SFX, FileType::SFX_GAME): return (ShadyCore::ResourceWriter_t)_private::writerSfxCv;
@@ -135,7 +143,7 @@ ShadyCore::Resource* ShadyCore::createResource(const ShadyCore::FileType::Type t
         case FileType::TYPE_PALETTE: return new Palette;
         case FileType::TYPE_SFX: return new Sfx;
         case FileType::TYPE_SCHEMA: return new Schema;
-        default: throw std::runtime_error("Trying to create unknown resource."); // TODO maybe use a messagebox
+        default: throw std::runtime_error("Trying to create an unknown resource."); // TODO maybe use a messagebox
     }
 }
 
@@ -148,6 +156,7 @@ void ShadyCore::destroyResource(const ShadyCore::FileType::Type type, ShadyCore:
         case FileType::TYPE_PALETTE: reinterpret_cast<Palette*>(resource)->destroy(); break;
         case FileType::TYPE_SFX: reinterpret_cast<Sfx*>(resource)->destroy(); break;
         case FileType::TYPE_SCHEMA: reinterpret_cast<Schema*>(resource)->destroy(); break;
+        default: throw std::runtime_error("Trying to destroy an unknown resource."); // TODO maybe use a messagebox
     } delete resource;
 }
 

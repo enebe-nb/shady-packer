@@ -210,6 +210,7 @@ void ShadyCore::Package::loadZip(const std::filesystem::path& path) {
 	auto file = zip_open_from_source(zip_source_win32handle_create(handle, 0, 0, 0), ZIP_RDONLY, 0);
 
 	zip_int64_t count = zip_get_num_entries(file, 0);
+	entries.reserve(entries.size() + count);
 	for (zip_int64_t i = 0; i < count; ++i) {
 		zip_stat_t fileStat;
 		zip_stat_index(file, i, 0, &fileStat);

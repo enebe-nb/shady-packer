@@ -18,6 +18,7 @@ namespace {
 
 static ShadyCore::BasePackageEntry* _lua_find(void* userdata, const char* filename) {
     _lua_loader* loader = reinterpret_cast<_lua_loader*>(userdata);
+    // TODO avoid double search
     auto iter = loader->owner->find(filename);
     if (iter == loader->owner->end()) {
         iter = loader->base->find(filename);

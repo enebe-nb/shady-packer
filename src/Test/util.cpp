@@ -5,7 +5,7 @@ testing::AssertionResult testing::isSameData(std::istream& l, std::istream& r) {
     std::streamsize lc, rc, offset = 0;
     do {
         lc = l.read(lb, 16).gcount(); rc = r.read(rb, 16).gcount();
-        if (lc != rc) throw AssertionFailure()
+        if (lc != rc) return AssertionFailure()
             << "size mismatch: " << offset + lc << " != " << offset + rc;
         if (memcmp(lb, rb, lc) != 0) return AssertionFailure()
             << "data mismatch [0x"<<itoa(offset, mb, 16)<<"]: " << PrintToString(lb) << " != " << PrintToString(rb) << " " << lc;

@@ -17,7 +17,7 @@ void readerSchemaGui(ShadyCore::Schema& resource, std::istream& input) {
 		char* name = new char[len + 1];
 		input.read(name, len); name[len] = '\0';
 		auto& image = resource.images.emplace_back(name);
-		input.read(image.getDataAddr(), 16);
+		input.read((char*)&image.x, 16); // , y, w, h
 	};
 
 	input.read((char*)&count, 4);
@@ -30,19 +30,20 @@ void readerSchemaGui(ShadyCore::Schema& resource, std::istream& input) {
 		switch (type) {
 		case 0: case 2: case 3: case 4: case 5:
 			object = new ShadyCore::Schema::GuiObject(id, type);
-			input.read(object->getDataAddr(), 16);
+			input.read((char*)&object->imageIndex, 16); // , x, y, mirror
 			break;
 		case 1:
 			object = new ShadyCore::Schema::GuiObject(id, type);
-			input.read(object->getDataAddr() + 4, 8);
+			input.read((char*)&object->x, 8); // , y
 			break;
 		case 6:
 			object = new ShadyCore::Schema::GuiNumber(id);
-			input.read(object->getDataAddr(), 12);
-			input.read(((ShadyCore::Schema::GuiNumber*)object)->getDataAddr(), 24);
+			input.read((char*)&object->imageIndex, 12); // , x, y
+			input.read((char*)&((ShadyCore::Schema::GuiNumber*)object)->w, 24);
+				// , h, fontSpacing, textSpacing, size, floatSize
 			break;
 		default:
-			throw new std::runtime_error("Schema Gui: Unrecognized type of object.");
+			throw std::runtime_error("Schema Gui: Unrecognized type of object.");
 		}
 		resource.objects.push_back(object);
 	}
@@ -54,10 +55,10 @@ void writerSchemaGui(ShadyCore::Schema& resource, std::ostream& output) {
 	output.write((char*)&count, 4);
 	for (int i = 0; i < count; ++i) {
 		auto& image = resource.images[i];
-		uint32_t len = strlen(image.getName());
+		uint32_t len = strlen(image.name);
 		output.write((char*)&len, 4);
-		output.write(image.getName(), len);
-		output.write(image.getDataAddr(), 16);
+		output.write(image.name, len);
+		output.write((char*)&image.x, 16);
 	}
 
 	count = resource.objects.size();
@@ -68,14 +69,15 @@ void writerSchemaGui(ShadyCore::Schema& resource, std::ostream& output) {
 		output.write((char*)&object->getType(), 1);
 		switch (object->getType()) {
 		case 0: case 2: case 3: case 4: case 5:
-			output.write(object->getDataAddr(), 16);
+			output.write((char*)&object->imageIndex, 16); // , x, y, mirror
 			break;
 		case 1:
-			output.write(object->getDataAddr() + 4, 8);
+			output.write((char*)&object->x, 8); // , y
 			break;
 		case 6:
-			output.write(object->getDataAddr(), 12);
-			output.write(((ShadyCore::Schema::GuiNumber*)object)->getDataAddr(), 24);
+			output.write((char*)&object->imageIndex, 12); // , x, y
+			output.write((char*)&((ShadyCore::Schema::GuiNumber*)object)->w, 24);
+				// , h, fontSpacing, textSpacing, size, floatSize
 			break;
 		}
 	}

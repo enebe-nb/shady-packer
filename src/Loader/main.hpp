@@ -14,4 +14,4 @@ void SaveSettings();
 void LoadPackage();
 void UnloadPackage();
 void HookLoader(const std::wstring& caller);
-void UnloadLoader();
+void UnhookLoader();

@@ -24,6 +24,26 @@ static void setPackageEnabled(ModPackage* package, bool value) {
 	}
 }
 
+static const char* translateExecuteError(int val) {
+	switch (val) {
+		case 0: return "The operating system is out of memory or resources.";
+		case 1: return "The file is invalid or does not exists";
+		case ERROR_FILE_NOT_FOUND: return "The specified file was not found.";
+		case ERROR_PATH_NOT_FOUND: return "The specified path was not found.";
+		case ERROR_BAD_FORMAT: return "The .exe file is invalid (non-Win32 .exe or error in .exe image).";
+		case SE_ERR_ACCESSDENIED: return "The operating system denied access to the specified file.";
+		case SE_ERR_ASSOCINCOMPLETE: return "The file name association is incomplete or invalid.";
+		case SE_ERR_DDEBUSY: return "The DDE transaction could not be completed because other DDE transactions were being processed.";
+		case SE_ERR_DDEFAIL: return "The DDE transaction failed.";
+		case SE_ERR_DDETIMEOUT: return "The DDE transaction could not be completed because the request timed out.";
+		case SE_ERR_DLLNOTFOUND: return "The specified DLL was not found.";
+		case SE_ERR_NOASSOC: return "There is no application associated with the given file name extension.";
+		case SE_ERR_OOM: return "There was not enough memory to complete the operation.";
+		case SE_ERR_SHARE: return "A sharing violation occurred.";
+		default: return "Unknown Error";
+	}
+}
+
 ModList::ModList() : CFileList() {
 	this->maxLength = 26;
 	this->extLength = 0;
@@ -69,6 +89,7 @@ int ModList::appendLine(SokuLib::String& out, void* unknown, SokuLib::Deque<Soku
 
 ModMenu::ModMenu() {
 	design.loadResource("shady/downloader.dat");
+	ModPackage::LoadFromFilesystem(); // TODO test
 	modList.updateList();
 
 	design.getById((SokuLib::CDesign::Sprite**)&modList.scrollBar, 101);
@@ -159,8 +180,25 @@ int ModMenu::onProcess() {
 				this->state = 0;
 				break;
 			case OPTION_SHOW:
-				ShellExecuteW(0, L"explore", package->path.c_str(), L"", 0, SW_NORMAL);
-				break;
+				HINSTANCE result = (HINSTANCE)1;
+				if (std::filesystem::is_directory(package->path)) {
+					result = ShellExecuteW(0, L"explore", package->path.c_str(), L"", 0, SW_NORMAL);
+				} else if (std::filesystem::is_regular_file(package->path)) {
+					std::wstring execPath;
+					int len = MAX_PATH + 1;
+					do { execPath.resize(len);
+						len = ExpandEnvironmentStringsW(L"%windir%\\explorer.exe", execPath.data(), len);
+					} while(len > execPath.size());
+
+					result = ShellExecuteW(0, L"open", execPath.c_str(),
+						(L"/select,\"" + package->path.wstring() + L"\"").c_str(), 0, SW_NORMAL);
+				}
+
+				if (result <= (HINSTANCE)32) {
+					char errTitle[32] = "Explorer Error: ";
+					itoa(GetLastError(), &errTitle[16], 10);
+					MessageBox(0, translateExecuteError((int)result), errTitle, MB_OK);
+				}
 			}
 
 			this->updateView(modCursor.pos);

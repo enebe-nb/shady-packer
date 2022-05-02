@@ -10,6 +10,7 @@ namespace ShadyCore {
 			TYPE_UNKNOWN, TYPE_TEXT, TYPE_TABLE,
 			TYPE_LABEL, TYPE_IMAGE, TYPE_PALETTE,
 			TYPE_SFX, TYPE_BGM, TYPE_SCHEMA,
+			TYPE_TEXTURE,
 		};
 
 		enum Format : short {
@@ -18,11 +19,12 @@ namespace ShadyCore {
 			TEXT_GAME, TEXT_NORMAL,
 			TABLE_GAME, TABLE_CSV,
 			LABEL_RIFF, LABEL_LBL,
-			IMAGE_GAME, IMAGE_PNG,
+			IMAGE_GAME, IMAGE_PNG, IMAGE_BMP,
 			PALETTE_PAL, PALETTE_ACT,
 			SFX_GAME, SFX_WAV,
 			BGM_OGG,
 			SCHEMA_XML, SCHEMA_GAME_GUI, SCHEMA_GAME_ANIM, SCHEMA_GAME_PATTERN,
+			TEXTURE_DDS,
 		};
 
 		// --- DATA ---
@@ -69,8 +71,4 @@ namespace ShadyCore {
 	Resource* createResource(const FileType::Type);
 	void destroyResource(const FileType::Type, Resource*);
 	void convertResource(const FileType::Type, const FileType::Format, std::istream&, const FileType::Format, std::ostream&);
-
-	// Resource* readResource(const FileType::Type, const FileType::Format, std::istream&);
-	// void readResource(Resource*, const FileType::Format, std::istream&);
-	// void writeResource(Resource*, const FileType::Format, std::ostream&);
 }

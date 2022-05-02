@@ -67,7 +67,7 @@ extern "C" __declspec(dllexport) void AtExit() {}
 
 BOOL WINAPI DllMain(HMODULE hModule, DWORD fdwReason, LPVOID lpReserved) {
 	if (fdwReason == DLL_PROCESS_DETACH) {
-		UnloadLoader();
+		UnhookLoader();
 		UnloadPackage();
 		Logger::Finalize();
 	}

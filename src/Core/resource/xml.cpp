@@ -163,7 +163,7 @@ namespace {
 		// modifiers
 		"liftmodifier",  "smashmodifier",   "bordermodifier", "chainmodifier",
 		"spellmodifier", "countermodifier", "modifier07",     "modifier08",
-};
+	};
 
 	const AttributeMap XmlMoveTraits = {
 		{"damage",      {(setter_t)setter<uint16_t>,    offsetof(ShadyCore::Schema::Sequence::MoveTraits, damage)}},
@@ -206,29 +206,31 @@ namespace {
 	};
 
 	const AttributeMap XmlMoveBox = {
-		{"left",        {(setter_t)setter<int32_t>,     offsetof(ShadyCore::Schema::Sequence::BBoxList::BBox, left)}},
-		{"up",          {(setter_t)setter<int32_t>,     offsetof(ShadyCore::Schema::Sequence::BBoxList::BBox, up)}},
-		{"right",       {(setter_t)setter<int32_t>,     offsetof(ShadyCore::Schema::Sequence::BBoxList::BBox, right)}},
-		{"down",        {(setter_t)setter<int32_t>,     offsetof(ShadyCore::Schema::Sequence::BBoxList::BBox, down)}},
-		{"unknown",     {(setter_t)setter<uint8_t>,     offsetof(ShadyCore::Schema::Sequence::BBoxList::BBox, unknown)}},
+		{"left",        {(setter_t)setter<int32_t>,     offsetof(ShadyCore::Schema::Sequence::BBox, left)}},
+		{"up",          {(setter_t)setter<int32_t>,     offsetof(ShadyCore::Schema::Sequence::BBox, up)}},
+		{"right",       {(setter_t)setter<int32_t>,     offsetof(ShadyCore::Schema::Sequence::BBox, right)}},
+		{"down",        {(setter_t)setter<int32_t>,     offsetof(ShadyCore::Schema::Sequence::BBox, down)}},
+		{"unknown",     {(setter_t)setter<uint8_t>,     offsetof(ShadyCore::Schema::Sequence::BBox, unknown)}},
 	};
 }
 
+// TODO hashing?
 static inline int addImage(ShadyCore::Schema& resource, rapidxml::xml_attribute<>* attr) {
-	using namespace rapidxml;
 	if (!attr) return -1;
 
 	const char* name = attr->value();
 	for (int i = 0; i < resource.images.size(); ++i) {
-		if (strcmp(resource.images[i].getName(), name) == 0) return i;
+		if (strcmp(resource.images[i].name, name) == 0) return i;
 	}
 
-	auto& image = resource.images.emplace_back(name);
+	char* buffer = new char[attr->value_size() + 1];
+	memcpy(buffer, name, attr->value_size());
+	buffer[attr->value_size()] = '\0';
+	auto& image = resource.images.emplace_back(buffer);
 	return resource.images.size() - 1;
 }
 
 static inline int addImage(ShadyCore::Schema& resource, rapidxml::xml_node<>* imageNode) {
-	using namespace rapidxml;
 	if (!imageNode) return -1;
 
 	int id = addImage(resource, imageNode->first_attribute("name"));
@@ -258,7 +260,7 @@ static void readerSchemaXmlNode(void* data, rapidxml::xml_node<>* node) {
 			int id = attr ? atoi(attr->value()) : 0;
 			auto obj = new ShadyCore::Schema::GuiObject(id, type);
 			schema->objects.push_back(obj);
-			obj->setImageIndex(addImage(*schema, node->first_node("image")));
+			obj->imageIndex = addImage(*schema, node->first_node("image"));
 			readAttributes(node, (char*)obj, XmlGuiObject);
 		} break;
 		case XmlNode::MUTABLE: {
@@ -273,7 +275,7 @@ static void readerSchemaXmlNode(void* data, rapidxml::xml_node<>* node) {
 			int id = attr ? atoi(attr->value()) : 0;
 			auto obj = new ShadyCore::Schema::GuiNumber(id);
 			schema->objects.push_back(obj);
-			obj->setImageIndex(addImage(*schema, node->first_node("image")));
+			obj->imageIndex = addImage(*schema, node->first_node("image"));
 			readAttributes(node, (char*)obj, XmlGuiNumber);
 		} break;
 		case XmlNode::CLONE: {
@@ -282,7 +284,7 @@ static void readerSchemaXmlNode(void* data, rapidxml::xml_node<>* node) {
 			auto obj = new ShadyCore::Schema::Clone(id);
 			schema->objects.push_back(obj);
 			attr = node->first_attribute("target");
-			if (attr) obj->setTargetId(atoi(attr->value()));
+			if (attr) obj->targetId = atoi(attr->value());
 		} break;
 		case XmlNode::ANIMATION:
 		case XmlNode::MOVE: {
@@ -294,7 +296,7 @@ static void readerSchemaXmlNode(void* data, rapidxml::xml_node<>* node) {
 			for (auto iter = node->first_node(); iter; iter = iter->next_sibling()) {
 				auto frame = type == XmlNode::ANIMATION ? new ShadyCore::Schema::Sequence::Frame() : new ShadyCore::Schema::Sequence::MoveFrame();
 				obj->frames.push_back(frame);
-				frame->setImageIndex(addImage(*schema, iter->first_attribute("image")));
+				frame->imageIndex = addImage(*schema, iter->first_attribute("image"));
 				readAttributes(iter, (char*)frame, XmlFrame);
 				for (auto prop = iter->first_node(); prop; prop = prop->next_sibling()) readerSchemaXmlNode(frame, prop);
 			}
@@ -304,8 +306,7 @@ static void readerSchemaXmlNode(void* data, rapidxml::xml_node<>* node) {
 			readAttributes(node, (char*)&frame->blendOptions, XmlBlendOptions); break;
 		} break;
 		case XmlNode::TRAITS: {
-			const auto frame = reinterpret_cast<ShadyCore::Schema::Sequence::MoveFrame*>(data);
-			auto& traits = frame->getTraits();
+			auto& traits = reinterpret_cast<ShadyCore::Schema::Sequence::MoveFrame*>(data)->traits;
 			traits.frameFlags = traits.attackFlags = traits.comboModifier = 0;
 			readAttributes(node, (char*)&traits, XmlMoveTraits);
 			for (auto flag = node->first_node(); flag; flag = flag->next_sibling()) {
@@ -326,27 +327,24 @@ static void readerSchemaXmlNode(void* data, rapidxml::xml_node<>* node) {
 		} break;
 		case XmlNode::EFFECT: {
 			const auto frame = reinterpret_cast<ShadyCore::Schema::Sequence::MoveFrame*>(data);
-			readAttributes(node, (char*)&frame->getEffect(), XmlMoveEffect);
+			readAttributes(node, (char*)&frame->effect, XmlMoveEffect);
 		} break;
 		case XmlNode::COLLISION: {
-			const auto frame = reinterpret_cast<ShadyCore::Schema::Sequence::MoveFrame*>(data);
+			auto& boxes = reinterpret_cast<ShadyCore::Schema::Sequence::MoveFrame*>(data)->cBoxes;
 			for(auto box = node->first_node("box"); box; box = box->next_sibling("box")) {
-				auto& object = frame->getCollisionBoxes().createBox();
-				readAttributes(box, (char*)&object, XmlMoveBox);
+				readAttributes(box, (char*)&boxes.emplace_back(), XmlMoveBox);
 			}
 		} break;
 		case XmlNode::HIT: {
-			const auto frame = reinterpret_cast<ShadyCore::Schema::Sequence::MoveFrame*>(data);
+			auto& boxes = reinterpret_cast<ShadyCore::Schema::Sequence::MoveFrame*>(data)->hBoxes;
 			for(auto box = node->first_node("box"); box; box = box->next_sibling("box")) {
-				auto& object = frame->getHitBoxes().createBox();
-				readAttributes(box, (char*)&object, XmlMoveBox);
+				readAttributes(box, (char*)&boxes.emplace_back(), XmlMoveBox);
 			}
 		} break;
 		case XmlNode::ATTACK: {
-			const auto frame = reinterpret_cast<ShadyCore::Schema::Sequence::MoveFrame*>(data);
+			auto& boxes = reinterpret_cast<ShadyCore::Schema::Sequence::MoveFrame*>(data)->aBoxes;
 			for(auto box = node->first_node("box"); box; box = box->next_sibling("box")) {
-				auto& object = frame->getAttackBoxes().createBox();
-				readAttributes(box, (char*)&object, XmlMoveBox);
+				readAttributes(box, (char*)&boxes.emplace_back(), XmlMoveBox);
 			}
 		} break;
 	}
@@ -376,11 +374,11 @@ void readerSchemaXml(ShadyCore::Schema& resource, std::istream& input) {
 
 static inline void printImageNode(ShadyCore::Schema::Image& image, ShadyUtil::XmlPrinter& printer) {
 	printer.openNode("image");
-	printer.appendAttribute("name", image.getName());
-	printer.appendAttribute("xposition", image.getX());
-	printer.appendAttribute("yposition", image.getY());
-	printer.appendAttribute("width", image.getWidth());
-	printer.appendAttribute("height", image.getHeight());
+	printer.appendAttribute("name", image.name);
+	printer.appendAttribute("xposition", image.x);
+	printer.appendAttribute("yposition", image.y);
+	printer.appendAttribute("width", image.w);
+	printer.appendAttribute("height", image.h);
 	printer.closeNode();
 }
 
@@ -421,7 +419,7 @@ static void writerSchemaXmlNode(ShadyCore::Schema& resource, ShadyUtil::XmlPrint
 		case XmlNode::CLONE: {
 			auto object = reinterpret_cast<ShadyCore::Schema::Clone*>(data);
 			printer.appendAttribute("id", object->getId());
-			printer.appendAttribute("target", object->getTargetId());
+			printer.appendAttribute("target", object->targetId);
 		} break;
 		case XmlNode::ANIMATION: {
 			auto object = reinterpret_cast<ShadyCore::Schema::Sequence*>(data);
@@ -432,18 +430,18 @@ static void writerSchemaXmlNode(ShadyCore::Schema& resource, ShadyUtil::XmlPrint
 			for (uint32_t i = 0; i < object->frames.size(); ++i) {
 				auto frame = object->frames[i];
 				printer.openNode("frame");
-				printer.appendAttribute("image", resource.images[frame->imageIndex].name.c_str());
+				printer.appendAttribute("image", resource.images[frame->imageIndex].name);
 				printer.appendAttribute("index", i);
 
-				printer.appendAttribute("unknown", frame->getUnknown(), true);
-				printer.appendAttribute("xtexoffset", frame->getTexOffsetX());
-				printer.appendAttribute("ytexoffset", frame->getTexOffsetY());
-				printer.appendAttribute("texwidth", frame->getTexWidth());
-				printer.appendAttribute("texheight", frame->getTexHeight());
-				printer.appendAttribute("xoffset", frame->getOffsetX());
-				printer.appendAttribute("yoffset", frame->getOffsetY());
-				printer.appendAttribute("duration", frame->getDuration());
-				printer.appendAttribute("rendergroup", frame->getRenderGroup());
+				printer.appendAttribute("unknown", frame->unknown, true);
+				printer.appendAttribute("xtexoffset", frame->texOffsetX);
+				printer.appendAttribute("ytexoffset", frame->texOffsetY);
+				printer.appendAttribute("texwidth", frame->texWidth);
+				printer.appendAttribute("texheight", frame->texHeight);
+				printer.appendAttribute("xoffset", frame->offsetX);
+				printer.appendAttribute("yoffset", frame->offsetY);
+				printer.appendAttribute("duration", frame->duration);
+				printer.appendAttribute("rendergroup", frame->renderGroup);
 
 				if (frame->hasBlendOptions()) writerSchemaXmlNode(resource, printer, &frame->blendOptions, XmlNode::BLEND);
 
@@ -455,77 +453,77 @@ static void writerSchemaXmlNode(ShadyCore::Schema& resource, ShadyUtil::XmlPrint
 			printer.appendAttribute("id", object->getId());
 			printer.appendAttribute("index", index);
 			printer.appendAttribute("loop", object->loop);
-			printer.appendAttribute("movelock", object->getMoveLock());
-			printer.appendAttribute("actionlock", object->getActionLock());
+			printer.appendAttribute("movelock", object->moveLock);
+			printer.appendAttribute("actionlock", object->actionLock);
 
 			for (uint32_t i = 0; i < ((ShadyCore::Schema::Sequence*)object)->frames.size(); ++i) {
 				auto frame = (ShadyCore::Schema::Sequence::MoveFrame*)object->frames[i];
 				printer.openNode("frame");
-				printer.appendAttribute("image", resource.images[frame->imageIndex].name.c_str());
+				printer.appendAttribute("image", resource.images[frame->imageIndex].name);
 				printer.appendAttribute("index", i);
 
-				printer.appendAttribute("unknown", frame->getUnknown(), true);
-				printer.appendAttribute("xtexoffset", frame->getTexOffsetX());
-				printer.appendAttribute("ytexoffset", frame->getTexOffsetY());
-				printer.appendAttribute("texwidth", frame->getTexWidth());
-				printer.appendAttribute("texheight", frame->getTexHeight());
-				printer.appendAttribute("xoffset", frame->getOffsetX());
-				printer.appendAttribute("yoffset", frame->getOffsetY());
-				printer.appendAttribute("duration", frame->getDuration());
-				printer.appendAttribute("rendergroup", frame->getRenderGroup());
+				printer.appendAttribute("unknown", frame->unknown, true);
+				printer.appendAttribute("xtexoffset", frame->texOffsetX);
+				printer.appendAttribute("ytexoffset", frame->texOffsetY);
+				printer.appendAttribute("texwidth", frame->texWidth);
+				printer.appendAttribute("texheight", frame->texHeight);
+				printer.appendAttribute("xoffset", frame->offsetX);
+				printer.appendAttribute("yoffset", frame->offsetY);
+				printer.appendAttribute("duration", frame->duration);
+				printer.appendAttribute("rendergroup", frame->renderGroup);
 
 				if (frame->hasBlendOptions()) writerSchemaXmlNode(resource, printer, &frame->blendOptions, XmlNode::BLEND);
 
-				writerSchemaXmlNode(resource, printer, &frame->getTraits(), XmlNode::TRAITS);
-				if (frame->getCollisionBoxes().getBoxCount()) writerSchemaXmlNode(resource, printer, &frame->getCollisionBoxes(), XmlNode::COLLISION);
-				if (frame->getHitBoxes().getBoxCount()) writerSchemaXmlNode(resource, printer, &frame->getHitBoxes(), XmlNode::HIT);
-				if (frame->getAttackBoxes().getBoxCount()) writerSchemaXmlNode(resource, printer, &frame->getAttackBoxes(), XmlNode::ATTACK);
-				writerSchemaXmlNode(resource, printer, &frame->getEffect(), XmlNode::EFFECT);
+				writerSchemaXmlNode(resource, printer, &frame->traits, XmlNode::TRAITS);
+				if (frame->cBoxes.size()) writerSchemaXmlNode(resource, printer, &frame->cBoxes, XmlNode::COLLISION);
+				if (frame->hBoxes.size()) writerSchemaXmlNode(resource, printer, &frame->hBoxes, XmlNode::HIT);
+				if (frame->aBoxes.size()) writerSchemaXmlNode(resource, printer, &frame->aBoxes, XmlNode::ATTACK);
+				writerSchemaXmlNode(resource, printer, &frame->effect, XmlNode::EFFECT);
 
 				printer.closeNode();
 			}
 		} break;
 		case XmlNode::BLEND: {
 			auto object = reinterpret_cast<ShadyCore::Schema::Sequence::BlendOptions*>(data);
-			printer.appendAttribute("mode", object->getMode());
-			printer.appendAttribute("color", object->getColor(), true);
-			printer.appendAttribute("xscale", object->getScaleX());
-			printer.appendAttribute("yscale", object->getScaleY());
-			printer.appendAttribute("vertflip", object->getFlipVert());
-			printer.appendAttribute("horzflip", object->getFlipHorz());
-			printer.appendAttribute("angle", object->getAngle());
+			printer.appendAttribute("mode", object->mode);
+			printer.appendAttribute("color", object->color, true);
+			printer.appendAttribute("xscale", object->scaleX);
+			printer.appendAttribute("yscale", object->scaleY);
+			printer.appendAttribute("vertflip", object->flipVert);
+			printer.appendAttribute("horzflip", object->flipHorz);
+			printer.appendAttribute("angle", object->angle);
 		} break;
 		case XmlNode::TRAITS: {
 			auto object = reinterpret_cast<ShadyCore::Schema::Sequence::MoveTraits*>(data);
-			printer.appendAttribute("damage", object->getDamage());
-			printer.appendAttribute("proration", object->getProration());
-			printer.appendAttribute("chipdamage", object->getChipDamage());
-			printer.appendAttribute("spiritdamage", object->getSpiritDamage());
-			printer.appendAttribute("untech", object->getUntech());
-			printer.appendAttribute("power", object->getPower());
-			printer.appendAttribute("limit", object->getLimit());
-			printer.appendAttribute("onhitplayerstun", object->getOnHitPlayerStun());
-			printer.appendAttribute("onhitenemystun", object->getOnHitEnemyStun());
-			printer.appendAttribute("onblockplayerstun", object->getOnBlockPlayerStun());
-			printer.appendAttribute("onblockenemystun", object->getOnBlockEnemyStun());
-			printer.appendAttribute("onhitcardgain", object->getOnHitCardGain());
-			printer.appendAttribute("onblockcardgain", object->getOnBlockCardGain());
-			printer.appendAttribute("onairhitsetsequence", object->getOnAirHitSetSequence());
-			printer.appendAttribute("ongroundhitsetsequence", object->getOnGroundHitSetSequence());
-			printer.appendAttribute("xspeed", object->getSpeedX());
-			printer.appendAttribute("yspeed", object->getSpeedY());
-			printer.appendAttribute("onhitsfx", object->getOnHitSfx());
-			printer.appendAttribute("onhiteffect", object->getOnHitEffect());
-			printer.appendAttribute("attacklevel", object->getAttackLevel());
+			printer.appendAttribute("damage", object->damage);
+			printer.appendAttribute("proration", object->proration);
+			printer.appendAttribute("chipdamage", object->chipDamage);
+			printer.appendAttribute("spiritdamage", object->spiritDamage);
+			printer.appendAttribute("untech", object->untech);
+			printer.appendAttribute("power", object->power);
+			printer.appendAttribute("limit", object->limit);
+			printer.appendAttribute("onhitplayerstun", object->onHitPlayerStun);
+			printer.appendAttribute("onhitenemystun", object->onHitEnemyStun);
+			printer.appendAttribute("onblockplayerstun", object->onBlockPlayerStun);
+			printer.appendAttribute("onblockenemystun", object->onBlockEnemyStun);
+			printer.appendAttribute("onhitcardgain", object->onHitCardGain);
+			printer.appendAttribute("onblockcardgain", object->onBlockCardGain);
+			printer.appendAttribute("onairhitsetsequence", object->onAirHitSetSequence);
+			printer.appendAttribute("ongroundhitsetsequence", object->onGroundHitSetSequence);
+			printer.appendAttribute("xspeed", object->speedX);
+			printer.appendAttribute("yspeed", object->speedY);
+			printer.appendAttribute("onhitsfx", object->onHitSfx);
+			printer.appendAttribute("onhiteffect", object->onHitEffect);
+			printer.appendAttribute("attacklevel", object->attackLevel);
 
 			for (int i = 0; i < 32; ++i) {
-				if (i < 8 && (object->getComboModifier() >> i & 1)) {
+				if (i < 8 && (object->comboModifier >> i & 1)) {
 					printer.openNode(FlagList[i + 64].name);
 					printer.closeNode();
-				} if (object->getFrameFlags() >> i & 1) {
+				} if (object->frameFlags >> i & 1) {
 					printer.openNode(FlagList[i].name);
 					printer.closeNode();
-				} if (object->getAttackFlags() >> i & 1) {
+				} if (object->attackFlags >> i & 1) {
 					printer.openNode(FlagList[i + 32].name);
 					printer.closeNode();
 				}
@@ -533,29 +531,29 @@ static void writerSchemaXmlNode(ShadyCore::Schema& resource, ShadyUtil::XmlPrint
 		} break;
 		case XmlNode::EFFECT: {
 			auto object = reinterpret_cast<ShadyCore::Schema::Sequence::MoveEffect*>(data);
-			printer.appendAttribute("xpivot", object->getPivotX());
-			printer.appendAttribute("ypivot", object->getPivotY());
-			printer.appendAttribute("xpositionextra", object->getPositionXExtra());
-			printer.appendAttribute("ypositionextra", object->getPositionYExtra());
-			printer.appendAttribute("xposition", object->getPositionX());
-			printer.appendAttribute("yposition", object->getPositionY());
-			printer.appendAttribute("unknown02", object->getUnknown02(), true);
-			printer.appendAttribute("xspeed", object->getSpeedX());
-			printer.appendAttribute("yspeed", object->getSpeedY());
+			printer.appendAttribute("xpivot", object->pivotX);
+			printer.appendAttribute("ypivot", object->pivotY);
+			printer.appendAttribute("xpositionextra", object->positionXExtra);
+			printer.appendAttribute("ypositionextra", object->positionYExtra);
+			printer.appendAttribute("xposition", object->positionX);
+			printer.appendAttribute("yposition", object->positionY);
+			printer.appendAttribute("unknown02", object->unknown02RESETSTATE, true);
+			printer.appendAttribute("xspeed", object->speedX);
+			printer.appendAttribute("yspeed", object->speedY);
 		} break;
 		case XmlNode::COLLISION:
 		case XmlNode::HIT:
 		case XmlNode::ATTACK: {
-			auto object = reinterpret_cast<ShadyCore::Schema::Sequence::BBoxList*>(data);
-			for (int i = 0; i < object->getBoxCount(); ++i) {
-				auto& box = object->getBox(i);
+			auto object = reinterpret_cast<std::vector<ShadyCore::Schema::Sequence::BBox>*>(data);
+			for (int i = 0; i < object->size(); ++i) {
+				auto& box = object->at(i);
 				printer.openNode("box");
-				printer.appendAttribute("left", box.getLeft());
-				printer.appendAttribute("up", box.getUp());
-				printer.appendAttribute("right", box.getRight());
-				printer.appendAttribute("down", box.getDown());
+				printer.appendAttribute("left", box.left);
+				printer.appendAttribute("up", box.up);
+				printer.appendAttribute("right", box.right);
+				printer.appendAttribute("down", box.down);
 				if (type == XmlNode::ATTACK)
-					printer.appendAttribute("unknown", box.getUnknown());
+					printer.appendAttribute("unknown", box.unknown);
 				printer.closeNode();
 			}
 		} break;

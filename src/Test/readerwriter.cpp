@@ -19,44 +19,45 @@ public:
 
 const ConvertionData ReaderWriterSuite::dataArray[] = {
 	{ FT::TYPE_TEXT, {
-		{FT::TEXT_GAME, "test-data/encrypted/data/my-text.cv0"},
-		{FT::TEXT_NORMAL, "test-data/decrypted/data/my-text.txt"},
+		{FT::TEXT_GAME, "test-data/all/my-text.cv0"},
+		{FT::TEXT_NORMAL, "test-data/all/my-text.txt"},
 	}},
 	{ FT::TYPE_TABLE, {
-		{FT::TABLE_GAME, "test-data/encrypted/data/my-text.cv1"},
-		{FT::TABLE_CSV, "test-data/decrypted/data/my-text.csv"},
+		{FT::TABLE_GAME, "test-data/all/my-text.cv1"},
+		{FT::TABLE_CSV, "test-data/all/my-text.csv"},
 	}},
 	{ FT::TYPE_LABEL, {
-		{FT::LABEL_RIFF, "test-data/encrypted/data/my-label.sfl"},
-		{FT::LABEL_LBL, "test-data/decrypted/data/my-label.lbl"},
+		{FT::LABEL_RIFF, "test-data/all/my-label.sfl"},
+		{FT::LABEL_LBL, "test-data/all/my-label.lbl"},
 	}},
 	{ FT::TYPE_IMAGE, {
-		{FT::IMAGE_GAME, "test-data/encrypted/data/my-image.cv2"},
-		{FT::IMAGE_PNG, "test-data/decrypted/data/my-image.png"},
+		{FT::IMAGE_GAME, "test-data/all/my-image.cv2"},
+		{FT::IMAGE_PNG, "test-data/all/my-image.png"},
+		{FT::IMAGE_BMP, "test-data/all/my-image.bmp"},
 	}},
 	{ FT::TYPE_IMAGE, {
-		{FT::IMAGE_GAME, "test-data/encrypted/data/my-image-indexed.cv2"},
-		{FT::IMAGE_PNG, "test-data/decrypted/data/my-image-indexed.png"},
+		{FT::IMAGE_GAME, "test-data/all/my-image-indexed.cv2"},
+		{FT::IMAGE_PNG, "test-data/all/my-image-indexed.png"},
 	}},
 	{ FT::TYPE_PALETTE, {
-		{FT::PALETTE_PAL, "test-data/encrypted/data/my-palette.pal"},
-		{FT::PALETTE_ACT, "test-data/decrypted/data/my-palette.act"},
+		{FT::PALETTE_PAL, "test-data/all/my-palette.pal"},
+		{FT::PALETTE_ACT, "test-data/all/my-palette.act"},
 	}},
 	{ FT::TYPE_SFX, {
-		{FT::SFX_GAME, "test-data/encrypted/data/my-sfx.cv3"},
-		{FT::SFX_WAV, "test-data/decrypted/data/my-sfx.wav"},
+		{FT::SFX_GAME, "test-data/all/my-sfx.cv3"},
+		{FT::SFX_WAV, "test-data/all/my-sfx.wav"},
 	}},
 	{ FT::TYPE_SCHEMA, {
-		{FT::SCHEMA_GAME_GUI, "test-data/encrypted/data/my-gui.dat"},
-		{FT::SCHEMA_XML, "test-data/decrypted/data/my-gui.xml"},
+		{FT::SCHEMA_GAME_GUI, "test-data/all/my-gui.dat"},
+		{FT::SCHEMA_XML, "test-data/all/my-gui.xml"},
 	}},
 	{ FT::TYPE_SCHEMA, {
-		{FT::SCHEMA_GAME_PATTERN, "test-data/encrypted/data/my-pattern.pat"},
-		{FT::SCHEMA_XML, "test-data/decrypted/data/my-pattern.xml"},
+		{FT::SCHEMA_GAME_PATTERN, "test-data/all/my-pattern.pat"},
+		{FT::SCHEMA_XML, "test-data/all/my-pattern.xml"},
 	}},
 	{ FT::TYPE_SCHEMA, {
-		{FT::SCHEMA_GAME_ANIM, "test-data/encrypted/data/my-effect.pat"},
-		{FT::SCHEMA_XML, "test-data/decrypted/data/my-effect.xml"},
+		{FT::SCHEMA_GAME_ANIM, "test-data/all/my-effect.pat"},
+		{FT::SCHEMA_XML, "test-data/all/my-effect.xml"},
 	}},
 };
 

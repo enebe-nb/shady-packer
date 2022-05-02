@@ -11,8 +11,35 @@
 #include "menu.hpp"
 #include "../Lua/lualibs/soku.hpp"
 
+void* ShadyCore::Allocate(size_t s) { return SokuLib::NewFct(s); }
+void ShadyCore::Deallocate(void* p) { SokuLib::DeleteFct(p); }
+
 namespace {
-    auto __readerCreate = reinterpret_cast<void* (__stdcall *)(const char *filename, unsigned int *size, unsigned int *offset)>(0x0041c080);
+    auto __textReader = reinterpret_cast<bool (__fastcall *)(int output, const char* filename)>(0x00408a20);
+    auto __tableReader = reinterpret_cast<bool (__fastcall *)(int output, const char* filename)>(0x00408ab0);
+    auto __labelReader = reinterpret_cast<bool (__fastcall *)(const char* filename, int unused, int output)>(0x00418eb0);
+    auto __sfxReader = reinterpret_cast<bool (__fastcall *)(int output, const char* filename)>(0x00408b40);
+    auto __paletteReader = reinterpret_cast<bool (__fastcall *)(int a, int unused, const char* filename, int output, int b)>(0x00408be0);
+    auto __bgmCreateReader = reinterpret_cast<bool (__fastcall *)(void** output, int unused, const char* filename)>(0x0040d1e0);
+    auto __textureCreateReader = reinterpret_cast<bool (__fastcall *)(void** output, int unused, const char* filename)>(0x0040d1e0);
+    auto __schemaCreateReader = reinterpret_cast<bool (__fastcall *)(void** output, int unused, const char* filename)>(0x0040d1e0);
+
+    // avail code [0x408e30:0x408ea5] 
+    // keep ebx state, return to 0x408ea5
+    uint8_t __imageReader[] = {
+        0x8D, 0x4C, 0x24, 0x2C,                     // lea ecx, [esp+2c](&BitmapData)
+        0x8D, 0x94, 0x24, 0x8C, 0x00, 0x00, 0x00,   // lea edx, [esp+8c](filename[])
+        0x53,                                       // push ebx
+        0x8D, 0x84, 0x24, 0x98, 0x01, 0x00, 0x00,   // lea eax, [esp+198](tempBuffer[0x104])
+        0x68, 0x04, 0x01, 0x00, 0x00,               // push 0x104
+        0x50,                                       // push eax
+        0xE8, 0x00, 0x00, 0x00, 0x00,               // call imageReader
+        0x5B,                                       // pop ebx
+        0xE9, 0x51, 0x00, 0x00, 0x00,               // jmp to return handling code
+        0x90,                                       // NOP to align
+    };
+
+    //auto __readerCreate = reinterpret_cast<void* (__stdcall *)(const char *filename, unsigned int *size, unsigned int *offset)>(0x0041c080);
     auto __loader = reinterpret_cast<int(*)()>(0);
     bool _initialized = false;
 
@@ -24,48 +51,247 @@ namespace {
         int timeout = 240;
         bool shown = false;
     } menuHint;
+
+    const SokuLib::FontDescription menuHintFont {
+        "Courier New",
+        255,255,255,255,255,255,
+        14, 500,
+        false, true, false,
+        0, 0, 0, 0, 0
+    };
 }
 
-static void* __stdcall readerCreate(const char *filename, unsigned int *_size, unsigned int *_offset) {
-    int esi_value;
-	__asm mov esi_value, esi
-
+static bool __fastcall textReader(int output, const char* filename) {
     ModPackage::CheckUpdates();
-    std::shared_lock lock(*ModPackage::basePackage);
-    auto iter = ModPackage::basePackage->find(filename);
-
-    void* result;
-    if (iter != ModPackage::basePackage->end()) {
-        auto type = iter.fileType();
-        *_offset = 0x40000000; // just to hold a value
-        if (type.format <= 0 || type.format >= 4) { // || type == ShadyCore::FileType::TYPE_UNKNOWN
-            *_size = iter.entry().getSize();
-            *(int*)esi_value = ShadyCore::entry_reader_vtbl;
-            result = new ShadyCore::EntryReader(iter.entry(), *iter.entry().getParent());
-        } else {
-            // TODO this convertion is slow, change it
-            std::istream& input = iter->second->open();
-            std::stringstream* buffer = new std::stringstream(std::ios::in|std::ios::out|std::ios::binary);
-            ShadyCore::convertResource(type.type, type.format, input, (ShadyCore::FileType::Format)0, *buffer); // TODO fix
-            *_size = buffer->tellp();
-            iter->second->close();
-
-            *(int*)esi_value = ShadyCore::stream_reader_vtbl;
-            result = buffer;
+    { std::shared_lock lock(*ModPackage::basePackage);
+        auto iter = ModPackage::basePackage->find(filename, ShadyCore::FileType::TYPE_TEXT);
+        if (iter != ModPackage::basePackage->end()) {
+            auto filetype = iter.fileType();
+            ShadyCore::getResourceReader(filetype)((ShadyCore::Resource*)output, iter.open());
+            iter.close();
+            return true;
         }
-    } else {
-        // result = __readerCreate(filename, _size, _offset);
-        __asm {
-            push _offset;
-            push _size;
-            push filename;
-	        mov esi, esi_value;
-            call __readerCreate;
-            mov result, eax;
+    } return __textReader(output, filename);
+}
+
+static bool __fastcall tableReader(int output, const char* filename) {
+    ModPackage::CheckUpdates();
+    { std::shared_lock lock(*ModPackage::basePackage);
+        auto iter = ModPackage::basePackage->find(filename, ShadyCore::FileType::TYPE_TABLE);
+        if (iter != ModPackage::basePackage->end()) {
+            auto filetype = iter.fileType();
+            ShadyCore::getResourceReader(filetype)((ShadyCore::Resource*)output, iter.open());
+            iter.close();
+            return true;
+        }
+    } return __tableReader(output, filename);
+}
+
+static bool __fastcall labelReader(const char* filename, int unused, int output) {
+    ModPackage::CheckUpdates();
+    { std::shared_lock lock(*ModPackage::basePackage);
+        auto iter = ModPackage::basePackage->find(filename, ShadyCore::FileType::TYPE_LABEL);
+        if (iter != ModPackage::basePackage->end()) {
+            auto filetype = iter.fileType();
+            ShadyCore::getResourceReader(filetype)((ShadyCore::Resource*)(output + 0x12e8), iter.open());
+            iter.close();
+            return true;
+        }
+    } return __labelReader(filename, unused, output);
+}
+
+static bool __fastcall sfxReader(int output, const char* filename) {
+    ModPackage::CheckUpdates();
+    { std::shared_lock lock(*ModPackage::basePackage);
+        auto iter = ModPackage::basePackage->find(filename, ShadyCore::FileType::TYPE_SFX);
+        if (iter != ModPackage::basePackage->end()) {
+            auto filetype = iter.fileType();
+            ShadyCore::getResourceReader(filetype)((ShadyCore::Resource*)output, iter.open());
+            iter.close();
+            return true;
+        }
+    } return __sfxReader(output, filename);
+}
+
+static bool __fastcall paletteReader(int a, int unused, const char* filename, int output, int b) {
+    ModPackage::CheckUpdates();
+    { std::shared_lock lock(*ModPackage::basePackage);
+        auto iter = ModPackage::basePackage->find(filename, ShadyCore::FileType::TYPE_PALETTE);
+        if (iter != ModPackage::basePackage->end()) {
+            auto filetype = iter.fileType();
+            ShadyCore::getResourceReader(filetype)((ShadyCore::Resource*)output, iter.open());
+            iter.close();
+            return true;
+        }
+    } return __paletteReader(a, unused, filename, output, b);
+}
+
+static bool __fastcall bgmCreateReader(void** output, int unused, const char* filename) {
+    ModPackage::CheckUpdates();
+    { std::shared_lock lock(*ModPackage::basePackage);
+        auto iter = ModPackage::basePackage->find(filename, ShadyCore::FileType::TYPE_BGM);
+        if (iter != ModPackage::basePackage->end()) {
+            auto filetype = iter.fileType();
+            int* reader = SokuLib::New<int>(6);
+            reader[0] = ShadyCore::entry_reader_vtbl;
+            reader[1] = (int)new ShadyCore::EntryReader(iter.entry());
+            reader[3] = iter.entry().getSize();
+            reader[2] = reader[4] = reader[5] = 0;
+            *output = reader;
+            return true;
+        }
+    } return __bgmCreateReader(output, unused, filename);
+}
+
+static bool __fastcall textureCreateReader(void** output, int unused, const char* filename) {
+    ModPackage::CheckUpdates();
+    { std::shared_lock lock(*ModPackage::basePackage);
+        auto iter = ModPackage::basePackage->find(filename, ShadyCore::FileType::TYPE_TEXTURE);
+        if (iter != ModPackage::basePackage->end()) {
+            auto filetype = iter.fileType();
+            int* reader = SokuLib::New<int>(6);
+            reader[0] = ShadyCore::entry_reader_vtbl;
+            reader[1] = (int)new ShadyCore::EntryReader(iter.entry());
+            reader[3] = iter.entry().getSize();
+            reader[2] = reader[4] = reader[5] = 0;
+            *output = reader;
+            return true;
+        }
+    } return __textureCreateReader(output, unused, filename);
+}
+
+static bool __fastcall imageReader(ShadyCore::Image* output, const char* filename, char* tempbuffer, size_t bufferSize) {
+    ModPackage::CheckUpdates();
+    { std::shared_lock lock(*ModPackage::basePackage);
+        auto iter = ModPackage::basePackage->find(filename, ShadyCore::FileType::TYPE_IMAGE);
+        if (iter != ModPackage::basePackage->end()) {
+            auto filetype = iter.fileType();
+            ShadyCore::getResourceReader(filetype)((ShadyCore::Resource*)output, iter.open());
+            iter.close();
+            return true;
         }
     }
 
-    return result;
+    bufferSize -= 4;
+    for (int i = 0; i < bufferSize; ++i) {
+        tempbuffer[i] = filename[i];
+        if (filename[i] == '.') {
+            *(int*)&tempbuffer[i+1] = *(int*)"cv2";
+            break;
+        } else if(filename[i] == '\0') break;
+    }
+
+    return reinterpret_cast<bool(__fastcall*)(ShadyCore::Image*, int*, const char*)>(output->vtable[3])(output, 0, tempbuffer);
+}
+
+/* Kept for reference
+static bool __fastcall guiReader(SokuLib::CDesign* output, int unused, const char* filename) {
+    ModPackage::CheckUpdates();
+    ShadyCore::Schema* schema = 0;
+    { std::shared_lock lock(*ModPackage::basePackage);
+        auto iter = ModPackage::basePackage->find(filename, ShadyCore::FileType::TYPE_SCHEMA);
+        if (iter != ModPackage::basePackage->end()) {
+            auto filetype = iter.fileType();
+            schema = new ShadyCore::Schema;
+            ShadyCore::getResourceReader(filetype)(schema, iter.open());
+            iter.close();
+        }
+    } if (!schema) return __guiReader(output, unused, filename);
+
+    size_t offset = output->textures.size();
+    std::string_view folder(filename);
+    folder.remove_suffix(folder.size() - folder.rfind('/') - 1);
+    output->textures.resize(offset + schema->images.size());
+    for (int i = 0; i < schema->images.size(); ++i) {
+        std::string imageFile(folder);
+        imageFile += schema->images[i].name;
+        SokuLib::textureMgr.loadTexture(&output->textures[offset + i], imageFile.c_str(), 0, 0);
+    }
+
+    for (int i = 0; i < schema->objects.size(); ++i) {
+        auto object = schema->objects[i];
+        switch(object->getType()) {
+        case 0: {
+            const auto in = reinterpret_cast<ShadyCore::Schema::GuiObject*>(object);
+            const auto out = new SokuLib::CDesign::Sprite();
+            const auto& texData = schema->images[in->imageIndex];
+            out->x2 = in->x; out->y2 = in->y;
+            out->sprite.setTexture(output->textures[offset + in->imageIndex], texData.x, texData.y, texData.w, texData.h, -texData.x, -texData.y);
+            if (in->mirror) out->sprite.scale.x = -1;
+            if (in->getId()) output->objectMap[in->getId()] = out;
+            output->objects.push_back(out);
+        } break;
+        case 1: {
+            const auto in = reinterpret_cast<ShadyCore::Schema::GuiObject*>(object);
+            const auto out = new SokuLib::CDesign::Object();
+            out->x2 = in->x; out->y2 = in->y;
+            if (in->getId()) output->objectMap[in->getId()] = out;
+            output->objects.push_back(out);
+        } break;
+        case 2: case 3: case 4: case 5: {
+            const auto in = reinterpret_cast<ShadyCore::Schema::GuiObject*>(object);
+            const auto out = new SokuLib::CDesign::Gauge();
+            const auto& texData = schema->images[in->imageIndex];
+            out->x2 = in->x; out->y2 = in->y;
+            out->gauge.fromTexture(output->textures[offset + in->imageIndex], texData.w, texData.h, object->getType() - 2);
+            if (in->mirror) out->gauge.scale.x = -1;
+            if (in->getId()) output->objectMap[in->getId()] = out;
+            output->objects.push_back(out);
+        } break;
+        case 6: {
+            const auto in = reinterpret_cast<ShadyCore::Schema::GuiNumber*>(object);
+            const auto out = new SokuLib::CDesign::Number();
+            const auto& texData = schema->images[in->imageIndex];
+            out->x2 = in->x; out->y2 = in->y;
+            out->number.width = in->w; out->number.textSpacing = in->textSpacing;
+            out->number.unknown0C = out->number.unknown10 = 1.f;
+            out->number.fontSpacing = in->fontSpacing;
+            out->number.size = in->size;
+            out->number.floatSize = in->floatSize;
+            out->number.unknown1C = false;
+            out->number.tiles.createSlices(output->textures[offset + in->imageIndex], 0, 0, in->w, in->h, 0, 0);
+            if (in->getId()) output->objectMap[in->getId()] = out;
+            output->objects.push_back(out);
+        } break;
+        }
+    }
+
+    // this is an iterator, but there's difference between debug and release
+    output->unknown0x2C = &output->objects;
+    output->unknown0x30 = (void*) ((int**)&output->objects)[1][1];
+
+    schema->destroy(); delete schema;
+    return true;
+}
+*/
+
+template <ShadyCore::FileType::Format targetFormat>
+static bool __fastcall schemaCreateReader(void** output, int unused, const char* filename) {
+    ModPackage::CheckUpdates();
+    { std::shared_lock lock(*ModPackage::basePackage);
+        auto iter = ModPackage::basePackage->find(filename, ShadyCore::FileType::TYPE_SCHEMA);
+        if (iter != ModPackage::basePackage->end()) {
+            auto type = iter.fileType();
+            int* reader = (int*&)*output = SokuLib::New<int>(6);
+            if (type.format != ShadyCore::FileType::SCHEMA_XML) {
+                reader[0] = ShadyCore::entry_reader_vtbl;
+                reader[1] = (int)new ShadyCore::EntryReader(iter.entry());
+                reader[3] = iter.entry().getSize();
+                reader[2] = reader[4] = reader[5] = 0;
+            } else {
+                // TODO schema loading is still too complex
+                std::istream& input = iter.open();
+                std::stringstream* buffer = new std::stringstream(std::ios::in|std::ios::out|std::ios::binary);
+                ShadyCore::convertResource(type.type, type.format, input, targetFormat, *buffer);
+                iter.close();
+
+                reader[0] = ShadyCore::stream_reader_vtbl;
+                reader[1] = (int)buffer;
+                reader[3] = buffer->tellp();
+                reader[2] = reader[4] = reader[5] = 0;
+            } return true;
+        }
+    } return __schemaCreateReader(output, unused, filename);
 }
 
 static int __fastcall titleOnProcess(SokuLib::Title* t) {
@@ -76,13 +302,7 @@ static int __fastcall titleOnProcess(SokuLib::Title* t) {
 
         int texture = 0;
         SokuLib::SWRFont font; font.create();
-        font.setIndirect(SokuLib::FontDescription{
-            "Courier New",
-            255,255,255,255,255,255,
-            14, 500,
-            false, true, false,
-            0, 0, 0, 0, 0
-        });
+        font.setIndirect(menuHintFont);
         SokuLib::textureMgr.createTextTexture(&texture, "Enabled shady-loader. Press F2 to open the menu.", font, 640, 20, 0, 0);
         font.destruct();
 
@@ -115,13 +335,33 @@ static int __fastcall titleOnRender(SokuLib::Title* t) {
     return ret;
 }
 
+template<int N> static inline void TamperCode(int addr, uint8_t(&code)[N]) {
+    for (int i = 0; i < N; ++i) {
+        uint8_t swap = *(uint8_t*)(addr+i);
+        *(uint8_t*)(addr+i) = code[i];
+        code[i] = swap;
+    }
+}
+
 static int _HookLoader() {
     if (__loader) __loader();
     curl_global_init(CURL_GLOBAL_DEFAULT);
 
     DWORD dwOldProtect;
     VirtualProtect((PVOID)TEXT_SECTION_OFFSET, TEXT_SECTION_SIZE, PAGE_EXECUTE_WRITECOPY, &dwOldProtect);
-    __readerCreate = SokuLib::TamperNearJmpOpr(0x0040D227, readerCreate);
+    __textReader = SokuLib::TamperNearJmpOpr(0x00405853, textReader);
+    __tableReader = SokuLib::TamperNearJmpOpr(0x0040f3b3, tableReader);
+    __labelReader = SokuLib::TamperNearJmpOpr(0x00418cc5, labelReader);
+    __sfxReader = SokuLib::TamperNearJmpOpr(0x0041869f, sfxReader);
+    __paletteReader = SokuLib::TamperNearJmpOpr(0x00467b7d, paletteReader); // patternLoad
+            SokuLib::TamperNearJmpOpr(0x0041ffb7, paletteReader); // charSelect
+    __bgmCreateReader = SokuLib::TamperNearJmpOpr(0x00418be1, bgmCreateReader);
+    __textureCreateReader = SokuLib::TamperNearJmpOpr(0x00409196, textureCreateReader);
+    TamperCode(0x00408e30, __imageReader);
+            SokuLib::TamperNearJmpOpr(0x00408e49, imageReader);
+    __schemaCreateReader = SokuLib::TamperNearJmpOpr(0x0040b36b, schemaCreateReader<ShadyCore::FileType::SCHEMA_GAME_GUI>);
+            SokuLib::TamperNearJmpOpr(0x0043b4bf, schemaCreateReader<ShadyCore::FileType::SCHEMA_GAME_ANIM>);
+            SokuLib::TamperNearJmpOpr(0x00467a80, schemaCreateReader<ShadyCore::FileType::SCHEMA_GAME_PATTERN>);
     VirtualProtect((PVOID)TEXT_SECTION_OFFSET, TEXT_SECTION_SIZE, dwOldProtect, &dwOldProtect);
 
     VirtualProtect((PVOID)RDATA_SECTION_OFFSET, RDATA_SECTION_SIZE, PAGE_EXECUTE_WRITECOPY, &dwOldProtect);
@@ -148,13 +388,24 @@ void HookLoader(const std::wstring& caller) {
     }
 }
 
-void UnloadLoader() {
+void UnhookLoader() {
     ShadyLua::UnloadTamper();
 
     if (!_initialized) return;
     DWORD dwOldProtect;
     VirtualProtect((PVOID)TEXT_SECTION_OFFSET, TEXT_SECTION_SIZE, PAGE_EXECUTE_WRITECOPY, &dwOldProtect);
-    SokuLib::TamperNearJmpOpr(0x0040D227, __readerCreate);
+    SokuLib::TamperNearJmpOpr(0x00405853, __textReader);
+    SokuLib::TamperNearJmpOpr(0x0040f3b3, __tableReader);
+    SokuLib::TamperNearJmpOpr(0x00418cc5, __labelReader);
+    SokuLib::TamperNearJmpOpr(0x0041869f, __sfxReader);
+    SokuLib::TamperNearJmpOpr(0x00467b7d, __paletteReader); // patternLoad
+        SokuLib::TamperNearJmpOpr(0x0041ffb7, __paletteReader); // charSelect
+    SokuLib::TamperNearJmpOpr(0x00418be1, __bgmCreateReader);
+    SokuLib::TamperNearJmpOpr(0x00409196, __textureCreateReader);
+    TamperCode(0x00408e30, __imageReader);
+    SokuLib::TamperNearJmpOpr(0x0040b36b, __schemaCreateReader); // gui
+        SokuLib::TamperNearJmpOpr(0x0043b4bf, __schemaCreateReader); // effect
+        SokuLib::TamperNearJmpOpr(0x00467a80, __schemaCreateReader); // pattern
     VirtualProtect((PVOID)TEXT_SECTION_OFFSET, TEXT_SECTION_SIZE, dwOldProtect, &dwOldProtect);
 
     VirtualProtect((PVOID)RDATA_SECTION_OFFSET, RDATA_SECTION_SIZE, PAGE_EXECUTE_WRITECOPY, &dwOldProtect);

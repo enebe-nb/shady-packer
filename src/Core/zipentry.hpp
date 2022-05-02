@@ -49,7 +49,7 @@ namespace ShadyCore {
 
 		inline StorageType getStorage() const override final { return TYPE_ZIP; }
 		inline bool isOpen() const override final { return zipBuffer.isOpen(); }
-		inline std::istream& open() override final { parent->lock_shared(); zipStream.clear(); zipBuffer.open(parent->getBasePath(), name); return zipStream; }
-		inline void close() override final { zipBuffer.close(); parent->unlock_shared(); }
+		inline std::istream& open() override final { zipStream.clear(); zipBuffer.open(parent->getBasePath(), name); return zipStream; }
+		inline void close() override final { zipBuffer.close(); }
 	};
 }

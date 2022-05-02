@@ -165,7 +165,6 @@ void ShadyCore::DataFileFilter::seek(off_type spos, std::ios::seekdir sdir) {
 //-------------------------------------------------------------
 
 std::istream& ShadyCore::DataPackageEntry::open() {
-	parent->lock_shared();
 	fileStream.clear();
 	std::filebuf* base = (std::filebuf*) fileFilter.getBaseBuffer();
 	if (!base) base = new std::filebuf();
@@ -184,7 +183,6 @@ void ShadyCore::DataPackageEntry::close() {
 		delete base;
 		fileFilter.setBaseBuffer(0);
 	}
-	parent->unlock_shared();
 }
 
 //-------------------------------------------------------------
@@ -197,6 +195,7 @@ void ShadyCore::Package::loadData(const std::filesystem::path& path) {
 	DataListFilter inputFilter(input.rdbuf(), listSize + 6, listSize);
 	std::istream filteredInput(&inputFilter);
 
+	entries.reserve(entries.size() + fileCount);
 	for (int i = 0; i < fileCount; ++i) {
 		unsigned int offset, size;
 		unsigned char nameSize;

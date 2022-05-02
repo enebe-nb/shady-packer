@@ -2,20 +2,19 @@
 #include "../util/iohelper.hpp"
 #include <cstring>
 
+ShadyCore::Schema::Image::~Image() { delete name; }
+ShadyCore::Schema::Sequence::~Sequence() { for (auto frame : frames) delete frame; }
+
 static void readerSchemaGame(ShadyCore::Schema& resource, std::istream& input, ShadyCore::Schema::Object* (*fnReadObject)(uint32_t, uint32_t, std::istream&)) {
 	uint32_t count = 0;
 	input.read((char*)&count, 1);
 	if (count != 5) return; // version is not "5"
 
-	char buffer[129];
 	input.read((char*)&count, 2);
 	resource.images.reserve(count);
 	for (int i = 0; i < count; ++i) {
-		input.read(buffer, 128);
-		uint32_t len = strnlen(buffer, 128);
-		buffer[len] = '\0';
-		char* name = new char[len + 1];
-		strcpy(name, buffer);
+		char* name = new char[129];
+		input.read(name, 128); name[128] = '\0';
 		resource.images.emplace_back(name);
 	}
 
@@ -27,8 +26,7 @@ static void readerSchemaGame(ShadyCore::Schema& resource, std::istream& input, S
 		if (id == -1) {
 			input.read((char*)&id, 4);
 			auto object = new ShadyCore::Schema::Clone(id);
-			input.read((char*)&id, 4);
-			object->setTargetId(id);
+			input.read((char*)&object->targetId, 4);
 			resource.objects.push_back(object);
 		} else if (id == -2) {
 			resource.objects.push_back(fnReadObject(lastId, ++lastIndex, input));
@@ -44,23 +42,19 @@ static void readerSchemaGame(ShadyCore::Schema& resource, std::istream& input, S
 
 static ShadyCore::Schema::Object* readerSchemaAnimObject(uint32_t id, uint32_t index, std::istream& input) {
 	auto object = new ShadyCore::Schema::Sequence(id, true);
-	input.read((char*)&object->hasLoop(), 1);
+	input.read((char*)&object->loop, 1);
 
 	uint32_t count; input.read((char*)&count, 4);
+	object->frames.reserve(count);
 	for (uint32_t i = 0; i < count; ++i) {
 		auto frame = new ShadyCore::Schema::Sequence::Frame();
 		object->frames.push_back(frame);
 
-		input.read(frame->getDataAddr(), 19);
+		input.read((char*)&frame->imageIndex, 19);
+			// , unknown, texOffsetX/Y, texW/H, offsetX/Y, duration, renderGroup
 		if (frame->hasBlendOptions()) {
-			// TODO packed load
-			ShadyUtil::readS(input, frame->getBlendOptions(), &ShadyCore::Schema::Sequence::BlendOptions::setMode);
-			ShadyUtil::readS(input, frame->getBlendOptions(), &ShadyCore::Schema::Sequence::BlendOptions::setColor);
-			ShadyUtil::readS(input, frame->getBlendOptions(), &ShadyCore::Schema::Sequence::BlendOptions::setScaleX);
-			ShadyUtil::readS(input, frame->getBlendOptions(), &ShadyCore::Schema::Sequence::BlendOptions::setScaleY);
-			ShadyUtil::readS(input, frame->getBlendOptions(), &ShadyCore::Schema::Sequence::BlendOptions::setFlipVert);
-			ShadyUtil::readS(input, frame->getBlendOptions(), &ShadyCore::Schema::Sequence::BlendOptions::setFlipHorz);
-			ShadyUtil::readS(input, frame->getBlendOptions(), &ShadyCore::Schema::Sequence::BlendOptions::setAngle);
+			input.read((char*)&frame->blendOptions.mode, 2);
+			input.read((char*)&frame->blendOptions.color, 14); // , scaleX/Y, flipV/H, angle
 		}
 	}
 
@@ -69,50 +63,54 @@ static ShadyCore::Schema::Object* readerSchemaAnimObject(uint32_t id, uint32_t i
 
 static ShadyCore::Schema::Object* readerSchemaMoveObject(uint32_t id, uint32_t index, std::istream& input) {
 	auto object = new ShadyCore::Schema::Sequence(id, false);
-	input.read(object->getDataAddr(), 5);
+	input.read((char*)&object->moveLock, 5); // , actionLock, loop
 
 	uint32_t count; input.read((char*)&count, 4);
+	object->frames.reserve(count);
 	for (uint32_t i = 0; i < count; ++i) {
 		auto frame = new ShadyCore::Schema::Sequence::MoveFrame();
 		object->frames.push_back(frame);
 
-		input.read(frame->getDataAddr(), 19);
+		input.read((char*)&frame->imageIndex, 19);
+			// , unknown, texOffsetX/Y, texW/H, offsetX/Y, duration, renderGroup
 		if (frame->hasBlendOptions()) {
-			// TODO packed load
-			ShadyUtil::readS(input, frame->getBlendOptions(), &ShadyCore::Schema::Sequence::BlendOptions::setMode);
-			ShadyUtil::readS(input, frame->getBlendOptions(), &ShadyCore::Schema::Sequence::BlendOptions::setColor);
-			ShadyUtil::readS(input, frame->getBlendOptions(), &ShadyCore::Schema::Sequence::BlendOptions::setScaleX);
-			ShadyUtil::readS(input, frame->getBlendOptions(), &ShadyCore::Schema::Sequence::BlendOptions::setScaleY);
-			ShadyUtil::readS(input, frame->getBlendOptions(), &ShadyCore::Schema::Sequence::BlendOptions::setFlipVert);
-			ShadyUtil::readS(input, frame->getBlendOptions(), &ShadyCore::Schema::Sequence::BlendOptions::setFlipHorz);
-			ShadyUtil::readS(input, frame->getBlendOptions(), &ShadyCore::Schema::Sequence::BlendOptions::setAngle);
+			input.read((char*)&frame->blendOptions.mode, 2);
+			input.read((char*)&frame->blendOptions.color, 14); // , scaleX/Y, flipV/H, angle
 		}
 
-		input.read(frame->getTraits().getDataAddr(), 40);
-		ShadyUtil::readS(input, frame->getTraits(), &ShadyCore::Schema::Sequence::MoveTraits::setComboModifier);
-		ShadyUtil::readS(input, frame->getTraits(), &ShadyCore::Schema::Sequence::MoveTraits::setFrameFlags);
-		ShadyUtil::readS(input, frame->getTraits(), &ShadyCore::Schema::Sequence::MoveTraits::setAttackFlags);
+		input.read((char*)&frame->traits.damage, 40);
+			// , proration, chipDamage, spiritDamage, untech, power, limit
+			// , onHitPlayerStun, onHitEnemyStun, onBlockPlayerStun, onBlockEnemyStun
+			// , onHitCardGain, onBlockCardGain, onAirHitSetSequence, onGroundHitSetSequence
+			// , speedX, speedY, onHitSfx, onHitEffect, attackLevel
+		input.read((char*)&frame->traits.comboModifier, 1);
+		input.read((char*)&frame->traits.frameFlags, 4);
+		input.read((char*)&frame->traits.attackFlags, 4);
 
-		uint8_t boxes;
-		input.read((char*)&boxes, 1);
-		for (uint8_t j = 0; j < boxes; ++j) {
-			auto& box = frame->getCollisionBoxes().createBox();
-			input.read(box.getDataAddr(), 16);
+		uint8_t boxCount;
+		input.read((char*)&boxCount, 1);
+		frame->cBoxes.reserve(boxCount);
+		for (uint8_t j = 0; j < boxCount; ++j) {
+			auto& box = frame->cBoxes.emplace_back();
+			input.read((char*)&box.left, 16); // , up, right, down
 		}
 
-		input.read((char*)&boxes, 1);
-		for (uint8_t j = 0; j < boxes; ++j) {
-			auto& box = frame->getHitBoxes().createBox();
-			input.read(box.getDataAddr(), 16);
+		input.read((char*)&boxCount, 1);
+		frame->hBoxes.reserve(boxCount);
+		for (uint8_t j = 0; j < boxCount; ++j) {
+			auto& box = frame->hBoxes.emplace_back();
+			input.read((char*)&box.left, 16); // , up, right, down
 		}
 
-		input.read((char*)&boxes, 1);
-		for (uint8_t j = 0; j < boxes; ++j) {
-			auto& box = frame->getAttackBoxes().createBox();
-			input.read(box.getDataAddr(), 17);
+		input.read((char*)&boxCount, 1);
+		frame->aBoxes.reserve(boxCount);
+		for (uint8_t j = 0; j < boxCount; ++j) {
+			auto& box = frame->aBoxes.emplace_back();
+			input.read((char*)&box.left, 17); // , up, right, down, unknown
 		}
 
-		input.read(frame->getEffect().getDataAddr(), 30);
+		input.read((char*)&frame->effect.pivotX, 30);
+			// , pivotY,  positionX/YExtra, positionX/Y, unknown02RESETSTATE, speedX/Y
 	}
 
 	return object;
@@ -133,8 +131,8 @@ static void writerSchemaGame(ShadyCore::Schema& resource, std::ostream& output, 
 	uint32_t count = resource.images.size();
 	output.write((char*)&count, 2);
 	for (int i = 0; i < count; ++i) {
-		size_t len = strlen(resource.images[i].getName());
-		output.write(resource.images[i].getName(), len + 1);
+		size_t len = strlen(resource.images[i].name);
+		output.write(resource.images[i].name, len + 1);
 		while (++len < 128) output.put(0);
 	}
 
@@ -147,7 +145,7 @@ static void writerSchemaGame(ShadyCore::Schema& resource, std::ostream& output, 
 		if (object->getType() == 7) {
 			output.write("\xff\xff\xff\xff", 4);
 			output.write((char*)&((ShadyCore::Schema::Clone*)object)->getId(), 4);
-			output.write((char*)&((ShadyCore::Schema::Clone*)object)->getTargetId(), 4);
+			output.write((char*)&((ShadyCore::Schema::Clone*)object)->targetId, 4);
 		} else {
 			if (lastId == object->getId()) output.write("\xff\xff\xff\xfe", 4);
 			else output.write((char*) &object->getId(), 4);
@@ -158,67 +156,62 @@ static void writerSchemaGame(ShadyCore::Schema& resource, std::ostream& output, 
 }
 
 static void writerSchemaAnimObject(ShadyCore::Schema::Sequence* resource, std::ostream& output) {
-	output.write((char*)&resource->hasLoop(), 1);
+	output.write((char*)&resource->loop, 1);
 	uint32_t count = resource->frames.size();
 	output.write((char*)&count, 4);
 	for (int i = 0; i < count; ++i) {
 		auto frame = resource->frames[i];
-		output.write(frame->getDataAddr(), 19);
+		output.write((char*)&frame->imageIndex, 19);
+			// , unknown, texOffsetX/Y, texW/H, offsetX/Y, duration, renderGroup
 		if (frame->hasBlendOptions()) {
-			// TODO packed load
-			ShadyUtil::writeS(output, frame->getBlendOptions().getMode());
-			ShadyUtil::writeS(output, frame->getBlendOptions().getColor());
-			ShadyUtil::writeS(output, frame->getBlendOptions().getScaleX());
-			ShadyUtil::writeS(output, frame->getBlendOptions().getScaleY());
-			ShadyUtil::writeS(output, frame->getBlendOptions().getFlipVert());
-			ShadyUtil::writeS(output, frame->getBlendOptions().getFlipHorz());
-			ShadyUtil::writeS(output, frame->getBlendOptions().getAngle());
+			output.write((char*)&frame->blendOptions.mode, 2);
+			output.write((char*)&frame->blendOptions.color, 14); // , scaleX/Y, flipV/H, angle
 		}
 	}
 }
 
 static void writerSchemaMoveObject(ShadyCore::Schema::Sequence* resource, std::ostream& output) {
-	output.write(resource->getDataAddr(), 5);
+	output.write((char*)&resource->moveLock, 5); // , actionLock, loop
 	uint32_t count = resource->frames.size();
 	output.write((char*)&count, 4);
 	for (int i = 0; i < count; ++i) {
 		auto frame = (ShadyCore::Schema::Sequence::MoveFrame*)resource->frames[i];
-		output.write(frame->getDataAddr(), 19);
+		output.write((char*)&frame->imageIndex, 19);
+			// , unknown, texOffsetX/Y, texW/H, offsetX/Y, duration, renderGroup
 		if (frame->hasBlendOptions()) {
-			// TODO packed load
-			ShadyUtil::writeS(output, frame->getBlendOptions().getMode());
-			ShadyUtil::writeS(output, frame->getBlendOptions().getColor());
-			ShadyUtil::writeS(output, frame->getBlendOptions().getScaleX());
-			ShadyUtil::writeS(output, frame->getBlendOptions().getScaleY());
-			ShadyUtil::writeS(output, frame->getBlendOptions().getFlipVert());
-			ShadyUtil::writeS(output, frame->getBlendOptions().getFlipHorz());
-			ShadyUtil::writeS(output, frame->getBlendOptions().getAngle());
+			output.write((char*)&frame->blendOptions.mode, 2);
+			output.write((char*)&frame->blendOptions.color, 14); // , scaleX/Y, flipV/H, angle
 		}
 
-		output.write(frame->getTraits().getDataAddr(), 40);
-		ShadyUtil::writeS(output, frame->getTraits().getComboModifier());
-		ShadyUtil::writeS(output, frame->getTraits().getFrameFlags());
-		ShadyUtil::writeS(output, frame->getTraits().getAttackFlags());
+		output.write((char*)&frame->traits.damage, 40);
+			// , proration, chipDamage, spiritDamage, untech, power, limit
+			// , onHitPlayerStun, onHitEnemyStun, onBlockPlayerStun, onBlockEnemyStun
+			// , onHitCardGain, onBlockCardGain, onAirHitSetSequence, onGroundHitSetSequence
+			// , speedX, speedY, onHitSfx, onHitEffect, attackLevel
+		output.write((char*)&frame->traits.comboModifier, 1);
+		output.write((char*)&frame->traits.frameFlags, 4);
+		output.write((char*)&frame->traits.attackFlags, 4);
 
-		uint8_t boxes = frame->getCollisionBoxes().getBoxCount();
-		output.write((char*)&boxes, 1);
-		for (int i = 0; i < boxes; ++i) {
-			output.write(frame->getCollisionBoxes().getBox(i).getDataAddr(), 16);
+		uint8_t boxCount = frame->cBoxes.size();
+		output.write((char*)&boxCount, 1);
+		for (int i = 0; i < boxCount; ++i) {
+			output.write((char*)&frame->cBoxes[i].left, 16); // , up, right, down
 		}
 
-		boxes = frame->getHitBoxes().getBoxCount();
-		output.write((char*)&boxes, 1);
-		for (int i = 0; i < boxes; ++i) {
-			output.write(frame->getHitBoxes().getBox(i).getDataAddr(), 16);
+		boxCount = frame->hBoxes.size();
+		output.write((char*)&boxCount, 1);
+		for (int i = 0; i < boxCount; ++i) {
+			output.write((char*)&frame->hBoxes[i].left, 16); // , up, right, down
 		}
 
-		boxes = frame->getAttackBoxes().getBoxCount();
-		output.write((char*)&boxes, 1);
-		for (int i = 0; i < boxes; ++i) {
-			output.write(frame->getAttackBoxes().getBox(i).getDataAddr(), 17);
+		boxCount = frame->aBoxes.size();
+		output.write((char*)&boxCount, 1);
+		for (int i = 0; i < boxCount; ++i) {
+			output.write((char*)&frame->aBoxes[i].left, 17); // , up, right, down, unknown
 		}
 
-		output.write(frame->getEffect().getDataAddr(), 30);
+		output.write((char*)&frame->effect.pivotX, 30);
+			// , pivotY,  positionX/YExtra, positionX/Y, unknown02RESETSTATE, speedX/Y
 	}
 }
 

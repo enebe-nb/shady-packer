@@ -23,19 +23,6 @@ const char* FileEntrySuite::dataArray[] = {
 	"data/my-text.cv1",
 };
 
-/*
-TEST_F(FileEntrySuite, FileRead) {
-	ShadyCore::FilePackageEntry entry(0, "test-data/decrypted/data/my-text.txt");
-	std::istream& input = entry.open();
-	std::ifstream expected("test-data/decrypted/data/my-text.txt");
-
-	EXPECT_TRUE(testing::isSameData(input, expected));
-
-	entry.close();
-	expected.close();
-}
-*/
-
 TEST_F(FileEntrySuite, FileTemporary) {
 	std::filesystem::path tempFile = ShadyUtil::TempFile();
 	std::filesystem::copy_file("test-data/decrypted/data/my-text.txt", tempFile);
@@ -97,7 +84,7 @@ TEST_F(FileEntrySuite, PackageWrite) {
 				input.close();
 				expected.close();
 			} else {
-				EXPECT_TRUE(!std::filesystem::is_regular_file(iter->path()));
+				EXPECT_TRUE(std::filesystem::is_directory(iter->path()));
 			}
 		}
 
