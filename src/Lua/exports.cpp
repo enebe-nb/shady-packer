@@ -5,6 +5,11 @@
 #include "lualibs/soku.hpp"
 #include "lualibs.hpp"
 
+namespace ShadyCore {
+    void* Allocate(size_t s) { return new uint8_t[s]; }
+    void Deallocate(void* p) { delete p; }
+}
+
 extern const BYTE TARGET_HASH[16];
 const BYTE TARGET_HASH[16] = { 0xdf, 0x35, 0xd1, 0xfb, 0xc7, 0xb5, 0x83, 0x31, 0x7a, 0xda, 0xbe, 0x8c, 0xd9, 0xf5, 0x3b, 0x2e };
 std::filesystem::path modulePath;
