@@ -53,6 +53,10 @@ bool ShadyCli::Command::run(int argc, char* argv[]) {
     return false;
 }
 
+namespace ShadyCore {
+    void* Allocate(size_t s) { return new uint8_t[s]; }
+    void Deallocate(void* p) { delete p; }
+}
 
 int main(int argc, char* argv[]) {
     if (ShadyCli::Command::run(argc, argv)) return 0;

@@ -7,34 +7,34 @@ namespace {
     typedef void (*funcPtr) (ShadyCore::Image*, uint8_t* source);
 
     static void nearestAlgorithm (ShadyCore::Image* image, uint8_t* source) {
-        size_t sourceSize = image->getWidth() * image->getHeight();
-        image->initialize(image->getWidth() * 2, image->getHeight() * 2, ceil(image->getWidth() / 2.f) * 4, image->getBitsPerPixel());
+        size_t sourceSize = image->width * image->height;
+        image->initialize(image->width * 2, image->height * 2, ceil(image->width / 2.f) * 4, image->bitsPerPixel);
         
-        for (int j = 0; j < image->getHeight(); ++j) {
-            for (int i = 0; i < image->getWidth(); ++i) {
-                image->getRawImage()[j * image->getWidth() + i] = source[j / 2 * image->getWidth() / 2 + i / 2];
+        for (int j = 0; j < image->height; ++j) {
+            for (int i = 0; i < image->width; ++i) {
+                image->raw[j * image->width + i] = source[j / 2 * image->width / 2 + i / 2];
             }
         }
     }
 
     static void epxAlgorithm (ShadyCore::Image* image, uint8_t* source) {
-        uint32_t width = image->getWidth();
-        uint32_t height = image->getHeight();
-        image->initialize(width * 2, height * 2, ceil(width / 2.f) * 4, image->getBitsPerPixel());
+        uint32_t width = image->width;
+        uint32_t height = image->height;
+        image->initialize(width * 2, height * 2, ceil(width / 2.f) * 4, image->bitsPerPixel);
         
         for (int j = 0; j < height; ++j) {
             for (int i = 0; i < width; ++i) {
                 int index = j * width + i;
-                image->getRawImage()[(j * 2    ) * width * 2 + (i * 2    )] = 
+                image->raw[(j * 2    ) * width * 2 + (i * 2    )] = 
                     i > 0 && j > 0 && source[(j - 1) * width + i] == source[(j) * width + i - 1]
                     ? source[(j - 1) * width + i] : source[index];
-                image->getRawImage()[(j * 2    ) * width * 2 + (i * 2 + 1)] = 
+                image->raw[(j * 2    ) * width * 2 + (i * 2 + 1)] = 
                     i < width - 1 && j > 0 && source[(j - 1) * width + i] == source[(j) * width + i + 1]
                     ? source[(j - 1) * width + i] : source[index];
-                image->getRawImage()[(j * 2 + 1) * width * 2 + (i * 2    )] = 
+                image->raw[(j * 2 + 1) * width * 2 + (i * 2    )] = 
                     i > 0 && j < height - 1 && source[(j + 1) * width + i] == source[(j) * width + i - 1]
                     ? source[(j + 1) * width + i] : source[index];
-                image->getRawImage()[(j * 2 + 1) * width * 2 + (i * 2 + 1)] = 
+                image->raw[(j * 2 + 1) * width * 2 + (i * 2 + 1)] = 
                     i < width - 1 && j < height - 1 && source[(j + 1) * width + i] == source[(j) * width + i + 1]
                     ? source[(j + 1) * width + i] : source[index];
             }
@@ -46,23 +46,23 @@ namespace {
     }
 
     static void eagleAlgorithm (ShadyCore::Image* image, uint8_t* source) {
-        uint32_t width = image->getWidth();
-        uint32_t height = image->getHeight();
-        image->initialize(width * 2, height * 2, ceil(width / 2.f) * 4, image->getBitsPerPixel());
+        uint32_t width = image->width;
+        uint32_t height = image->height;
+        image->initialize(width * 2, height * 2, ceil(width / 2.f) * 4, image->bitsPerPixel);
         
         for (int j = 0; j < height; ++j) {
             for (int i = 0; i < width; ++i) {
                 int index = j * width + i;
-                image->getRawImage()[(j * 2    ) * width * 2 + (i * 2    )] = 
+                image->raw[(j * 2    ) * width * 2 + (i * 2    )] = 
                     i > 0 && j > 0
                     ? eagleTest(source[index], source[index - width], source[index - 1], source[index - width - 1]) : source[index];
-                image->getRawImage()[(j * 2    ) * width * 2 + (i * 2 + 1)] = 
+                image->raw[(j * 2    ) * width * 2 + (i * 2 + 1)] = 
                     i < width - 1 && j > 0
                     ? eagleTest(source[index], source[index - width], source[index + 1], source[index - width + 1]) : source[index];
-                image->getRawImage()[(j * 2 + 1) * width * 2 + (i * 2    )] = 
+                image->raw[(j * 2 + 1) * width * 2 + (i * 2    )] = 
                     i > 0 && j < height - 1
                     ? eagleTest(source[index], source[index + width], source[index - 1], source[index + width - 1]) : source[index];
-                image->getRawImage()[(j * 2 + 1) * width * 2 + (i * 2 + 1)] = 
+                image->raw[(j * 2 + 1) * width * 2 + (i * 2 + 1)] = 
                     i < width - 1 && j < height - 1
                     ? eagleTest(source[index], source[index + width], source[index + 1], source[index + width + 1]) : source[index];
             }
@@ -83,46 +83,48 @@ void ShadyCli::ScaleCommand::process(std::filesystem::path filename, std::filesy
     std::ifstream input(filename, std::fstream::binary);
     ShadyCore::FileType type = ShadyCore::FileType::get(filename.string().c_str());
     if (type == ShadyCore::FileType::TYPE_IMAGE) {
-        //if (std::strncmp((char*)filename.filename().c_str(), prefix.c_str(), prefix.length()) == 0) return;
-        ShadyCore::Image* image = (ShadyCore::Image*)ShadyCore::readResource(type.type, type.format, input);
-        if (image->getBitsPerPixel() == 8) {
-            uint8_t* imageData = new uint8_t[image->getWidth() * image->getHeight()];
-            std::memcpy(imageData, image->getRawImage(), image->getWidth() * image->getHeight());
+        ShadyCore::Image* image = (ShadyCore::Image*)ShadyCore::createResource(ShadyCore::FileType::TYPE_IMAGE);
+        ShadyCore::getResourceReader(type)(image, input);
+        if (image->bitsPerPixel == 8) {
+            uint8_t* imageData = new uint8_t[image->width * image->height];
+            std::memcpy(imageData, image->raw, image->width * image->height);
             scalingAlgorithm(image, imageData);
             delete[] imageData;
 
             std::filesystem::path targetName = targetPath / prefix; targetName += filename.filename();
             std::filesystem::create_directories(targetPath);
             std::ofstream output(targetName.string(), std::fstream::binary);
-            ShadyCore::writeResource(image, type.format, output);
-        } delete image;
+            ShadyCore::getResourceWriter(type)(image, output);
+        } ShadyCore::destroyResource(ShadyCore::FileType::TYPE_IMAGE, image);
     } else if (type == ShadyCore::FileType::TYPE_SCHEMA) {
-        ShadyCore::FileType::Format format = filename.extension() == ".dat" ? ShadyCore::FileType::SCHEMA_GAME_PATTERN : ShadyCore::FileType::SCHEMA_XML_PATTERN;
-        ShadyCore::Pattern* pattern = (ShadyCore::Pattern*)ShadyCore::readResource(type.type, format, input);
-        process(pattern);
+        ShadyCore::FileType::Format format = filename.extension() == ".dat" ? ShadyCore::FileType::SCHEMA_GAME_PATTERN : ShadyCore::FileType::SCHEMA_XML;
+        ShadyCore::Schema* schema = (ShadyCore::Schema*)ShadyCore::createResource(ShadyCore::FileType::TYPE_SCHEMA);
+        ShadyCore::getResourceReader(type)(schema, input);
+        process(schema);
 
         std::filesystem::path targetName = targetPath / filename.filename();
         std::filesystem::create_directories(targetPath);
         std::ofstream output(targetName.string(), std::fstream::binary);
-        ShadyCore::writeResource(pattern, format, output);
-        delete pattern;
+        ShadyCore::getResourceWriter(type)(schema, output);
+        ShadyCore::destroyResource(ShadyCore::FileType::TYPE_SCHEMA, schema);
     }
 }
 
-void ShadyCli::ScaleCommand::process(ShadyCore::Pattern* pattern) {
-    for (int i = 0; i < pattern->getSequenceCount(); ++i) {
-        if (pattern->getSequence(i).getType() == ShadyCore::Sequence::SEQUENCE_MOVE) {
-            ShadyCore::Sequence::Move& move = pattern->getSequence(i).asMove();
-            for (int j = 0; j < move.getFrameCount(); ++j) {
-                ShadyCore::Frame::Move& frame = move.getFrame(j).asMove();
-                if (frame.getRenderGroup() != 0) continue;
-                frame.setRenderGroup(1);
-                std::string imageName(prefix + frame.getImageName());
-                frame.setImageName(imageName.c_str());
-                frame.setTexWidth(frame.getTexWidth() * 2);
-                frame.setTexHeight(frame.getTexHeight() * 2);
-                frame.setTexOffsetX(frame.getTexOffsetX() * 2);
-                frame.setTexOffsetY(frame.getTexOffsetY() * 2);
+void ShadyCli::ScaleCommand::process(ShadyCore::Schema* pattern) {
+    for (int i = 0; i < pattern->objects.size(); ++i) {
+        if (pattern->objects[i]->getType() == 9) {
+            auto move = ((ShadyCore::Schema::Sequence*)pattern->objects[i]);
+            for (int j = 0; j < move->frames.size(); ++j) {
+                auto frame = (ShadyCore::Schema::Sequence::MoveFrame*)move->frames[j];
+                if (frame->renderGroup != 0) continue;
+                frame->renderGroup = 1;
+                // TODO
+                // std::string imageName(prefix + frame.getImageName());
+                // frame.setImageName(imageName.c_str());
+                // frame.setTexWidth(frame.getTexWidth() * 2);
+                // frame.setTexHeight(frame.getTexHeight() * 2);
+                // frame.setTexOffsetX(frame.getTexOffsetX() * 2);
+                // frame.setTexOffsetY(frame.getTexOffsetY() * 2);
             }
         }
     }

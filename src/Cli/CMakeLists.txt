@@ -1,7 +1,7 @@
 set(SRC_CLI
 	command.hpp
 	command.cpp
-#	convert.cpp
+	convert.cpp
 	merge.cpp
 	merge-palette.cpp
 	pack.cpp

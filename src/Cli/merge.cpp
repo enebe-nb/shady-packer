@@ -25,8 +25,9 @@ static inline ShadyCore::Palette* getPalette(std::string filename) {
         return 0;
     }
 
-    return (ShadyCore::Palette*)ShadyCore::readResource(type.type, type.format, input);
-    return 0;
+    auto palette = ShadyCore::createResource(ShadyCore::FileType::TYPE_PALETTE);
+    ShadyCore::getResourceReader(type)(palette, input);
+    return (ShadyCore::Palette*)palette;
 }
 
 bool ShadyCli::MergeCommand::run(const cxxopts::ParseResult& result) {
@@ -51,7 +52,6 @@ bool ShadyCli::MergeCommand::run(const cxxopts::ParseResult& result) {
         }
     }
 
-    if (palette) delete palette;
-
+    if (palette) ShadyCore::destroyResource(ShadyCore::FileType::TYPE_PALETTE, palette);
     return true;
 }

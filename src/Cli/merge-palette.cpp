@@ -33,12 +33,29 @@ static inline bool isPNG(std::istream& input) {
     return !png_sig_cmp(buffer, 0, 8);
 }
 
+static inline void toPngPalette(uint8_t* output, ShadyCore::Palette* palette) {
+    if (palette->bitsPerPixel <= 16) {
+        for (int i = 0; i < 256; ++i) {
+            uint32_t color = ShadyCore::Palette::unpackColor(((uint16_t*)palette->data)[i]);
+            output[i*3  ] = color;
+            output[i*3+1] = color >> 8;
+            output[i*3+2] = color >> 16;
+        }
+    } else {
+        for (int i = 0; i < 256; ++i) {
+            output[i*3  ] = palette->data[i*4];
+            output[i*3+1] = palette->data[i*4+1];
+            output[i*3+2] = palette->data[i*4+2];
+        }
+    }
+}
+
 static inline bool transformImage(uint8_t** rows, const uint8_t* palette, uint32_t rowSize, uint32_t height, int32_t channels) {
     for (int y = 0; y < height; ++y) {
         for (int x = 0; x * channels < rowSize; ++x) {
             uint8_t* color = rows[y] + x * channels;
             int i; for (i = 0; i < 256; ++i)
-                if (palette[i * 3] == *(color) && palette[i * 3 + 1] == *(color + 1) && palette[i * 3 + 1] == *(color + 1) ) break;
+                if (palette[i * 3] == *(color) && palette[i * 3 + 1] == *(color + 1) && palette[i * 3 + 2] == *(color + 2) ) break;
             if (i >= 256) return false;
             *(rows[y] + x) = (uint8_t)i;
         }
@@ -75,8 +92,11 @@ void ShadyCli::MergeCommand::processPalette(ShadyCore::Palette* palette, std::fi
     png_destroy_read_struct(&pngData, 0, 0);
     file.seekp(0);
 
+    uint8_t pngPalette[256*3];
+    toPngPalette(pngPalette, palette);
+
     if (channels >= 3 && depth == 8) {
-        if (!transformImage(rows, palette->getData(), rowSize, height, channels)) {
+        if (!transformImage(rows, pngPalette, rowSize, height, channels)) {
             printf("Image \"%s\" has missing colors.\n", filename.generic_string().c_str());
             delete[] rows;
             delete[] data;
@@ -94,7 +114,7 @@ void ShadyCli::MergeCommand::processPalette(ShadyCore::Palette* palette, std::fi
     png_set_write_fn(pngData, &file, pngWrite, pngFlush);
 
     png_set_IHDR(pngData, pngInfo, rowSize / channels, height, 8, PNG_COLOR_TYPE_PALETTE, PNG_INTERLACE_NONE, PNG_COMPRESSION_TYPE_DEFAULT, PNG_FILTER_TYPE_DEFAULT);
-    png_set_PLTE(pngData, pngInfo, (png_const_colorp)palette->getData(), 256);
+    png_set_PLTE(pngData, pngInfo, (png_const_colorp)pngPalette, 256);
     png_write_info(pngData, pngInfo);
 
     png_write_image(pngData, rows);
