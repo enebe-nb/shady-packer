@@ -11,11 +11,10 @@ source_group("Source Files\\resource" FILES ${SRC_CORE_Resource})
 
 set(SRC_CORE_Util
 	util/iohelper.hpp
-    util/riffdocument.hpp
-    util/singleton.hpp
-    util/strallocator.hpp
+	util/riffdocument.hpp
+	util/singleton.hpp
 	util/xmlprinter.hpp
-    util/util.cpp )
+	util/util.cpp )
 source_group("Source Files\\util" FILES ${SRC_CORE_Util})
 
 set(SRC_CORE_Root

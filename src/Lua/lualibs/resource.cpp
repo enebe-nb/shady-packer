@@ -5,20 +5,30 @@
 #include <LuaBridge/LuaBridge.h>
 #include <LuaBridge/RefCountedPtr.h>
 #include <sstream>
+#include <fstream>
 #include <cmath>
 
 using namespace luabridge;
 
 namespace {
-    struct StringInputBuf : public std::streambuf {
-        StringInputBuf(std::string& s) {setg((char*)s.data(), (char*)s.data(), (char*)(s.data() + s.size()));}
-    };
     template <int value> static inline int* enumMap()
         {static const int valueHolder = value; return (int*)&valueHolder;}
+
+    class ResourceProxy {
+    public:
+        ShadyCore::Resource* const resource;
+        const ShadyCore::FileType::Type type;
+        const bool isOwner;
+
+        inline ResourceProxy(ShadyCore::Resource* resource, ShadyCore::FileType::Type type, bool isOwner = true)
+            : resource(resource), type(type), isOwner(isOwner) {}
+        template <class T> ResourceProxy(T* resource, bool isOwner = true);
+        inline ~ResourceProxy() { if(isOwner) ShadyCore::destroyResource(type, resource); }
+    };
 }
 
 /** Creates a resource from a file in script space */
-static RefCountedPtr<ShadyCore::Resource> resource_createfromfile(const char* filename, lua_State* L) {
+static RefCountedPtr<ResourceProxy> resource_createfromfile(const char* filename, int format, lua_State* L) {
     ShadyLua::LuaScript* script = ShadyLua::ScriptMap.at(L);
 
     std::stringstream data;
@@ -28,17 +38,18 @@ static RefCountedPtr<ShadyCore::Resource> resource_createfromfile(const char* fi
         data.write(buffer, size);
     }
 
-    // TODO fix
-    // const ShadyCore::FileType& type = ShadyCore::FileType::get(filename, data);
-    // return ShadyCore::readResource(type, data);
-    return 0;
+    auto type = ShadyCore::FileType::get(filename).type;
+    RefCountedPtr<ResourceProxy> proxy(new ResourceProxy(ShadyCore::createResource(type), type, true));
+    ShadyCore::getResourceReader(ShadyCore::FileType(type, (ShadyCore::FileType::Format)format))(proxy->resource, data);
+    return proxy;
 }
 
 /** Saves a resource into filesystem */
-// static void resource_export(RefCountedPtr<ShadyCore::Resource> resource, const char* filename, bool encripted, lua_State* L) {
-//     std::fstream out(filename, std::ios::out|std::ios::binary);
-//     ShadyCore::writeResource(resource.get(), out, encripted);
-// }
+static void resource_export(RefCountedPtr<ResourceProxy> resource, const char* filename, int format, lua_State* L) {
+    std::fstream out(filename, std::ios::out|std::ios::binary);
+    ShadyCore::getResourceWriter(ShadyCore::FileType(resource->type, (ShadyCore::FileType::Format)format))
+        (resource->resource, out);
+}
 
 static int resource_Text_getData(lua_State* L) {
     ShadyCore::TextResource* resource = Stack<ShadyCore::TextResource*>::get(L, 1);
@@ -118,43 +129,77 @@ static int resource_Sfx_setData(lua_State* L) {
 void ShadyLua::LualibResource(lua_State* L) {
     getGlobalNamespace(L)
         .beginNamespace("resource")
+            .beginNamespace("Type")
+                .addVariable("Unknown",     enumMap<ShadyCore::FileType::TYPE_UNKNOWN>(), false)
+                .addVariable("Text",        enumMap<ShadyCore::FileType::TYPE_TEXT>(), false)
+                .addVariable("Table",       enumMap<ShadyCore::FileType::TYPE_TABLE>(), false)
+                .addVariable("Label",       enumMap<ShadyCore::FileType::TYPE_LABEL>(), false)
+                .addVariable("Image",       enumMap<ShadyCore::FileType::TYPE_IMAGE>(), false)
+                .addVariable("Palette",     enumMap<ShadyCore::FileType::TYPE_PALETTE>(), false)
+                .addVariable("Sfx",         enumMap<ShadyCore::FileType::TYPE_SFX>(), false)
+                .addVariable("Bgm",         enumMap<ShadyCore::FileType::TYPE_BGM>(), false)
+                .addVariable("Schema",      enumMap<ShadyCore::FileType::TYPE_SCHEMA>(), false)
+                .addVariable("Texture",     enumMap<ShadyCore::FileType::TYPE_TEXTURE>(), false)
+            .endNamespace()
+            .beginNamespace("Format")
+                .addVariable("Unknown",     enumMap<ShadyCore::FileType::FORMAT_UNKNOWN>(), false)
+                .addVariable("TextGame",    enumMap<ShadyCore::FileType::TEXT_GAME>(), false)
+                .addVariable("TextNormal",  enumMap<ShadyCore::FileType::TEXT_NORMAL>(), false)
+                .addVariable("TableGame",   enumMap<ShadyCore::FileType::TABLE_GAME>(), false)
+                .addVariable("TableCsv",    enumMap<ShadyCore::FileType::TABLE_CSV>(), false)
+                .addVariable("LabelRiff",   enumMap<ShadyCore::FileType::LABEL_RIFF>(), false)
+                .addVariable("LabelLbl",    enumMap<ShadyCore::FileType::LABEL_LBL>(), false)
+                .addVariable("ImageGame",   enumMap<ShadyCore::FileType::IMAGE_GAME>(), false)
+                .addVariable("ImagePng",    enumMap<ShadyCore::FileType::IMAGE_PNG>(), false)
+                .addVariable("ImageBmp",    enumMap<ShadyCore::FileType::IMAGE_BMP>(), false)
+                .addVariable("PalettePal",  enumMap<ShadyCore::FileType::PALETTE_PAL>(), false)
+                .addVariable("PaletteAct",  enumMap<ShadyCore::FileType::PALETTE_ACT>(), false)
+                .addVariable("SfxGame",     enumMap<ShadyCore::FileType::SFX_GAME>(), false)
+                .addVariable("SfxWave",     enumMap<ShadyCore::FileType::SFX_WAV>(), false)
+                .addVariable("BgmOgg",      enumMap<ShadyCore::FileType::BGM_OGG>(), false)
+                .addVariable("TextureDds",  enumMap<ShadyCore::FileType::TEXTURE_DDS>(), false)
+                .addVariable("SchemaXml",   enumMap<ShadyCore::FileType::SCHEMA_XML>(), false)
+                .addVariable("SchemaGui",   enumMap<ShadyCore::FileType::SCHEMA_GAME_GUI>(), false)
+                .addVariable("SchemaAnim",  enumMap<ShadyCore::FileType::SCHEMA_GAME_ANIM>(), false)
+                .addVariable("SchemaPat",   enumMap<ShadyCore::FileType::SCHEMA_GAME_PATTERN>(), false)
+            .endNamespace()
             .addFunction("createfromfile", resource_createfromfile)
-            //.addFunction("export", resource_export)
-            .beginClass<ShadyCore::Resource>("Resource").endClass()
-            .deriveClass<ShadyCore::TextResource, ShadyCore::Resource>("Text")
-                .addConstructor<void(*)(), RefCountedPtr<ShadyCore::TextResource>>()
-                .addProperty("data", resource_Text_getData, resource_Text_setData)
-            .endClass()
-            .deriveClass<ShadyCore::LabelResource, ShadyCore::Resource>("Label")
-                .addConstructor<void(*)(), RefCountedPtr<ShadyCore::LabelResource>>()
-                .addProperty("begin", &ShadyCore::LabelResource::begin)
-                .addProperty("end", &ShadyCore::LabelResource::end)
-            .endClass()
-            .deriveClass<ShadyCore::Palette, ShadyCore::Resource>("Palette")
-                .addConstructor<void(*)(), RefCountedPtr<ShadyCore::Palette>>()
-                .addProperty("data", resource_Palette_getData, resource_Palette_setData)
-                // .addFunction("getColor", &ShadyCore::Palette::getColor)
-                // .addFunction("setColor", &ShadyCore::Palette::setColor)
-                .addStaticFunction("packColor", &ShadyCore::Palette::packColor)
-                .addStaticFunction("unpackColor", &ShadyCore::Palette::unpackColor)
-            .endClass()
-            .deriveClass<ImageProxy, ShadyCore::Resource>("Image")
-                .addConstructor<void(*)(uint32_t, uint32_t, uint8_t), RefCountedPtr<ImageProxy>>()
-                .addProperty<uint32_t>("width", &ImageProxy::width, false)
-                .addProperty<uint32_t>("height", &ImageProxy::height, false)
-                .addProperty<uint32_t>("paddedwidth", &ImageProxy::paddedWidth, false)
-                .addProperty<uint8_t>("bitsperpixel", &ImageProxy::bitsPerPixel, false)
-                .addProperty("raw", resource_Image_getRaw, resource_Image_setRaw)
-            .endClass()
-            .deriveClass<ShadyCore::Sfx, ShadyCore::Resource>("Sfx")
-                .addConstructor<void(*)(), RefCountedPtr<ShadyCore::Sfx>>()
-                .addProperty("channels", &ShadyCore::Sfx::channels)
-                .addProperty("samplerate", &ShadyCore::Sfx::sampleRate)
-                .addProperty("byterate", &ShadyCore::Sfx::byteRate)
-                .addProperty("blockalign", &ShadyCore::Sfx::blockAlign)
-                .addProperty("bitspersample", &ShadyCore::Sfx::bitsPerSample)
-                .addProperty("data", resource_Sfx_getData, resource_Sfx_setData)
-            .endClass()
+            .addFunction("export", resource_export)
+            // .beginClass<ShadyCore::Resource>("Resource").endClass()
+            // .deriveClass<ShadyCore::TextResource, ShadyCore::Resource>("Text")
+            //     .addConstructor<void(*)(), RefCountedPtr<ShadyCore::TextResource>>()
+            //     .addProperty("data", resource_Text_getData, resource_Text_setData)
+            // .endClass()
+            // .deriveClass<ShadyCore::LabelResource, ShadyCore::Resource>("Label")
+            //     .addConstructor<void(*)(), RefCountedPtr<ShadyCore::LabelResource>>()
+            //     .addProperty("begin", &ShadyCore::LabelResource::begin)
+            //     .addProperty("end", &ShadyCore::LabelResource::end)
+            // .endClass()
+            // .deriveClass<ShadyCore::Palette, ShadyCore::Resource>("Palette")
+            //     .addConstructor<void(*)(), RefCountedPtr<ShadyCore::Palette>>()
+            //     .addProperty("data", resource_Palette_getData, resource_Palette_setData)
+            //     // .addFunction("getColor", &ShadyCore::Palette::getColor)
+            //     // .addFunction("setColor", &ShadyCore::Palette::setColor)
+            //     // .addStaticFunction("packColor", &ShadyCore::Palette::packColor)
+            //     .addStaticFunction("unpackColor", &ShadyCore::Palette::unpackColor)
+            // .endClass()
+            // .deriveClass<ImageProxy, ShadyCore::Resource>("Image")
+            //     .addConstructor<void(*)(uint32_t, uint32_t, uint8_t), RefCountedPtr<ImageProxy>>()
+            //     .addProperty<uint32_t>("width", &ImageProxy::width, false)
+            //     .addProperty<uint32_t>("height", &ImageProxy::height, false)
+            //     .addProperty<uint32_t>("paddedwidth", &ImageProxy::paddedWidth, false)
+            //     .addProperty<uint8_t>("bitsperpixel", &ImageProxy::bitsPerPixel, false)
+            //     .addProperty("raw", resource_Image_getRaw, resource_Image_setRaw)
+            // .endClass()
+            // .deriveClass<ShadyCore::Sfx, ShadyCore::Resource>("Sfx")
+            //     .addConstructor<void(*)(), RefCountedPtr<ShadyCore::Sfx>>()
+            //     .addProperty("channels", &ShadyCore::Sfx::channels)
+            //     .addProperty("samplerate", &ShadyCore::Sfx::sampleRate)
+            //     .addProperty("byterate", &ShadyCore::Sfx::byteRate)
+            //     .addProperty("blockalign", &ShadyCore::Sfx::blockAlign)
+            //     .addProperty("bitspersample", &ShadyCore::Sfx::bitsPerSample)
+            //     .addProperty("data", resource_Sfx_getData, resource_Sfx_setData)
+            // .endClass()
         .endNamespace()
     ;
 }

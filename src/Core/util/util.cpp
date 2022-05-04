@@ -1,37 +1,6 @@
-#include "strallocator.hpp"
 #include "riffdocument.hpp"
 #include "xmlprinter.hpp"
 #include "filewatcher.hpp"
-
-ShadyUtil::StrAllocator::~StrAllocator() {
-    for(char* str : strings) {
-        delete[] str;
-    }
-}
-
-char* ShadyUtil::StrAllocator::allocateString(const char* str, unsigned int size) {
-    if (size) {
-        strings.push_back(new char[size + 1]);
-        memcpy(strings.back(), str, size);
-        strings.back()[size] = '\0';
-    } else {
-        strings.push_back(new char[strlen(str) + 1]);
-        strcpy(strings.back(), str);
-    }
-    return strings.back();
-}
-
-char* ShadyUtil::StrAllocator::allocateString(unsigned int size) {
-    strings.push_back(new char[size + 1]);
-    strings.back()[size] = '\0';
-    return strings.back();
-}
-
-void ShadyUtil::StrAllocator::clear() {
-	for (char* str : strings) {
-		delete[] str;
-	} strings.clear();
-}
 
 ShadyUtil::RiffDocument::RiffDocument(std::istream& input) : input(input) {
     typedef struct{ char type[4]; uint32_t left; } ListInfo;

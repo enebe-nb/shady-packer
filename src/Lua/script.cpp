@@ -40,6 +40,7 @@ ShadyLua::LuaScript::LuaScript(void* userdata, fnOpen_t open, fnRead_t read, fnD
 }
 
 ShadyLua::LuaScript::~LuaScript() {
+    std::lock_guard guard(mutex);
     if (lua_getglobal(L, "AtExit") == LUA_TFUNCTION) {
         if (lua_pcall(L, 0, 0, 0)) Logger::Error(lua_tostring(L, -1));
     }

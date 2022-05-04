@@ -3,7 +3,14 @@
 #include <math.h>
 #include <string>
 
-// TODO review
+namespace {
+	bool isTrueColorAvailable = false;
+}
+
+void ShadyCore::Palette::setTrueColorAvailable(bool value) {
+	isTrueColorAvailable = value;
+}
+
 uint16_t ShadyCore::Palette::packColor(uint32_t color, bool transparent) {
 	uint16_t pcolor = !transparent;
 	pcolor = (pcolor << 5) + ((color >> 19) & 0x1F);
@@ -15,22 +22,21 @@ uint16_t ShadyCore::Palette::packColor(uint32_t color, bool transparent) {
 uint32_t ShadyCore::Palette::unpackColor(uint16_t color) {
 	uint32_t ucolor;
 
-	//ucolor = (color << 3) & 0xF8;
 	ucolor = (color >> 7) & 0xF8;
 	ucolor += (ucolor >> 5) & 0x07;
 	ucolor = ucolor << 8;
-	//ucolor += (color >> 2) & 0xF8;
+
 	ucolor += (color >> 2) & 0xF8;
 	ucolor += (ucolor >> 5) & 0x07;
 	ucolor = ucolor << 8;
-	//ucolor += (color >> 7) & 0xF8;
+
 	ucolor += (color << 3) & 0xF8;
 	ucolor += (ucolor >> 5) & 0x07;
 
+	if (color & 0x8000) ucolor |= 0xff000000;
 	return ucolor;
 }
 
-// TODO fix tranparency
 void ShadyCore::Palette::pack() {
 	if (bitsPerPixel <= 16) return;
 
@@ -45,7 +51,6 @@ void ShadyCore::Palette::pack() {
 	data = (uint8_t*)newData;
 }
 
-// TODO fix tranparency
 void ShadyCore::Palette::unpack() {
 	if (bitsPerPixel > 16) return;
 
@@ -284,10 +289,14 @@ void writerImageBmp(ShadyCore::Image& resource, std::ostream& output) {
 }
 
 void readerPaletteAct(ShadyCore::Palette& resource, std::istream& input) {
-	resource.initialize(16);
-	uint16_t* data = (uint16_t*)resource.data;
-	for (int i = 0; i < 256; ++i) {
+	if (isTrueColorAvailable) for (int i = 0; i < 256; ++i) {
+		resource.initialize(32);
+		input.read((char*)&resource.data[i*4], 3);
+		resource.data[i*4+3] = i == 0 ? 0 : 0xff;
+	} else for (int i = 0; i < 256; ++i) {
 		uint32_t color = 0;
+		resource.initialize(16);
+		uint16_t* data = (uint16_t*)resource.data;
 		input.read((char*)&color, 3);
 		data[i] = ShadyCore::Palette::packColor(color, i == 0);
 	}

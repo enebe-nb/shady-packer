@@ -11,6 +11,7 @@ namespace {
 }
 bool iniAutoUpdate;
 bool iniUseLoadLock;
+bool iniEnableLua;
 std::string iniRemoteConfig;
 
 static bool GetModulePath(HMODULE handle, std::filesystem::path& result) {
@@ -44,7 +45,11 @@ extern "C" __declspec(dllexport) bool Initialize(HMODULE hMyModule, HMODULE hPar
 	if (!_initialized) _initialized = true;
 	else return FALSE;
 
+#ifdef _DEBUG
+	Logger::Initialize(Logger::LOG_ALL);
+#else
 	Logger::Initialize(Logger::LOG_ERROR);
+#endif
 	GetModulePath(hMyModule, ModPackage::basePath);
 	ModPackage::basePackage.reset(new ShadyCore::PackageEx(ModPackage::basePath));
 	LoadSettings();
@@ -56,10 +61,7 @@ extern "C" __declspec(dllexport) bool Initialize(HMODULE hMyModule, HMODULE hPar
 		t.detach();
 	}
 
-	std::wstring callerName;
-	GetModuleName(hParentModule, callerName);
-	HookLoader(callerName);
-
+	HookLoader();
 	return TRUE;
 }
 
@@ -80,6 +82,7 @@ void LoadSettings() {
 
 	iniAutoUpdate = GetPrivateProfileIntA("Options", "autoUpdate", true, ipath.c_str());
 	iniUseLoadLock = GetPrivateProfileIntA("Options", "useLoadLock", false, ipath.c_str());
+	iniEnableLua = GetPrivateProfileIntA("Options", "enableLua", true, ipath.c_str());
 	iniRemoteConfig.resize(64);
 	size_t len = GetPrivateProfileStringA("Options", "remoteConfig",
 		"1EpxozKDE86N3Vb8b4YIwx798J_YfR_rt", iniRemoteConfig.data(), 64, ipath.c_str());
@@ -91,6 +94,7 @@ void SaveSettings() {
 
 	WritePrivateProfileStringA("Options", "autoUpdate", iniAutoUpdate ? "1" : "0", ipath.c_str());
 	WritePrivateProfileStringA("Options", "useLoadLock", iniUseLoadLock ? "1" : "0", ipath.c_str());
+	WritePrivateProfileStringA("Options", "enableLua", iniEnableLua ? "1" : "0", ipath.c_str());
 	WritePrivateProfileStringA("Options", "remoteConfig", iniRemoteConfig.c_str(), ipath.c_str());
 
 	nlohmann::json root;

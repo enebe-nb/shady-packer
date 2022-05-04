@@ -99,8 +99,8 @@ namespace ShadyCore {
 
 		inline StorageType getStorage() const final { return entry.getStorage(); }
 		inline std::istream& open() final { return entry.open(); }
-		inline bool isOpen() const final { return entry.isOpen(); }
-		inline void close() final { entry.close(); }
+		inline bool isOpen() const final { return false; } // TODO test
+		inline void close() final { entry.close(); if (disposable) delete this; }
 	};
 }
 
@@ -240,15 +240,16 @@ ShadyCore::Package* ShadyCore::PackageEx::demerge(Package* child) {
 // }
 
 void ShadyCore::PackageEx::erase(Package* package) {
-	std::scoped_lock lock(*this, *package);
+	{ std::scoped_lock lock(*this, *package);
 	if (!std::erase(groups, package)) return;
 
 	auto i = begin(); while(i != end()) {
 		if (package == i.entry().getParent()) {
-			delete i->second;
+			if (!i->second->isOpen()) delete i->second;
+			else i->second->markAsDisposable();
 			i = entries.erase(i);
 		} else ++i;
-	}
+	}}
 
 	delete package;
 }

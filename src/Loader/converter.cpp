@@ -346,6 +346,7 @@ template<int N> static inline void TamperCode(int addr, uint8_t(&code)[N]) {
 static int _HookLoader() {
     if (__loader) __loader();
     curl_global_init(CURL_GLOBAL_DEFAULT);
+    ShadyCore::Palette::setTrueColorAvailable(GetModuleHandleA("true-color-palettes.dll"));
 
     DWORD dwOldProtect;
     VirtualProtect((PVOID)TEXT_SECTION_OFFSET, TEXT_SECTION_SIZE, PAGE_EXECUTE_WRITECOPY, &dwOldProtect);
@@ -374,18 +375,15 @@ static int _HookLoader() {
     return *(int*)0x008943b8;
 }
 
-void HookLoader(const std::wstring& caller) {
-    ShadyLua::LoadTamper(caller);
+void HookLoader() {
+    if (iniEnableLua) ShadyLua::LoadTamper();
 
-    if (caller == L"SokuEngine.dll") _HookLoader();
-    else {
-        DWORD dwOldProtect;
-        ::VirtualProtect(reinterpret_cast<LPVOID>(0x007fb596), 5, PAGE_EXECUTE_WRITECOPY, &dwOldProtect);
-        bool hasCall = 0xE8 == *(unsigned char*)0x007fb596;
-        __loader = SokuLib::TamperNearCall(0x007fb596, _HookLoader);
-        if (!hasCall) __loader = 0;
-        ::VirtualProtect(reinterpret_cast<LPVOID>(0x007fb596), 5, dwOldProtect, &dwOldProtect);
-    }
+    DWORD dwOldProtect;
+    ::VirtualProtect(reinterpret_cast<LPVOID>(0x007fb596), 5, PAGE_EXECUTE_WRITECOPY, &dwOldProtect);
+    bool hasCall = 0xE8 == *(unsigned char*)0x007fb596;
+    __loader = SokuLib::TamperNearCall(0x007fb596, _HookLoader);
+    if (!hasCall) __loader = 0;
+    ::VirtualProtect(reinterpret_cast<LPVOID>(0x007fb596), 5, dwOldProtect, &dwOldProtect);
 }
 
 void UnhookLoader() {

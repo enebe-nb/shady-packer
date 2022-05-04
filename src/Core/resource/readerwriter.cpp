@@ -33,7 +33,7 @@ namespace {
         FT(FT::TYPE_SCHEMA, FT::FORMAT_UNKNOWN, FT::getExtValue(".pat")),
 
         FT(FT::TYPE_TEXTURE, FT::TEXTURE_DDS, FT::getExtValue(".dds")),
-        FT(FT::TYPE_BGM, FT::FORMAT_UNKNOWN, FT::getExtValue(".ogg")),
+        FT(FT::TYPE_BGM, FT::BGM_OGG, FT::getExtValue(".ogg")),
     };
 }
 
@@ -105,6 +105,7 @@ ShadyCore::ResourceReader_t ShadyCore::getResourceReader(const ShadyCore::FileTy
         case _pack(FileType::TYPE_SCHEMA, FileType::SCHEMA_GAME_PATTERN): return (ShadyCore::ResourceReader_t)_private::readerSchemaMove;
 
         case _pack(FileType::TYPE_BGM, FileType::BGM_OGG): //return (ShadyCore::ResourceReader_t)_private::readerText;
+        case _pack(FileType::TYPE_TEXTURE, FileType::TEXTURE_DDS): //return (ShadyCore::ResourceReader_t)_private::readerText;
         default: throw std::runtime_error("Trying to get the reader of an unknown resource."); // TODO maybe use a messagebox
     }
 }
@@ -130,6 +131,7 @@ ShadyCore::ResourceWriter_t ShadyCore::getResourceWriter(const ShadyCore::FileTy
         case _pack(FileType::TYPE_SCHEMA, FileType::SCHEMA_GAME_PATTERN): return (ShadyCore::ResourceWriter_t)_private::writerSchemaMove;
 
         case _pack(FileType::TYPE_BGM, FileType::BGM_OGG): //return (ShadyCore::ResourceWriter_t)_private::readerText;
+        case _pack(FileType::TYPE_TEXTURE, FileType::TEXTURE_DDS): //return (ShadyCore::ResourceReader_t)_private::readerText;
         default: throw std::runtime_error("Trying to get the writer of an unknown resource."); // TODO maybe use a messagebox
     }
 }

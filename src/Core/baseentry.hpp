@@ -7,6 +7,7 @@ namespace ShadyCore {
 	protected:
 		Package* const parent;
 		const unsigned int size;
+		bool disposable = false;
 	public:
 		inline BasePackageEntry(Package* parent, unsigned int size = 0) : parent(parent), size(size) {}
 		virtual ~BasePackageEntry() {}
@@ -14,6 +15,7 @@ namespace ShadyCore {
 
 		inline Package* getParent() const { return parent; }
 		inline const unsigned int& getSize() const { return size; }
+		inline void markAsDisposable() { disposable = true; }
 
 		virtual StorageType getStorage() const = 0;
 		virtual bool isOpen() const = 0;

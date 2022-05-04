@@ -7,11 +7,12 @@
 
 extern bool iniAutoUpdate;
 extern bool iniUseLoadLock;
+extern bool iniEnableLua;
 extern std::string iniRemoteConfig;
 
 void LoadSettings();
 void SaveSettings();
 void LoadPackage();
 void UnloadPackage();
-void HookLoader(const std::wstring& caller);
+void HookLoader();
 void UnhookLoader();

@@ -7,5 +7,4 @@ namespace ShadyLua {
     void LualibMemory(lua_State* L);
     void LualibResource(lua_State* L);
     void LualibSoku(lua_State* L);
-    //void LualibImGui(lua_State* L);
 }

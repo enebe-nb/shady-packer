@@ -89,7 +89,7 @@ int ModList::appendLine(SokuLib::String& out, void* unknown, SokuLib::Deque<Soku
 
 ModMenu::ModMenu() {
 	design.loadResource("shady/downloader.dat");
-	ModPackage::LoadFromFilesystem(); // TODO test
+	ModPackage::LoadFromFilesystem();
 	modList.updateList();
 
 	design.getById((SokuLib::CDesign::Sprite**)&modList.scrollBar, 101);

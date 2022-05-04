@@ -16,7 +16,7 @@ namespace ShadyLua {
         EmitSokuEventRender();
     }
 
-    void LoadTamper(const std::wstring& caller);
+    void LoadTamper();
     void UnloadTamper();
     class LuaScript;
     void RemoveEvents(LuaScript*);

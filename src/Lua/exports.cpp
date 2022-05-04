@@ -56,7 +56,6 @@ static void LoadSettings() {
         ShadyLua::LualibBase(script->L, modulePath);
         ShadyLua::LualibMemory(script->L);
         ShadyLua::LualibResource(script->L);
-        //ShadyLua::LualibImGui(script->L);
         ShadyLua::LualibSoku(script->L);
         if (script->load((const char*)scriptPath.filename().u8string().c_str()) == LUA_OK) script->run();
         line += len + 1;
@@ -64,12 +63,12 @@ static void LoadSettings() {
 }
 
 
+/* TODO redo console
 static void RenderConsole() {
     static bool showConsole = iniShowConsole;
     static std::string input;
     bool didEnter = false;
 
-/*
     if (showConsole) { if (ImGui::Begin("Console", &showConsole, ImGuiWindowFlags_NoFocusOnAppearing)) {
         ImVec2 content = ImGui::GetContentRegionAvail();
         ImVec2 inputSize = ImGui::CalcTextSize(input.data(), input.data() + input.size(), false, content.x - 16);
@@ -85,7 +84,6 @@ static void RenderConsole() {
             if (didEnter) ImGui::SetKeyboardFocusHere(-1);
         } ImGui::EndChild();
     } ImGui::End(); }
-*/
 
     if (didEnter) {
         lua_State* L = consoleScript->L;
@@ -113,8 +111,8 @@ static void ResetConsole() {
     ShadyLua::LualibMemory(consoleScript->L);
     ShadyLua::LualibResource(consoleScript->L);
     ShadyLua::LualibSoku(consoleScript->L);
-    //ShadyLua::LualibImGui(consoleScript->L);
 }
+*/
 
 extern "C" __declspec(dllexport) bool CheckVersion(const BYTE hash[16]) {
 	return ::memcmp(TARGET_HASH, hash, sizeof TARGET_HASH) == 0;
@@ -126,45 +124,13 @@ extern "C" __declspec(dllexport) bool Initialize(HMODULE hMyModule, HMODULE hPar
 	std::filesystem::path callerName;
 	GetModuleName(hParentModule, callerName);
 
-    ResetConsole();
-    ShadyLua::LoadTamper(callerName);
+    ShadyLua::LoadTamper();
     LoadSettings();
 
 	return TRUE;
 }
 
 extern "C" __declspec(dllexport) void AtExit() {}
-
-/*
-extern "C" __declspec(dllexport) ShadyLua::LuaScript* LoadFromGeneric(void* userdata, ShadyLua::fnOpen_t open, ShadyLua::fnRead_t read, const char* filename) {
-    ShadyLua::LuaScript* script = new ShadyLua::LuaScript(userdata, open, read);
-    if (script->load(filename) != LUA_OK || !script->run()) {
-        delete script;
-        return 0;
-    } return script;
-}
-
-extern "C" __declspec(dllexport) ShadyLua::LuaScript* LoadFromFilesystem(const char* path) {
-    const char* filename = PathFindFileName(path);
-    ShadyLua::LuaScriptFS* script = new ShadyLua::LuaScriptFS(std::string(path, filename));
-    if (script->load(filename) != LUA_OK || !script->run()) {
-        delete script;
-        return 0;
-    } return script;
-}
-
-extern "C" __declspec(dllexport) ShadyLua::LuaScript* LoadFromZip(const char* zipFile, const char* filename) {
-    ShadyLua::LuaScriptZip* script = new ShadyLua::LuaScriptZip(zipFile);
-    if (script->load(filename) != LUA_OK || !script->run()) {
-        delete script;
-        return 0;
-    } return script;
-}
-
-extern "C" __declspec(dllexport) void FreeScript(ShadyLua::LuaScript* script) {
-	delete script;
-}
-*/
 
 BOOL WINAPI DllMain(HMODULE hModule, DWORD fdwReason, LPVOID lpReserved) {
 	if (fdwReason == DLL_PROCESS_DETACH) Logger::Finalize();

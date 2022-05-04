@@ -183,6 +183,7 @@ void ShadyCore::DataPackageEntry::close() {
 		delete base;
 		fileFilter.setBaseBuffer(0);
 	}
+	if (disposable) delete this;
 }
 
 //-------------------------------------------------------------

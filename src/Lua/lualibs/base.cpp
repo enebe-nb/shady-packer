@@ -1,7 +1,6 @@
 #include "../lualibs.hpp"
 #include "../logger.hpp"
 #include "../script.hpp"
-#include <unordered_map>
 #include <LuaBridge/LuaBridge.h>
 
 static int _print(lua_State* L) {

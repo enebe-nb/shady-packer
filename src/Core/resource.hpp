@@ -40,7 +40,9 @@ namespace ShadyCore {
 		//inline uint32_t getColor(int index) const { index *= 3; return (index == 0 ? 0x00 : 0xff << 24) + ((uint32_t)data[index] << 16) + ((uint32_t)data[index + 1] << 8) + ((uint32_t)data[index + 2]); }
 		//inline void setColor(int index, uint32_t value) { index *= 3; data[index] = value >> 16; data[index + 1] = value >> 8; data[index + 2] = value; }
 
-		static uint16_t packColor(uint32_t color, bool = false);
+		static void setTrueColorAvailable(bool value);
+		static uint16_t packColor(uint32_t color, bool transparent);
+		static inline uint16_t packColor(uint32_t color) { return packColor(color, (color >> 24) < 0x80); }
 		static uint32_t unpackColor(uint16_t color);
 		void pack();
 		void unpack();

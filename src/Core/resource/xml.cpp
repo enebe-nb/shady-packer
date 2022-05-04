@@ -111,7 +111,7 @@ namespace {
 	};
 
 	const AttributeMap XmlFrame = {
-		{"unknown",     {(setter_t)setter<uint16_t, 16>,offsetof(ShadyCore::Schema::Sequence::Frame, unknown)}}, // TODO check
+		{"unknown",     {(setter_t)setter<uint16_t, 16>,offsetof(ShadyCore::Schema::Sequence::Frame, unknown)}},
 		{"xtexoffset",  {(setter_t)setter<uint16_t>,    offsetof(ShadyCore::Schema::Sequence::Frame, texOffsetX)}},
 		{"xtex",        {(setter_t)setter<uint16_t>,    offsetof(ShadyCore::Schema::Sequence::Frame, texOffsetX)}},
 		{"ytexoffset",  {(setter_t)setter<uint16_t>,    offsetof(ShadyCore::Schema::Sequence::Frame, texOffsetY)}},

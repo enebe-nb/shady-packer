@@ -74,12 +74,11 @@ TEST_F(FileEntrySuite, PackageWrite) {
 			std::replace(filename.begin(), filename.end(), L'\\', L'_');
 			filename = tempFile / filename;
 
-// TODO fix
 			if (std::filesystem::is_regular_file(filename)) {
 				std::ifstream input(filename, std::ios::binary);
 				std::ifstream expected(iter->path(), std::ios::binary);
 
-				EXPECT_TRUE(testing::isSameData(input, expected)) << "filename: " << filename << ", package: " << packageName; // TODO fix
+				EXPECT_TRUE(testing::isSameData(input, expected)) << "filename: " << filename << ", package: " << packageName;
 
 				input.close();
 				expected.close();

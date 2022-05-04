@@ -35,7 +35,7 @@ void Logger::Initialize(int flags) {
 
 void Logger::Finalize() {
     std::lock_guard guard(consoleLock);
-    if (consoleView.dxHandle) SokuLib::textureMgr.remove(consoleView.dxHandle);
+    //if (consoleView.dxHandle) SokuLib::textureMgr.remove(consoleView.dxHandle);
     logContent.clear();
 
     if (consoleFont) {
@@ -90,7 +90,7 @@ void Logger::Log(int type, const std::string& text) {
 
     std::lock_guard guard(consoleLock);
     logContent.push_back(getTypeName(type) + ": " + text);
-    isDirty = true; logTimeout = 300; // TODO use time instead
+    isDirty = true; logTimeout = 2000; // TODO use time instead
 
     // size limiting
     while(logContent.size() > 10) logContent.pop_front();
