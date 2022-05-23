@@ -117,7 +117,7 @@ namespace {
 					} else ++i;
 				}
 
-				std::this_thread::sleep_for(50ms);
+				std::this_thread::sleep_for(200ms);
 				_mutex.lock();
 			}
 

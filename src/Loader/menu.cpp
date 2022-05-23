@@ -105,9 +105,13 @@ ModMenu::~ModMenu() {
 	design.clear();
 	modList.clear();
 	if (viewTitle.dxHandle) SokuLib::textureMgr.remove(viewTitle.dxHandle);
+	viewTitle.dxHandle = 0;
 	if (viewContent.dxHandle) SokuLib::textureMgr.remove(viewContent.dxHandle);
+	viewContent.dxHandle = 0;
 	if (viewOption.dxHandle) SokuLib::textureMgr.remove(viewOption.dxHandle);
+	viewOption.dxHandle = 0;
 	if (viewPreview.dxHandle) SokuLib::textureMgr.remove(viewPreview.dxHandle);
+	viewPreview.dxHandle = 0;
 }
 
 void ModMenu::_() {}
@@ -165,15 +169,15 @@ int ModMenu::onProcess() {
 			return true;
 		}
 
+		bool shouldUpdate = false;
 		if (SokuLib::inputMgrs.input.a == 1) {
-			std::shared_lock lock(ModPackage::descMutex);
+			{ std::shared_lock lock(ModPackage::descMutex);
 			SokuLib::playSEWaveBuffer(0x28);
 			ModPackage* package = ModPackage::descPackage[modCursor.pos];
 			switch (options[viewCursor.pos]) {
 			case OPTION_ENABLE_DISABLE:
 				setPackageEnabled(package, !package->package);
-				SaveSettings();
-				modList.updateList();
+				shouldUpdate = true;
 				break;
 			case OPTION_DOWNLOAD:
 				package->downloadFile();
@@ -199,8 +203,13 @@ int ModMenu::onProcess() {
 					itoa(GetLastError(), &errTitle[16], 10);
 					MessageBox(0, translateExecuteError((int)result), errTitle, MB_OK);
 				}
-			}
+				break;
+			}}
 
+			if(shouldUpdate) {
+				SaveSettings();
+				modList.updateList();
+			}
 			this->updateView(modCursor.pos);
 		}
 	}

@@ -48,6 +48,7 @@ static inline FT::Format findXmlFormat(const FT& inputType, std::istream& input)
         if (strcmp(buffer, "layout") == 0) return FT::SCHEMA_GAME_GUI;
         if (!strchr("?", buffer[0])) break;
     }
+    return FT::FORMAT_UNKNOWN;
 }
 
 void ShadyCli::ConvertCommand::processFile(std::filesystem::path filename, std::filesystem::path targetPath, bool copyUnknown) {

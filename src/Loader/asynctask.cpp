@@ -31,6 +31,8 @@ static std::string findConfirmUrl(const std::filesystem::path& filename) {
 
 void FetchFile::run() {
     CURL* curl = curl_easy_init();
+    if (!curl) { return; }
+
     curl_easy_setopt(curl, CURLOPT_AUTOREFERER, 1L);
     curl_easy_setopt(curl, CURLOPT_ACCEPT_ENCODING, "");
     curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
@@ -60,6 +62,8 @@ void FetchFile::run() {
 
 void FetchJson::run() {
     CURL* curl = curl_easy_init();
+    if (!curl) { return; }
+
     curl_easy_setopt(curl, CURLOPT_AUTOREFERER, 1L);
     curl_easy_setopt(curl, CURLOPT_ACCEPT_ENCODING, "");
     curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
@@ -77,6 +81,8 @@ void FetchJson::run() {
 
 void FetchImage::run() {
     CURL* curl = curl_easy_init();
+    if (!curl) { return; }
+
     curl_easy_setopt(curl, CURLOPT_AUTOREFERER, 1L);
     curl_easy_setopt(curl, CURLOPT_ACCEPT_ENCODING, "");
     curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);

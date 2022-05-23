@@ -29,7 +29,7 @@ private:
     int scrollPos = 0;
     int state = 0;
     int optionCount = 0;
-    int options[2];
+    int options[3];
 
 public:
     ModMenu();
