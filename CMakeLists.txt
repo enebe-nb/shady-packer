@@ -26,6 +26,8 @@ add_subdirectory(${CMAKE_SOURCE_DIR}/thirdparty)
 add_subdirectory(${CMAKE_SOURCE_DIR}/src/Core)
 # Shady *Cli*
 add_subdirectory(${CMAKE_SOURCE_DIR}/src/Cli)
+# Shady *Dnd*
+add_subdirectory(${CMAKE_SOURCE_DIR}/src/Dnd)
 
 # Shady *Loader*
 if(SHADY_ENABLE_MODULE)
