@@ -67,7 +67,7 @@ void ShadyCli::ConvertCommand::processFile(std::filesystem::path filename, std::
             if (type.second.format == FT::SCHEMA_GAME_GUI) type.second.extValue = FT::getExtValue(".dat");
             input.seekg(0);
         }
-        std::filesystem::path targetName = targetPath / filename.filename(); type.second.appendExtValue(targetName);
+        std::filesystem::path targetName = targetPath / filename.filename().replace_extension(); type.second.appendExtValue(targetName);
         printf("Converting %s -> %s\n", filename.generic_string().c_str(), targetName.generic_string().c_str());
         std::filesystem::create_directories(targetPath);
         std::ofstream output(targetName.string(), std::fstream::binary);
@@ -81,6 +81,7 @@ bool ShadyCli::ConvertCommand::run(const cxxopts::ParseResult& result) {
     auto& files = result["files"].as<std::vector<std::string> >();
 
     size_t size = files.size();
+    for (size_t i = 0; i < size; ++i) std::cout << files[i].c_str() << std::endl;
     for (size_t i = 0; i < size; ++i) {
         std::filesystem::path path(files[i]);
         if (std::filesystem::is_directory(path)) {
