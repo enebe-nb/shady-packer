@@ -93,6 +93,7 @@ namespace ShadyCore {
 			int32_t x, y, w, h;
 
 			inline Image(const char* name) : name(name) {}
+			inline Image(Image&& o) : name(o.name), x(o.x), y(o.y), w(o.w), h(o.h) { (const char*&)o.name = 0; }
 			virtual ~Image();
 		};
 
