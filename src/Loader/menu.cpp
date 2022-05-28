@@ -90,6 +90,8 @@ int ModList::appendLine(SokuLib::String& out, void* unknown, SokuLib::Deque<Soku
 ModMenu::ModMenu() {
 	design.loadResource("shady/downloader.dat");
 	ModPackage::LoadFromFilesystem();
+	(guide.*SokuLib::union_cast<void (SokuLib::Guide::*)(unsigned int)>(0x443160))(89); // Init
+	guide.active = true;
 	modList.updateList();
 
 	design.getById((SokuLib::CDesign::Sprite**)&modList.scrollBar, 101);
@@ -112,11 +114,13 @@ ModMenu::~ModMenu() {
 	viewOption.dxHandle = 0;
 	if (viewPreview.dxHandle) SokuLib::textureMgr.remove(viewPreview.dxHandle);
 	viewPreview.dxHandle = 0;
+	(guide.*SokuLib::union_cast<void (SokuLib::Guide::*)()>(0x443100))(); // Cleanup
 }
 
 void ModMenu::_() {}
 
 int ModMenu::onProcess() {
+	(guide.*SokuLib::union_cast<void (SokuLib::Guide::*)()>(0x443220))(); // Update
 	if (ModPackage::Notify()) {
 		modList.updateList();
 		modCursor.set(&SokuLib::inputMgrs.input.verticalAxis, modList.names.size(), modCursor.pos);
@@ -245,6 +249,7 @@ int ModMenu::onRender() {
 	design.getById(&pos, 203);
 	if(viewPreview.dxHandle) viewPreview.renderScreen(pos->x2, pos->y2, pos->x2 + 200, pos->y2 + 150);
 
+	(guide.*SokuLib::union_cast<void (SokuLib::Guide::*)()>(0x443260))(); // Update
 	return 0;
 }
 

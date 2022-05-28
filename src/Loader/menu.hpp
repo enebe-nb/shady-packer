@@ -25,6 +25,7 @@ private:
     SokuLib::Sprite viewOption;
     SokuLib::Sprite viewPreview;
     SokuLib::MenuCursor viewCursor;
+    SokuLib::Guide guide;
     int orderCursor = -1;
     int scrollPos = 0;
     int state = 0;
