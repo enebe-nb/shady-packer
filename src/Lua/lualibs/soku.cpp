@@ -8,7 +8,7 @@
 #include <LuaBridge/RefCountedPtr.h>
 #include <sstream>
 #include <shared_mutex>
-#include <unordered_map>
+#include <unordered_set>
 #include <SokuLib.hpp>
 
 using namespace luabridge;
@@ -17,7 +17,8 @@ namespace {
     constexpr int EVENT_RENDER = 0;
     constexpr int EVENT_LOADER = 1;
 
-    std::unordered_map<int, ShadyLua::LuaScript*> eventMap[2];
+    struct eventHash { size_t operator()(const std::pair<int, ShadyLua::LuaScript*> &x) const { return x.first ^ (int)x.second; } };
+    std::unordered_set<std::pair<int, ShadyLua::LuaScript*>, eventHash> eventMap[2];
     std::shared_mutex eventMapLock;
     template <int value> static inline int* enumMap()
         {static const int valueHolder = value; return (int*)&valueHolder;}
@@ -133,7 +134,7 @@ static int soku_SubscribeEvent(lua_State* L) {
     if (lua_gettop(L) < 1 || !lua_isfunction(L, 1)) return luaL_error(L, "Must pass a callback");
     int callback = luaL_ref(L, LUA_REGISTRYINDEX);
     // iterators valid on insertion
-    eventMap[eventType][callback] = ShadyLua::ScriptMap[L];
+    eventMap[eventType].insert(std::make_pair(callback, ShadyLua::ScriptMap[L]));
     lua_pushnumber(L, callback);
     return 1;
 }
@@ -141,7 +142,7 @@ static int soku_SubscribeEvent(lua_State* L) {
 static void soku_UnsubscribeEvent(int id, lua_State* L) {
     std::unique_lock guard(eventMapLock);
     luaL_unref(L, LUA_REGISTRYINDEX, id);
-    for (auto& map : eventMap) map.erase(id);
+    for (auto& map : eventMap) map.erase(std::make_pair(id, ShadyLua::ScriptMap[L]));
 }
 
 static void soku_PlaySE(int id) {
