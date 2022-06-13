@@ -39,7 +39,6 @@ namespace ShadyCore {
 		std::filesystem::path basePath;
 
 		Package() = default;
-		virtual MapType::iterator insert(const std::string_view& name, BasePackageEntry* entry);
 
 		void loadData(const std::filesystem::path&);
 		void loadDir(const std::filesystem::path&);
@@ -72,6 +71,7 @@ namespace ShadyCore {
 		inline bool empty() const { return entries.empty(); }
 		inline const std::filesystem::path& getBasePath() { return basePath; }
 
+		iterator insert(const std::string_view& name, BasePackageEntry* entry);
 		//iterator rename(iterator i, const std::string_view& name);
 		iterator alias(const std::string_view& name, BasePackageEntry& entry);
 
@@ -99,7 +99,7 @@ namespace ShadyCore {
 		iterator insert(const std::string_view& name, std::istream& data); // uses temporary file
 
 		//iterator erase(iterator i);                   // TODO requires complexes locks
-		//iterator erase(const std::string_view& name); // TODO requires complexes locks
+		bool erase(const std::string_view& name);
 		void clear();
 
 		template<class Iterator>

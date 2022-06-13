@@ -86,4 +86,7 @@ namespace ShadyCore {
 		std::istream& open() override;
 		void close() override;
 	};
+
+	ShadyCore::FileType GetDataPackageDefaultType(const ShadyCore::FileType& inputType, ShadyCore::BasePackageEntry* entry);
+	ShadyCore::FileType GetDataPackageDefaultType(const ShadyCore::FileType::Type& inputType, ShadyCore::Resource* resource);
 }

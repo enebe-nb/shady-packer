@@ -49,7 +49,12 @@ namespace {
 		FT(FT::TYPE_SFX, FT::SFX_WAV, FT::getExtValue(".wav")),
 		FT(FT::TYPE_BGM, FT::BGM_OGG, FT::getExtValue(".ogg")),
 		FT(FT::TYPE_SCHEMA, FT::SCHEMA_XML, FT::getExtValue(".xml")),
+		FT(FT::TYPE_TEXTURE, FT::TEXTURE_DDS, FT::getExtValue(".dds")),
 	};
+}
+
+ShadyCore::FileType ShadyCore::GetFilePackageDefaultType(const FT& inputType, ShadyCore::BasePackageEntry* entry) {
+	return outputTypes[inputType.type];
 }
 
 void ShadyCore::Package::saveDir(const std::filesystem::path& directory) {
@@ -60,7 +65,7 @@ void ShadyCore::Package::saveDir(const std::filesystem::path& directory) {
 	std::filesystem::path target = std::filesystem::absolute(directory);
 	for (auto i = begin(); i != end(); ++i) {
 		FileType inputType = i.fileType();
-		FileType targetType = outputTypes[inputType.type];
+		FileType targetType = GetFilePackageDefaultType(inputType, i->second);
 
 		std::filesystem::path tempFile = ShadyUtil::TempFile();
 		std::ofstream output(tempFile, std::ios::binary);

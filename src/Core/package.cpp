@@ -35,7 +35,7 @@ ShadyCore::Package::~Package() {
 	}
 }
 
-ShadyCore::Package::MapType::iterator ShadyCore::Package::insert(const std::string_view& name, BasePackageEntry* entry) {
+ShadyCore::Package::iterator ShadyCore::Package::insert(const std::string_view& name, BasePackageEntry* entry) {
 	std::unique_lock lock(*this);
 	auto result = entries.emplace(name, entry);
 	if (result.second) return result.first;
@@ -222,22 +222,19 @@ ShadyCore::Package* ShadyCore::PackageEx::demerge(Package* child) {
 // 	}
 // }
 
-// ShadyCore::Package::iterator ShadyCore::PackageEx::erase(const std::string_view& name) {
-// 	std::unique_lock lock(*this);
-// 	// lock context is required, don't simplify this function
-// 	iterator i = find(name);
+bool ShadyCore::PackageEx::erase(const std::string_view& name) {
+	std::unique_lock lock(*this);
+	// lock context is required, don't simplify this function
+	iterator i = find(name);
 
-// 	if (i->second->getParent() == this) {
-// 		delete i->second;
-// 		return entries.erase(i);
-// 	} else {
-// 		// TODO fix locks
-// 		Package* parent = i->second->getParent();
-// 		auto result = parent->entries.insert(entries.extract(i++));
-// 		if (!result.inserted) throw std::logic_error("Error reinserting node to parent. This should not happen!"); // TODO test and remove
-// 		return i;
-// 	}
-// }
+	if (i != end()) {
+		delete i->second;
+		entries.erase(i);
+		return true;
+	}
+
+	return false;
+}
 
 void ShadyCore::PackageEx::erase(Package* package) {
 	{ std::scoped_lock lock(*this, *package);

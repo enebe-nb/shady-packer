@@ -232,28 +232,30 @@ namespace {
 		FT(FT::TYPE_PALETTE, FT::PALETTE_PAL, FT::getExtValue(".pal")),
 		FT(FT::TYPE_SFX, FT::SFX_GAME, FT::getExtValue(".cv3")),
 		FT(FT::TYPE_BGM, FT::BGM_OGG, FT::getExtValue(".ogg")),
+		FT(FT::TYPE_SCHEMA, FT::FORMAT_UNKNOWN),
+		FT(FT::TYPE_TEXTURE, FT::TEXTURE_DDS, FT::getExtValue(".dds"))
 	};
+}
 
-	static inline FT findTargetType(const FT& inputType, ShadyCore::BasePackageEntry* entry) {
-		if (inputType == FT::TYPE_SCHEMA) {
-			FT::Format format = FT::FORMAT_UNKNOWN;
-			if (inputType.format == FT::SCHEMA_XML) {
-				char buffer[16];
-				std::istream& input = entry->open();
-				while (input.get(buffer[0]) && input.gcount()) if (buffer[0] == '<') {
-					int j = 0;
-					for (input.get(buffer[0]); j < 16 && buffer[j] && !strchr(" />", buffer[j]); input.get(buffer[++j]));
-					buffer[j] = '\0';
-					if (strcmp(buffer, "movepattern") == 0) { format = FT::SCHEMA_GAME_PATTERN; break; }
-					if (strcmp(buffer, "animpattern") == 0) { format = FT::SCHEMA_GAME_ANIM; break; }
-					if (strcmp(buffer, "layout") == 0) { format = FT::SCHEMA_GAME_GUI; break; }
-					if (!strchr("?", buffer[0])) break;
-				}
-				entry->close();
-			} else format = inputType.format;
-			return FT(FT::TYPE_SCHEMA, format, format == FT::SCHEMA_GAME_GUI ? FT::getExtValue(".dat") : FT::getExtValue(".pat"));
-		} return outputTypes[inputType.type];
-	}
+ShadyCore::FileType ShadyCore::GetZipPackageDefaultType(const FT& inputType, ShadyCore::BasePackageEntry* entry) {
+	if (inputType == FT::TYPE_SCHEMA) {
+		FT::Format format = FT::FORMAT_UNKNOWN;
+		if (inputType.format == FT::SCHEMA_XML) {
+			char buffer[16];
+			std::istream& input = entry->open();
+			while (input.get(buffer[0]) && input.gcount()) if (buffer[0] == '<') {
+				int j = 0;
+				for (input.get(buffer[0]); j < 16 && buffer[j] && !strchr(" />", buffer[j]); input.get(buffer[++j]));
+				buffer[j] = '\0';
+				if (strcmp(buffer, "movepattern") == 0) { format = FT::SCHEMA_GAME_PATTERN; break; }
+				if (strcmp(buffer, "animpattern") == 0) { format = FT::SCHEMA_GAME_ANIM; break; }
+				if (strcmp(buffer, "layout") == 0) { format = FT::SCHEMA_GAME_GUI; break; }
+				if (!strchr("?", buffer[0])) break;
+			}
+			entry->close();
+		} else format = inputType.format;
+		return FT(FT::TYPE_SCHEMA, format, format == FT::SCHEMA_GAME_GUI ? FT::getExtValue(".dat") : FT::getExtValue(".pat"));
+	} return outputTypes[inputType.type];
 }
 
 void ShadyCore::Package::saveZip(const std::filesystem::path& filename) {
@@ -268,7 +270,7 @@ void ShadyCore::Package::saveZip(const std::filesystem::path& filename) {
 
 		zip_source_t* inputSource;
 		FileType inputType = i.fileType();
-		FileType targetType = findTargetType(inputType, entry);
+		FileType targetType = GetZipPackageDefaultType(inputType, entry);
 
 		if (inputType.format == targetType.format) {
 			inputSource = zip_source_function_create(zipInputFunc, createZipReader(entry), 0);

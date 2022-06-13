@@ -155,7 +155,7 @@ namespace ShadyCore {
 			class BBox {
 			public:
 				int32_t left, up, right, down;
-				uint8_t unknown = 0;
+				BBox* extra = 0;
 			};
 
 			class MoveEffect {

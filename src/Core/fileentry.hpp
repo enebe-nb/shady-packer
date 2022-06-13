@@ -11,7 +11,7 @@ namespace ShadyCore {
 		std::ifstream fileStream;
 		bool deleteOnDestroy;
 	public:
-		inline FilePackageEntry(Package* parent, std::filesystem::path filename, bool deleteOnDestroy = false)
+		inline FilePackageEntry(Package* parent, const std::filesystem::path& filename, bool deleteOnDestroy = false)
 			: BasePackageEntry(parent, std::filesystem::file_size(parent->getBasePath() / filename)), filename(filename), deleteOnDestroy(deleteOnDestroy) {}
 		virtual ~FilePackageEntry();
 
@@ -20,4 +20,6 @@ namespace ShadyCore {
 		inline std::istream& open() override final { fileStream.open(parent->getBasePath() / filename, std::ios::binary, _SH_DENYWR); return fileStream; }
 		inline void close() override final { fileStream.close(); if (disposable) delete this; }
 	};
+
+	ShadyCore::FileType GetFilePackageDefaultType(const ShadyCore::FileType& inputType, ShadyCore::BasePackageEntry* entry);
 }

@@ -52,4 +52,6 @@ namespace ShadyCore {
 		inline std::istream& open() override final { zipStream.clear(); zipBuffer.open(parent->getBasePath(), name); return zipStream; }
 		inline void close() override final { zipBuffer.close(); if (disposable) delete this; }
 	};
+
+	ShadyCore::FileType GetZipPackageDefaultType(const ShadyCore::FileType& inputType, ShadyCore::BasePackageEntry* entry);
 }
