@@ -1,4 +1,5 @@
 #include "../lualibs.hpp"
+#include "../script.hpp"
 #include "../logger.hpp"
 #include "../../Core/package.hpp"
 #include "../../Core/dataentry.hpp"
@@ -11,8 +12,8 @@
 using namespace luabridge;
 
 namespace {
-	std::unordered_map<lua_State*, ShadyCore::Package*> packageMap;
-	std::unordered_map<std::string, std::pair<lua_State*, int>> callbackMap;
+	std::unordered_map<ShadyLua::LuaScript*, ShadyCore::Package*> packageMap;
+	std::unordered_map<std::string, std::pair<ShadyLua::LuaScript*, int>> callbackMap;
 	std::shared_mutex packageMapLock;
 
 	struct charbuf : std::streambuf {
@@ -28,7 +29,7 @@ void ShadyLua::EmitSokuEventFileLoader2(const char* filename, std::istream** inp
 
 	auto iter = callbackMap.find(filename);
 	if (iter != callbackMap.end()) {
-		lua_State* L = iter->second.first;
+		lua_State* L = iter->second.first->L;
 		lua_rawgeti(L, LUA_REGISTRYINDEX, iter->second.second);
 		lua_pushstring(L, filename);
 		if (lua_pcall(L, 1, 1, 0)) {
@@ -72,9 +73,19 @@ void ShadyLua::EmitSokuEventFileLoader2(const char* filename, std::istream** inp
 	}
 }
 
+void ShadyLua::RemoveLoaderEvents(LuaScript* script) {
+	std::unique_lock lock(packageMapLock);
+	packageMap.erase(script);
+	for (auto i = callbackMap.begin(); i != callbackMap.end(); ++i) {
+		if (i->second.first == script)
+			i = callbackMap.erase(i);
+		else ++i;
+	}
+}
+
 static bool loader_addAlias(const char* alias, const char* target, lua_State* L) {
 	std::shared_lock guard(packageMapLock);
-	auto package = packageMap[L];
+	auto package = packageMap[ShadyLua::ScriptMap[L]];
 
 	auto iter = package->find(target);
 	if (iter == package->end()) { Logger::Error("Target resource was not found."); return false; }
@@ -92,7 +103,7 @@ static int loader_addData(lua_State* L) {
 	output.close();
 
 	std::shared_lock guard(packageMapLock);
-	auto package = packageMap[L];
+	auto package = packageMap[ShadyLua::ScriptMap[L]];
 	lua_pushboolean(L, package->insert(alias, new ShadyCore::FilePackageEntry(package, tempFile, true)) != package->end());
 	return 1;
 }
@@ -104,7 +115,7 @@ static int loader_addCallback(lua_State* L) {
 
 	std::shared_lock guard(packageMapLock);
 	int callback = luaL_ref(L, LUA_REGISTRYINDEX);
-	callbackMap[alias] = std::make_pair(L, callback);
+	callbackMap[alias] = std::make_pair(ShadyLua::ScriptMap[L], callback);
 
 	lua_pushinteger(L, callback);
 	return 1;
@@ -118,27 +129,27 @@ static bool loader_addResource(std::string alias, RefCountedObjectPtr<ShadyLua::
 	ShadyCore::getResourceWriter(outputType)(proxy->resource, output);
 
 	std::shared_lock guard(packageMapLock);
-	auto package = packageMap[L];
+	auto package = packageMap[ShadyLua::ScriptMap[L]];
 	return package->insert(alias, new ShadyCore::FilePackageEntry(package, tempFile, true)) != package->end();
 }
 
 static bool loader_addFile(const char* alias, const char* filename, lua_State* L) {
 	std::shared_lock guard(packageMapLock);
-	ShadyCore::PackageEx* package = reinterpret_cast<ShadyCore::PackageEx*>(packageMap[L]);
+	ShadyCore::PackageEx* package = reinterpret_cast<ShadyCore::PackageEx*>(packageMap[ShadyLua::ScriptMap[L]]);
 
 	return package->insert(alias, std::filesystem::u8path(filename)) != package->end();
 }
 
 static int loader_addPackage(const char* filename, lua_State* L) {
 	std::shared_lock guard(packageMapLock);
-	ShadyCore::PackageEx* package = reinterpret_cast<ShadyCore::PackageEx*>(packageMap[L]);
+	ShadyCore::PackageEx* package = reinterpret_cast<ShadyCore::PackageEx*>(packageMap[ShadyLua::ScriptMap[L]]);
 
 	return (int)package->merge(std::filesystem::u8path(filename));
 }
 
 static bool loader_removeFile(const char* alias, lua_State* L) {
 	std::shared_lock guard(packageMapLock);
-	ShadyCore::PackageEx* package = reinterpret_cast<ShadyCore::PackageEx*>(packageMap[L]);
+	ShadyCore::PackageEx* package = reinterpret_cast<ShadyCore::PackageEx*>(packageMap[ShadyLua::ScriptMap[L]]);
 
 	return package->erase(alias);
 }
@@ -146,7 +157,7 @@ static bool loader_removeFile(const char* alias, lua_State* L) {
 static bool loader_removePackage(int childId, lua_State* L) {
 	auto child = reinterpret_cast<ShadyCore::Package*>(childId);
 	std::shared_lock guard(packageMapLock);
-	ShadyCore::PackageEx* package = reinterpret_cast<ShadyCore::PackageEx*>(packageMap[L]);
+	ShadyCore::PackageEx* package = reinterpret_cast<ShadyCore::PackageEx*>(packageMap[ShadyLua::ScriptMap[L]]);
 
 	child = package->demerge(child);
 	if (child) delete child;
@@ -154,7 +165,7 @@ static bool loader_removePackage(int childId, lua_State* L) {
 }
 
 void ShadyLua::LualibLoader(lua_State* L, ShadyCore::Package* package, bool isEx) {
-	packageMap[L] = package;
+	packageMap[ShadyLua::ScriptMap[L]] = package;
 	// TODO check lua require() behavior
 	// auto package = luabridge::getGlobal(L, "package");
 	// package["cpath"] = package["cpath"].tostring()

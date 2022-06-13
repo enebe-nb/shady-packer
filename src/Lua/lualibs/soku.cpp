@@ -30,6 +30,7 @@ namespace {
 }
 
 void ShadyLua::RemoveEvents(LuaScript* script) {
+    RemoveLoaderEvents(script);
     std::unique_lock lock(eventMapLock);
     for (auto& hooks : eventMap) {
         auto i = hooks.begin(); while (i != hooks.end()) {

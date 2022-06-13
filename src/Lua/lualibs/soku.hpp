@@ -24,6 +24,7 @@ namespace ShadyLua {
     void UnloadTamper();
     class LuaScript;
     void RemoveEvents(LuaScript*);
+    void RemoveLoaderEvents(LuaScript*);
 
 	class ResourceProxy : public luabridge::RefCountedObject {
 	public:
