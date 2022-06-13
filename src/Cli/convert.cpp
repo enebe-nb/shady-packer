@@ -62,10 +62,17 @@ void ShadyCli::ConvertCommand::processFile(std::filesystem::path filename, std::
     } else {
         auto type = iter->second;
         std::ifstream input(filename, std::fstream::binary);
-        if (type.first.type == FT::SCHEMA_XML) {
+        if (type.first.format == FT::SCHEMA_XML) {
             type.second.format = findXmlFormat(type.first, input);
             if (type.second.format == FT::SCHEMA_GAME_GUI) type.second.extValue = FT::getExtValue(".dat");
             input.seekg(0);
+        } else if (type.first.type == FT::TYPE_SCHEMA) {
+            if (filename.extension() == L".pat") {
+                auto stem = filename.stem().string();
+                if (stem.ends_with("effect") || stem.ends_with("stand"))
+                    type.first.format = FT::SCHEMA_GAME_ANIM;
+                else type.first.format = FT::SCHEMA_GAME_PATTERN;
+            }
         }
         std::filesystem::path targetName = targetPath / filename.filename().replace_extension(); type.second.appendExtValue(targetName);
         printf("Converting %s -> %s\n", filename.generic_string().c_str(), targetName.generic_string().c_str());
