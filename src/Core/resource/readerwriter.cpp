@@ -163,7 +163,9 @@ void ShadyCore::destroyResource(const ShadyCore::FileType::Type type, ShadyCore:
 }
 
 void ShadyCore::convertResource(const FileType::Type type, const FileType::Format inputFormat, std::istream& input, const FileType::Format outputFormat, std::ostream& output) {
-    if (inputFormat == outputFormat) { output << input.rdbuf(); return; }
+    if (inputFormat == outputFormat ||
+        outputFormat == FileType::Format::FORMAT_UNKNOWN)
+        { output << input.rdbuf(); return; }
 
     Resource* resource = createResource(type);
     getResourceReader(FileType(type, inputFormat))(resource, input);

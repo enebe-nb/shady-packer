@@ -33,7 +33,7 @@ static void readerSchemaGame(ShadyCore::Schema& resource, std::istream& input, S
 		} else {
 			auto i = resource.objects.begin(), end = resource.objects.end(); for(; i != end; ++i) {
 				if ((*i)->getId() == id) break;
-			} while (i != end && (*i)->getId() == id) i = resource.objects.erase(i);
+			} while (i != resource.objects.end() && (*i)->getId() == id) i = resource.objects.erase(i);
 			resource.objects.push_back(fnReadObject(lastId = id, lastIndex = 0, input));
 		}
 		input.peek();
@@ -106,7 +106,12 @@ static ShadyCore::Schema::Object* readerSchemaMoveObject(uint32_t id, uint32_t i
 		frame->aBoxes.reserve(boxCount);
 		for (uint8_t j = 0; j < boxCount; ++j) {
 			auto& box = frame->aBoxes.emplace_back();
-			input.read((char*)&box.left, 17); // , up, right, down, unknown
+			input.read((char*)&box.left, 16); // , up, right, down
+			char hasExtra; input.read(&hasExtra, 1);
+			if (hasExtra) {
+				box.extra = new ShadyCore::Schema::Sequence::BBox;
+				input.read((char*)box.extra, 16); // , up, right, down
+			}
 		}
 
 		input.read((char*)&frame->effect.pivotX, 30);
@@ -147,7 +152,7 @@ static void writerSchemaGame(ShadyCore::Schema& resource, std::ostream& output, 
 			output.write((char*)&((ShadyCore::Schema::Clone*)object)->getId(), 4);
 			output.write((char*)&((ShadyCore::Schema::Clone*)object)->targetId, 4);
 		} else {
-			if (lastId == object->getId()) output.write("\xff\xff\xff\xfe", 4);
+			if (lastId == object->getId()) output.write("\xfe\xff\xff\xff", 4);
 			else output.write((char*) &object->getId(), 4);
 			lastId = object->getId();
 			fnWriteObject((ShadyCore::Schema::Sequence*)object, output);
@@ -207,7 +212,12 @@ static void writerSchemaMoveObject(ShadyCore::Schema::Sequence* resource, std::o
 		boxCount = frame->aBoxes.size();
 		output.write((char*)&boxCount, 1);
 		for (int i = 0; i < boxCount; ++i) {
-			output.write((char*)&frame->aBoxes[i].left, 17); // , up, right, down, unknown
+			output.write((char*)&frame->aBoxes[i].left, 16); // , up, right, down
+			if (frame->aBoxes[i].extra == 0) output.put(0);
+			else {
+				output.put(1);
+				output.write((char*)&frame->aBoxes[i].extra->left, 16); // , up, right, down
+			}
 		}
 
 		output.write((char*)&frame->effect.pivotX, 30);
