@@ -37,6 +37,10 @@ int ShadyLua::LuaScript::run() {
 ShadyLua::LuaScript::LuaScript(void* userdata, fnOpen_t open, fnRead_t read, fnDestroy_t destroy)
     : L(luaL_newstate()), userdata(userdata), fnOpen(open), fnRead(read), fnDestroy(destroy) {
     ScriptMap[L] = this;
+    LualibBase(L);
+    LualibMemory(L);
+    LualibResource(L);
+    LualibSoku(L);
 }
 
 ShadyLua::LuaScript::~LuaScript() {
@@ -60,9 +64,14 @@ int ShadyLua::LuaScript::load(const char* filename, const char* mode) {
     return result;
 }
 
+ShadyLua::LuaScriptFS::LuaScriptFS(const std::filesystem::path& basePath)
+    : LuaScript(this, LuaScriptFS::fnOpen, LuaScriptFS::fnRead), basePath(basePath) {
+    LualibLoader(L, &package, true);
+}
+
 void* ShadyLua::LuaScriptFS::fnOpen(void* userdata, const char* filename) {
     LuaScriptFS* script = reinterpret_cast<LuaScriptFS*>(userdata);
-    std::filesystem::path path(script->root / std::filesystem::u8path(filename));
+    std::filesystem::path path(script->basePath / std::filesystem::u8path(filename)); // TODO check utf
 
     std::ifstream* input = new std::ifstream(path, std::ios::in | std::ios::binary);
     if (input->fail()) {

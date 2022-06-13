@@ -1,6 +1,5 @@
 #include "../lualibs.hpp"
 #include "../logger.hpp"
-#include "../strconv.hpp"
 #include "../../Core/resource/readerwriter.hpp"
 #include "soku.hpp"
 #include "../script.hpp"
@@ -48,14 +47,6 @@ static void soku_Player_PlaySE(const SokuLib::PlayerInfo* player, int id) {
         mov ecx, player;
         call callAddr;
     }
-}
-
-static void soku_ReloadSE(int id) {
-    char buffer[] = "data/se/000.wav";
-    sprintf(buffer, "data/se/%03d.wav", id);
-    // TODO fix call
-    __asm mov ecx, 0x0089f9f8;
-    reinterpret_cast<void(__stdcall*)(int*, char*)>(0x00401af0)((int*)(0x00899D60 + id*4), buffer);
 }
 
 void ShadyLua::EmitSokuEventRender() {
@@ -235,7 +226,6 @@ void ShadyLua::LualibSoku(lua_State* L) {
             .addVariable("P1", &SokuLib::leftPlayerInfo)
             .addVariable("P2", &SokuLib::rightPlayerInfo)
             .addFunction("PlaySE", soku_PlaySE)
-            .addFunction("ReloadSE", soku_ReloadSE)
             .addCFunction("SubscribeRender", soku_SubscribeEvent<EVENT_RENDER>)
             .addCFunction("SubscribeFileLoader", soku_SubscribeEvent<EVENT_LOADER>)
             .addFunction("UnsubscribeEvent", soku_UnsubscribeEvent)

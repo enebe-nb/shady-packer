@@ -3,6 +3,7 @@
 #include "main.hpp"
 #include "../Lua/script.hpp"
 #include "../Lua/lualibs.hpp"
+#include "../Lua/lualibs/soku.hpp"
 #include <LuaBridge/LuaBridge.h>
 #include "../Lua/logger.hpp"
 
@@ -16,34 +17,12 @@ namespace {
         ShadyCore::Package* base;
         ShadyCore::Package* owner;
     };
-
-    struct charbuf : std::streambuf {
-        charbuf(const char* begin, const char* end) {
-            this->setg((char*)begin, (char*)begin, (char*)end);
-        }
-    };
 }
 
-static bool loader_alias(const char* alias, const char* target) {
+static bool loader_addAlias(const char* alias, const char* target) {
     auto iter = ModPackage::basePackage->find(target);
     if (iter == ModPackage::basePackage->end()) return false;
     ModPackage::basePackage->alias(alias, iter.entry());
-    return true;
-}
-
-static bool loader_data(const char* alias, const std::string data) {
-    charbuf buffer(data.data(), data.data() + data.size());
-    std::istream stream(&buffer);
-    ModPackage::basePackage->insert(alias, stream);
-    return true;
-}
-
-static bool loader_resource(const char* alias, ShadyCore::Resource* data) {
-    auto ft = ShadyCore::FileType::get(alias);
-    if (ft.format == ShadyCore::FileType::FORMAT_UNKNOWN) throw std::exception("File format is not supported");
-    std::stringstream stream;
-    ShadyCore::getResourceWriter(ft)(data, stream);
-    ModPackage::basePackage->insert(alias, stream);
     return true;
 }
 
@@ -59,8 +38,11 @@ static ShadyCore::BasePackageEntry* _lua_find(ShadyCore::Package* base, ShadyCor
 }
 
 static void* _lua_open(void* userdata, const char* filename) {
-    // TODO fix and test mutexes here
     _lua_loader* loader = reinterpret_cast<_lua_loader*>(userdata);
+    std::shared_lock l0(*loader->base, std::defer_lock);
+    std::shared_lock l1(*loader->owner, std::defer_lock);
+    std::scoped_lock lock(l0, l1);
+
     ShadyCore::BasePackageEntry* entry = _lua_find(loader->base, loader->owner, filename);
     if (entry) return new _lua_file{entry, &entry->open()};
     else return 0;
@@ -81,16 +63,6 @@ static void _lua_destroy(void* userdata) {
     delete reinterpret_cast<_lua_loader*>(userdata);
 }
 
-static void LualibLoader(lua_State* L) {
-    luabridge::getGlobalNamespace(L)
-        .beginNamespace("loader")
-            .addFunction("insertAlias", loader_alias)
-            .addFunction("insertData", loader_data)
-            .addFunction("insertResource", loader_resource)
-        .endNamespace()
-    ;
-}
-
 void EnablePackage(ModPackage* p) {
     if (!std::filesystem::is_directory(p->path) && !std::filesystem::is_regular_file(p->path)) return;
     p->package = ModPackage::basePackage->merge(p->path);
@@ -103,11 +75,9 @@ void EnablePackage(ModPackage* p) {
     if (_lua_find(ModPackage::basePackage.get(), p->package, "init.lua")) {
         auto loader = new _lua_loader{ModPackage::basePackage.get(), p->package};
         ShadyLua::LuaScript* script = new ShadyLua::LuaScript(loader, _lua_open, _lua_read, _lua_destroy);
-        ShadyLua::LualibBase(script->L, ModPackage::basePath);
-        ShadyLua::LualibMemory(script->L);
-        ShadyLua::LualibResource(script->L);
-        ShadyLua::LualibSoku(script->L);
-        LualibLoader(script->L);
+        ShadyLua::LualibLoader(script->L, p->package);
+        luabridge::getGlobalNamespace(script->L).beginNamespace("loader")
+            .addFunction("addAlias", loader_addAlias).endNamespace();
         p->script = script;
     } }
 

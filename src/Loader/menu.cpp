@@ -71,13 +71,21 @@ void ModList::updateList() {
 	this->updateResources();
 }
 
+static inline int _getPackageColor(ModPackage* package) {
+	if (package->requireUpdate) return 0xff8040;
+	if (package->isEnabled()) {
+		if (package->package->empty()
+			|| package->package->size() == 1 
+			&& package->package->find("init.lua") != package->package->end()) return 0x40ff40;
+		return 0xff2020;
+	} if (package->isLocal()) return 0x6060d0;
+	return 0x808080;
+}
+
 int ModList::appendLine(SokuLib::String& out, void* unknown, SokuLib::Deque<SokuLib::String>& list, int index) {
 	std::shared_lock lock(ModPackage::descMutex);
 	ModPackage* package = ModPackage::descPackage[index];
-	int color = package->requireUpdate ? 0xff8040
-		: package->isEnabled() ? (package->package->empty() ? 0x40ff40 : 0xff2020)
-		: package->isLocal() ? 0x6060d0
-		: 0x808080;
+	int color = _getPackageColor(package);
 
 	char buffer[15]; sprintf(buffer, "<color %06x>", color);
 	out.append(buffer, 14);

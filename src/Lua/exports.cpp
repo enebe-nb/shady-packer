@@ -31,19 +31,6 @@ static bool GetModulePath(HMODULE handle, std::filesystem::path& result) {
 	return len;
 }
 
-static bool GetModuleName(HMODULE handle, std::filesystem::path& result) {
-	// use wchar for better path handling
-	std::wstring buffer;
-	int len = MAX_PATH + 1;
-	do {
-		buffer.resize(len);
-		len = GetModuleFileNameW(handle, buffer.data(), buffer.size());
-	} while(len > buffer.size());
-
-	if (len) result = std::filesystem::path(buffer.begin(), buffer.begin()+len).filename();
-	return len;
-}
-
 static void LoadSettings() {
 	iniShowConsole = GetPrivateProfileIntW(L"Options", L"showConsole",
 		false, (modulePath / L"shady-lua.ini").c_str());
@@ -55,13 +42,8 @@ static void LoadSettings() {
     wchar_t* line = buffer;
     while(len = wcslen(line)) {
         std::filesystem::path scriptPath(wcschr(line, L'=') + 1);
-        if (scriptPath.is_relative()) scriptPath = modulePath / scriptPath;
+        scriptPath = modulePath / scriptPath;
         auto script = new ShadyLua::LuaScriptFS(scriptPath.parent_path());
-
-        ShadyLua::LualibBase(script->L, modulePath);
-        ShadyLua::LualibMemory(script->L);
-        ShadyLua::LualibResource(script->L);
-        ShadyLua::LualibSoku(script->L);
         if (script->load((const char*)scriptPath.filename().u8string().c_str()) == LUA_OK) script->run();
         line += len + 1;
     }
@@ -126,8 +108,6 @@ extern "C" __declspec(dllexport) bool CheckVersion(const BYTE hash[16]) {
 extern "C" __declspec(dllexport) bool Initialize(HMODULE hMyModule, HMODULE hParentModule) {
 	GetModulePath(hMyModule, modulePath);
     Logger::Initialize(Logger::LOG_DEBUG | Logger::LOG_ERROR);
-	std::filesystem::path callerName;
-	GetModuleName(hParentModule, callerName);
 
     ShadyLua::LoadTamper();
     LoadSettings();

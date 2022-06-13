@@ -2,6 +2,7 @@ set(SRC_LUA_Library
     logger.cpp
     script.cpp
     lualibs/base.cpp
+    lualibs/loader.cpp
     lualibs/memory.cpp
     lualibs/resource.cpp
     lualibs/soku.cpp

@@ -11,7 +11,7 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    ShadyCore::PackageEx basePackage;
+    ShadyCore::PackageEx basePackage(std::filesystem::current_path());
     for (int i = 1; i < argc; ++i) {
         std::filesystem::path filename(argv[i]);
         if (std::filesystem::is_directory(filename) || filename.extension() == L".zip") {

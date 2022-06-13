@@ -31,6 +31,7 @@ static void* __stdcall readerCreate(const char *filename, unsigned int *_size, u
 
     std::istream* input = 0; int s;
     ShadyLua::EmitSokuEventFileLoader(filenameB, &input, &s);
+    if (!input) ShadyLua::EmitSokuEventFileLoader2(filenameB, &input, &s);
     delete[] filenameB;
 
     if (input) {

@@ -2,11 +2,13 @@
 #include "../script.hpp"
 #include "../../Core/resource.hpp"
 #include "../../Core/resource/readerwriter.hpp"
+#include "soku.hpp"
 #include <LuaBridge/LuaBridge.h>
-#include <LuaBridge/RefCountedPtr.h>
 #include <sstream>
 #include <fstream>
 #include <cmath>
+#include <deque>
+#include <streambuf>
 
 using namespace luabridge;
 
@@ -14,52 +16,56 @@ namespace {
     template <int value> static inline int* enumMap()
         {static const int valueHolder = value; return (int*)&valueHolder;}
 
-    class ResourceProxy {
-    public:
-        ShadyCore::Resource* const resource;
-        const ShadyCore::FileType::Type type;
-        const bool isOwner;
+	template <class T> class _ResourceProxy : public ShadyLua::ResourceProxy {
+		static_assert(std::is_base_of<ShadyCore::Resource, T>::value);
+		static const ShadyCore::FileType::Type staticType;
+	public:
+		inline _ResourceProxy() : ResourceProxy(staticType) {}
+		inline T& get() { return *reinterpret_cast<T*>(resource); }
+		inline const T& get() const { return *reinterpret_cast<T*>(resource); }
+	};
 
-        inline ResourceProxy(ShadyCore::Resource* resource, ShadyCore::FileType::Type type, bool isOwner = true)
-            : resource(resource), type(type), isOwner(isOwner) {}
-        template <class T> ResourceProxy(T* resource, bool isOwner = true);
-        inline ~ResourceProxy() { if(isOwner) ShadyCore::destroyResource(type, resource); }
-    };
+	const ShadyCore::FileType::Type _ResourceProxy<ShadyCore::TextResource>::staticType =   ShadyCore::FileType::TYPE_TEXT;
+	//const ShadyCore::FileType::Type _ResourceProxy<ShadyCore::TableResource>::staticType =  ShadyCore::FileType::TYPE_TABLE;
+	const ShadyCore::FileType::Type _ResourceProxy<ShadyCore::LabelResource>::staticType =  ShadyCore::FileType::TYPE_LABEL;
+	const ShadyCore::FileType::Type _ResourceProxy<ShadyCore::Palette>::staticType =        ShadyCore::FileType::TYPE_PALETTE;
+	const ShadyCore::FileType::Type _ResourceProxy<ShadyCore::Image>::staticType =          ShadyCore::FileType::TYPE_IMAGE;
+	const ShadyCore::FileType::Type _ResourceProxy<ShadyCore::Sfx>::staticType =            ShadyCore::FileType::TYPE_SFX;
 }
 
 /** Creates a resource from a file in script space */
-static RefCountedPtr<ResourceProxy> resource_createfromfile(const char* filename, int format, lua_State* L) {
+static RefCountedObjectPtr<ShadyLua::ResourceProxy> resource_createfromfile(const char* filename, int format, lua_State* L) {
     ShadyLua::LuaScript* script = ShadyLua::ScriptMap.at(L);
 
     std::stringstream data;
     char buffer[4096]; size_t size;
-    void* file = script->open(filename);
-    while (size = script->read(file, buffer, 4096)) {
+    void* file = script->openFile(filename);
+    while (size = script->readFile(file, buffer, 4096)) {
         data.write(buffer, size);
-    }
+    } // TODO this read is bad, but there's too many changes to fix it
 
     auto type = ShadyCore::FileType::get(filename).type;
-    RefCountedPtr<ResourceProxy> proxy(new ResourceProxy(ShadyCore::createResource(type), type, true));
+    RefCountedObjectPtr<ShadyLua::ResourceProxy> proxy(new ShadyLua::ResourceProxy(ShadyCore::createResource(type), type, true));
     ShadyCore::getResourceReader(ShadyCore::FileType(type, (ShadyCore::FileType::Format)format))(proxy->resource, data);
     return proxy;
 }
 
 /** Saves a resource into filesystem */
-static void resource_export(RefCountedPtr<ResourceProxy> resource, const char* filename, int format, lua_State* L) {
+static void resource_export(RefCountedObjectPtr<ShadyLua::ResourceProxy> resource, const char* filename, int format, lua_State* L) {
     std::fstream out(filename, std::ios::out|std::ios::binary);
     ShadyCore::getResourceWriter(ShadyCore::FileType(resource->type, (ShadyCore::FileType::Format)format))
         (resource->resource, out);
 }
 
 static int resource_Text_getData(lua_State* L) {
-    ShadyCore::TextResource* resource = Stack<ShadyCore::TextResource*>::get(L, 1);
+    auto resource = &Stack<_ResourceProxy<ShadyCore::TextResource>*>::get(L, 1)->get();
     if (!resource->data) lua_pushstring(L, "");
     else lua_pushlstring(L, resource->data, resource->length);
     return 1;
 }
 
 static int resource_Text_setData(lua_State* L) {
-    ShadyCore::TextResource* resource = Stack<ShadyCore::TextResource*>::get(L, 1);
+    auto resource = &Stack<_ResourceProxy<ShadyCore::TextResource>*>::get(L, 1)->get();
     size_t size; const char* data = luaL_checklstring(L, 2, &size);
     if (size != resource->length) resource->initialize(size);
     memcpy(resource->data, data, size);
@@ -75,51 +81,51 @@ static int resource_Text_setData(lua_State* L) {
 // }
 
 static int resource_Palette_getData(lua_State* L) {
-    ShadyCore::Palette* resource = Stack<ShadyCore::Palette*>::get(L, 1);
-    lua_pushlstring(L, (const char*)resource->data, 256 * 3);
+	auto resource = &Stack<_ResourceProxy<ShadyCore::Palette>*>::get(L, 1)->get();
+	lua_pushlstring(L, (const char*)resource->data, resource->getDataSize());
     return 1;
 }
 
-static int resource_Palette_setData(lua_State* L) {
-    ShadyCore::Palette* resource = Stack<ShadyCore::Palette*>::get(L, 1);
+static int resource_Palette_setData(lua_State* L) { // TODO better control and true colors
+	auto resource = &Stack<_ResourceProxy<ShadyCore::Palette>*>::get(L, 1)->get();
     size_t size; const char* data = luaL_checklstring(L, 2, &size);
-    if (size < 256 * 3) return luaL_error(L, "Palette must have 256 * 3 Bytes. Received %d.", size);
-    memcpy(resource->data, data, 256 * 3);
+	if (size < 256 * 2) return luaL_error(L, "Palette must have 256 * 2 Bytes. Received %d.", size);
+	if (size != resource->getDataSize()) resource->initialize(16);
+	memcpy(resource->data, data, resource->getDataSize());
     return 0;
 }
 
-namespace {
-    class ImageProxy : public ShadyCore::Image {
-    public: inline ImageProxy(uint32_t w, uint32_t h, uint8_t bpp) {
-        initialize(w, h, std::ceil(w / 4.f) * 4, bpp);
-    } };
-}
+// namespace {
+//     class ImageProxy : public ShadyCore::Image {
+//     public: inline ImageProxy(uint32_t w, uint32_t h, uint8_t bpp) {
+//         initialize(w, h, std::ceil(w / 4.f) * 4, bpp);
+//     } };
+// }
 
 static int resource_Image_getRaw(lua_State* L) {
-    ShadyCore::Image* resource = Stack<ShadyCore::Image*>::get(L, 1);
-    size_t size = resource->width * resource->height * (resource->bitsPerPixel == 8 ? 1 : 4);
-    lua_pushlstring(L, (char*)resource->raw, size);
+	auto resource = &Stack<_ResourceProxy<ShadyCore::Image>*>::get(L, 1)->get();
+	lua_pushlstring(L, (char*)resource->raw, resource->getRawSize());
     return 1;
 }
 
 static int resource_Image_setRaw(lua_State* L) {
-    ShadyCore::Image* resource = Stack<ShadyCore::Image*>::get(L, 1);
+	auto resource = &Stack<_ResourceProxy<ShadyCore::Image>*>::get(L, 1)->get();
     size_t size; const char* data = luaL_checklstring(L, 2, &size);
-    size_t iSize = resource->width * resource->height * (resource->bitsPerPixel == 8 ? 1 : 4);
+	size_t iSize = resource->getRawSize();
     if (size < iSize) return luaL_error(L, "Image must have %d Bytes. Received %d.", iSize, size);
     memcpy(resource->raw, data, iSize);
     return 0;
 }
 
 static int resource_Sfx_getData(lua_State* L) {
-    ShadyCore::Sfx* resource = Stack<ShadyCore::Sfx*>::get(L, 1);
+	auto resource = &Stack<_ResourceProxy<ShadyCore::Sfx>*>::get(L, 1)->get();
     if (!resource->data) lua_pushstring(L, "");
     else lua_pushlstring(L, (char*)resource->data, resource->size);
     return 1;
 }
 
 static int resource_Sfx_setData(lua_State* L) {
-    ShadyCore::Sfx* resource = Stack<ShadyCore::Sfx*>::get(L, 1);
+	auto resource = &Stack<_ResourceProxy<ShadyCore::Sfx>*>::get(L, 1)->get();
     size_t size; const char* data = luaL_checklstring(L, 2, &size);
     if (size != resource->size) resource->initialize(size);
     memcpy(resource->data, data, size);
@@ -165,41 +171,41 @@ void ShadyLua::LualibResource(lua_State* L) {
             .endNamespace()
             .addFunction("createfromfile", resource_createfromfile)
             .addFunction("export", resource_export)
-            // .beginClass<ShadyCore::Resource>("Resource").endClass()
-            // .deriveClass<ShadyCore::TextResource, ShadyCore::Resource>("Text")
-            //     .addConstructor<void(*)(), RefCountedPtr<ShadyCore::TextResource>>()
-            //     .addProperty("data", resource_Text_getData, resource_Text_setData)
-            // .endClass()
+            .beginClass<ResourceProxy>("Resource").endClass()
+            .deriveClass<_ResourceProxy<ShadyCore::TextResource>, ResourceProxy>("Text")
+                .addConstructor<void(*)(), RefCountedObjectPtr<_ResourceProxy<ShadyCore::TextResource>>>() // TODO test reference counter
+                .addProperty("data", resource_Text_getData, resource_Text_setData)
+            .endClass()
             // .deriveClass<ShadyCore::LabelResource, ShadyCore::Resource>("Label")
-            //     .addConstructor<void(*)(), RefCountedPtr<ShadyCore::LabelResource>>()
+            //     .addConstructor<void(*)(), RefCountedObjectPtr<ShadyCore::LabelResource>>()
             //     .addProperty("begin", &ShadyCore::LabelResource::begin)
             //     .addProperty("end", &ShadyCore::LabelResource::end)
             // .endClass()
-            // .deriveClass<ShadyCore::Palette, ShadyCore::Resource>("Palette")
-            //     .addConstructor<void(*)(), RefCountedPtr<ShadyCore::Palette>>()
-            //     .addProperty("data", resource_Palette_getData, resource_Palette_setData)
-            //     // .addFunction("getColor", &ShadyCore::Palette::getColor)
-            //     // .addFunction("setColor", &ShadyCore::Palette::setColor)
-            //     // .addStaticFunction("packColor", &ShadyCore::Palette::packColor)
-            //     .addStaticFunction("unpackColor", &ShadyCore::Palette::unpackColor)
-            // .endClass()
-            // .deriveClass<ImageProxy, ShadyCore::Resource>("Image")
-            //     .addConstructor<void(*)(uint32_t, uint32_t, uint8_t), RefCountedPtr<ImageProxy>>()
+            .deriveClass<_ResourceProxy<ShadyCore::Palette>, ResourceProxy>("Palette")
+                .addConstructor<void(*)(), RefCountedObjectPtr<_ResourceProxy<ShadyCore::Palette>>>()
+                .addProperty("data", resource_Palette_getData, resource_Palette_setData)
+                // .addFunction("getColor", &ShadyCore::Palette::getColor)
+                // .addFunction("setColor", &ShadyCore::Palette::setColor)
+                // .addStaticFunction("packColor", &ShadyCore::Palette::packColor)
+                // .addStaticFunction("unpackColor", &ShadyCore::Palette::unpackColor)
+            .endClass()
+            .deriveClass<_ResourceProxy<ShadyCore::Image>, ResourceProxy>("Image")
+            //     .addConstructor<void(*)(uint32_t, uint32_t, uint8_t), RefCountedObjectPtr<ImageProxy>>()
             //     .addProperty<uint32_t>("width", &ImageProxy::width, false)
             //     .addProperty<uint32_t>("height", &ImageProxy::height, false)
             //     .addProperty<uint32_t>("paddedwidth", &ImageProxy::paddedWidth, false)
             //     .addProperty<uint8_t>("bitsperpixel", &ImageProxy::bitsPerPixel, false)
-            //     .addProperty("raw", resource_Image_getRaw, resource_Image_setRaw)
-            // .endClass()
-            // .deriveClass<ShadyCore::Sfx, ShadyCore::Resource>("Sfx")
-            //     .addConstructor<void(*)(), RefCountedPtr<ShadyCore::Sfx>>()
+                .addProperty("raw", resource_Image_getRaw, resource_Image_setRaw)
+            .endClass()
+            .deriveClass<_ResourceProxy<ShadyCore::Sfx>, ResourceProxy>("Sfx")
+            //     .addConstructor<void(*)(), RefCountedObjectPtr<ShadyCore::Sfx>>()
             //     .addProperty("channels", &ShadyCore::Sfx::channels)
             //     .addProperty("samplerate", &ShadyCore::Sfx::sampleRate)
             //     .addProperty("byterate", &ShadyCore::Sfx::byteRate)
             //     .addProperty("blockalign", &ShadyCore::Sfx::blockAlign)
             //     .addProperty("bitspersample", &ShadyCore::Sfx::bitsPerSample)
-            //     .addProperty("data", resource_Sfx_getData, resource_Sfx_setData)
-            // .endClass()
+                .addProperty("data", resource_Sfx_getData, resource_Sfx_setData)
+            .endClass()
         .endNamespace()
     ;
 }

@@ -35,13 +35,13 @@ static int _loadfile(lua_State* L) {
 static int _readfile(lua_State* L) {
     ShadyLua::LuaScript* script = ShadyLua::ScriptMap.at(L);
     const char *filename = luaL_checkstring(L, 1);
-    void* file = script->open(filename);
+    void* file = script->openFile(filename);
 
     luaL_Buffer buffer; luaL_buffinit(L, &buffer);
     size_t size;
     do {
         char* addr = luaL_prepbuffer(&buffer);
-        size = script->read(file, addr, LUAL_BUFFERSIZE);
+        size = script->readFile(file, addr, LUAL_BUFFERSIZE);
         luaL_addsize(&buffer, size);
     } while (size);
 
@@ -58,16 +58,8 @@ static int _dofile(lua_State* L) {
     return lua_gettop(L) - 1;
 }
 
-void ShadyLua::LualibBase(lua_State* L, std::filesystem::path& basePath) {
+void ShadyLua::LualibBase(lua_State* L) {
     luaL_openlibs(L);
-    auto package = luabridge::getGlobal(L, "package");
-    package["cpath"] = package["cpath"].tostring()
-        + ";" + basePath.string() + "\\?.dll";
-    package["path"] = package["path"].tostring()
-        + ";" + basePath.string() + "\\?.lua"
-        + ";" + basePath.string() + "\\?\\init.lua"
-        + ";" + basePath.string() + "\\lua\\?.lua"
-        + ";" + basePath.string() + "\\lua\\?\\init.lua";
     lua_register(L, "print", _print);
     lua_register(L, "loadfile", _loadfile);
     lua_register(L, "readfile", _readfile);
