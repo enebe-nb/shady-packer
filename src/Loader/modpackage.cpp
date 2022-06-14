@@ -253,9 +253,25 @@ bool ModPackage::Notify() { return downloadController.notify(); }
 void LoadPackage() {
 	ModPackage::LoadFromLocalData();
 	ModPackage::LoadFromFilesystem();
-
 	const std::string spath = (ModPackage::basePath / L"shady-loader.ini").string();
 	std::shared_lock lock(ModPackage::descMutex);
+
+	{ char buffer[4096], *context = 0; int i = 0;
+		GetPrivateProfileStringA("Options", "order", "", buffer, 4096, spath.c_str());
+		for(char* token = strtok_s(buffer, ",", &context); token; token = strtok_s(0, ",", &context)) {
+			std::string_view name(token);
+			if (i >= ModPackage::descPackage.size()) break;
+			if (ModPackage::descPackage[i]->name == name) {++i; continue;}
+			for (int j = i + 1; j < ModPackage::descPackage.size(); ++j)
+				if (ModPackage::descPackage[j]->name == name) {
+					ModPackage* aux = ModPackage::descPackage[j];
+					ModPackage::descPackage[j] = ModPackage::descPackage[i];
+					ModPackage::descPackage[i] = aux;
+					++i; break;
+				}
+		}
+	}
+
 	for (auto& package : ModPackage::descPackage) {
 		if (GetPrivateProfileIntA("Packages", package->name.c_str(), false, spath.c_str())) {
 			EnablePackage(package);

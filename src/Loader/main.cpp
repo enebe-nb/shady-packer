@@ -98,12 +98,16 @@ void SaveSettings() {
 	WritePrivateProfileStringA("Options", "remoteConfig", iniRemoteConfig.c_str(), ipath.c_str());
 
 	nlohmann::json root;
+	std::stringstream order;
 	{ std::shared_lock lock(ModPackage::descMutex);
 	for (auto& package : ModPackage::descPackage) {
 		root[package->name] = package->data;
-		if (package->fileExists)
+		if (package->fileExists) {
+			order << package->name << ",";
 			WritePrivateProfileStringA("Packages", package->name.c_str(), package->package ? "1" : "0", ipath.c_str());
+		}
 	} }
+	WritePrivateProfileStringA("Options", "order", order.str().c_str(), ipath.c_str());
 
 	std::ofstream output(ModPackage::basePath / L"packages.json");
 	output << root;
