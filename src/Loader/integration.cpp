@@ -6,6 +6,8 @@
 #include "../Lua/lualibs/soku.hpp"
 #include <LuaBridge/LuaBridge.h>
 #include "../Lua/logger.hpp"
+#include "../Core/util/tempfiles.hpp"
+#include <fstream>
 
 namespace {
     struct _lua_file {
@@ -17,13 +19,41 @@ namespace {
         ShadyCore::Package* base;
         ShadyCore::Package* owner;
     };
+
+	struct charbuf : std::streambuf {
+		inline charbuf(const char* begin, const char* end) {
+			this->setg((char*)begin, (char*)begin, (char*)end);
+		}
+	};
 }
 
 static bool loader_addAlias(const char* alias, const char* target) {
-    auto iter = ModPackage::basePackage->find(target);
-    if (iter == ModPackage::basePackage->end()) return false;
-    ModPackage::basePackage->alias(alias, iter.entry());
-    return true;
+	auto iter = ModPackage::basePackage->find(target);
+	if (iter == ModPackage::basePackage->end()) return false;
+	return ModPackage::basePackage->alias(alias, iter.entry()) != ModPackage::basePackage->end();
+}
+
+static int loader_addData(lua_State* L) {
+	const char* alias = luaL_checkstring(L, 1);
+	size_t dataSize; const char* data = luaL_checklstring(L, 2, &dataSize);
+	charbuf buffer(data, data+dataSize);
+	std::istream input(&buffer);
+
+	lua_pushboolean(L, ModPackage::basePackage->insert(alias, input) != ModPackage::basePackage->end());
+	return 1;
+}
+
+static bool loader_removeFile(const char* alias, lua_State* L) {
+	auto iter = ModPackage::basePackage->find(alias);
+	if (iter == ModPackage::basePackage->end()) return false;
+	auto loader = reinterpret_cast<_lua_loader*>(ShadyLua::ScriptMap[L]->userdata);
+	if (iter.entry().getParent() != loader->base
+		&& iter.entry().getParent() != loader->owner) {
+		Logger::Error("Can't remove files from other mods.");
+		return false;
+	}
+
+	return ModPackage::basePackage->erase(alias);
 }
 
 static ShadyCore::BasePackageEntry* _lua_find(ShadyCore::Package* base, ShadyCore::Package* owner, const char* filename) {
@@ -63,6 +93,15 @@ static void _lua_destroy(void* userdata) {
     delete reinterpret_cast<_lua_loader*>(userdata);
 }
 
+static void LualibLoader(lua_State* L) {
+	luabridge::getGlobalNamespace(L)
+		.beginNamespace("loader")
+			.addFunction("addAlias", loader_addAlias)
+			.addFunction("addData", loader_addData)
+			.addFunction("removeFile", loader_removeFile)
+		.endNamespace();
+}
+
 void EnablePackage(ModPackage* p) {
     if (!std::filesystem::is_directory(p->path) && !std::filesystem::is_regular_file(p->path)) return;
     p->package = ModPackage::basePackage->merge(p->path);
@@ -75,9 +114,7 @@ void EnablePackage(ModPackage* p) {
     if (_lua_find(ModPackage::basePackage.get(), p->package, "init.lua")) {
         auto loader = new _lua_loader{ModPackage::basePackage.get(), p->package};
         ShadyLua::LuaScript* script = new ShadyLua::LuaScript(loader, _lua_open, _lua_read, _lua_destroy);
-        ShadyLua::LualibLoader(script->L, p->package);
-        luabridge::getGlobalNamespace(script->L).beginNamespace("loader")
-            .addFunction("addAlias", loader_addAlias).endNamespace();
+        LualibLoader(script->L);
         p->script = script;
     } }
 

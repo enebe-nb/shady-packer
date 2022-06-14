@@ -94,6 +94,7 @@ namespace ShadyCore {
 		inline Package* merge(const std::filesystem::path& filename)
 			{ return merge(new Package(filename.is_relative() ? basePath / filename : filename)); }
 
+		using Package::insert;
 		iterator insert(const std::filesystem::path& filename);
 		iterator insert(const std::string_view& name, const std::filesystem::path& filename);
 		iterator insert(const std::string_view& name, std::istream& data); // uses temporary file
