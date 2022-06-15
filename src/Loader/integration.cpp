@@ -10,9 +10,9 @@
 #include <fstream>
 
 namespace {
-    struct _lua_file {
+    struct _lua_file : ShadyLua::LuaScript::File {
         ShadyCore::BasePackageEntry* entry;
-        std::istream* input;
+        inline _lua_file(ShadyCore::BasePackageEntry* entry) : entry(entry), File(entry->open()) {}
     };
 
     struct _lua_loader {
@@ -67,26 +67,21 @@ static ShadyCore::BasePackageEntry* _lua_find(ShadyCore::Package* base, ShadyCor
     else return &iter.entry();
 }
 
-static void* _lua_open(void* userdata, const char* filename) {
+static ShadyLua::LuaScript::File* _lua_open(void* userdata, const char* filename) {
     _lua_loader* loader = reinterpret_cast<_lua_loader*>(userdata);
     std::shared_lock l0(*loader->base, std::defer_lock);
     std::shared_lock l1(*loader->owner, std::defer_lock);
     std::scoped_lock lock(l0, l1);
 
     ShadyCore::BasePackageEntry* entry = _lua_find(loader->base, loader->owner, filename);
-    if (entry) return new _lua_file{entry, &entry->open()};
+    if (entry) return new _lua_file(entry);
     else return 0;
 }
 
-static size_t _lua_read(void* userdata, void* file, char* buffer, size_t size) {
-    if (!file) return 0;
-    _lua_file* luaFile = reinterpret_cast<_lua_file*>(file);
-    luaFile->input->read(buffer, size);
-    size = luaFile->input->gcount();
-    if (size == 0) {
-        luaFile->entry->close();
-        delete luaFile;
-    } return size;
+static void _lua_close(void* userdata, ShadyLua::LuaScript::File* file) {
+    _lua_file* _file = reinterpret_cast<_lua_file*>(file);
+    _file->entry->close();
+    delete file;
 }
 
 static void _lua_destroy(void* userdata) {
@@ -113,7 +108,7 @@ void EnablePackage(ModPackage* p) {
 
     if (_lua_find(ModPackage::basePackage.get(), p->package, "init.lua")) {
         auto loader = new _lua_loader{ModPackage::basePackage.get(), p->package};
-        ShadyLua::LuaScript* script = new ShadyLua::LuaScript(loader, _lua_open, _lua_read, _lua_destroy);
+        ShadyLua::LuaScript* script = new ShadyLua::LuaScript(loader, _lua_open, _lua_close, _lua_destroy);
         LualibLoader(script->L);
         p->script = script;
     } }

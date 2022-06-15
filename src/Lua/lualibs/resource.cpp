@@ -26,7 +26,6 @@ namespace {
 	};
 
 	const ShadyCore::FileType::Type _ResourceProxy<ShadyCore::TextResource>::staticType =   ShadyCore::FileType::TYPE_TEXT;
-	//const ShadyCore::FileType::Type _ResourceProxy<ShadyCore::TableResource>::staticType =  ShadyCore::FileType::TYPE_TABLE;
 	const ShadyCore::FileType::Type _ResourceProxy<ShadyCore::LabelResource>::staticType =  ShadyCore::FileType::TYPE_LABEL;
 	const ShadyCore::FileType::Type _ResourceProxy<ShadyCore::Palette>::staticType =        ShadyCore::FileType::TYPE_PALETTE;
 	const ShadyCore::FileType::Type _ResourceProxy<ShadyCore::Image>::staticType =          ShadyCore::FileType::TYPE_IMAGE;
@@ -37,16 +36,11 @@ namespace {
 static RefCountedObjectPtr<ShadyLua::ResourceProxy> resource_createfromfile(const char* filename, int format, lua_State* L) {
     ShadyLua::LuaScript* script = ShadyLua::ScriptMap.at(L);
 
-    std::stringstream data;
-    char buffer[4096]; size_t size;
-    void* file = script->openFile(filename);
-    while (size = script->readFile(file, buffer, 4096)) {
-        data.write(buffer, size);
-    } // TODO this read is bad, but there's too many changes to fix it
-
+    auto file = script->openFile(filename);
     auto type = ShadyCore::FileType::get(filename).type;
     RefCountedObjectPtr<ShadyLua::ResourceProxy> proxy(new ShadyLua::ResourceProxy(ShadyCore::createResource(type), type, true));
-    ShadyCore::getResourceReader(ShadyCore::FileType(type, (ShadyCore::FileType::Format)format))(proxy->resource, data);
+    ShadyCore::getResourceReader(ShadyCore::FileType(type, (ShadyCore::FileType::Format)format))(proxy->resource, file->input);
+    script->closeFile(file);
     return proxy;
 }
 

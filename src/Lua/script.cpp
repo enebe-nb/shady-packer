@@ -12,15 +12,18 @@ std::unordered_map<lua_State*, ShadyLua::LuaScript*> ShadyLua::ScriptMap;
 
 namespace {
     struct Reader {
-        ShadyLua::fnRead_t fnRead;
-        void* userdata;
-        void* file;
+        ShadyLua::LuaScript::File* file;
         char buffer[4096];
-        static const char* read(lua_State* L, void* dt, size_t* size) {
-            Reader* reader = reinterpret_cast<Reader*>(dt);
-            *size = reader->fnRead(reader->userdata, reader->file, reader->buffer, 4096);
+        static const char* read(lua_State* L, Reader* reader, size_t* size) {
+            reader->file->input.read(reader->buffer, 4096);
+            *size = reader->file->input.gcount();
             return reader->buffer;
         }
+    };
+
+    struct FileFS : ShadyLua::LuaScript::File {
+        std::ifstream data;
+        inline FileFS(const std::filesystem::path& filename) : data(filename), File(data) {}
     };
 }
 
@@ -34,8 +37,8 @@ int ShadyLua::LuaScript::run() {
 	return true;
 }
 
-ShadyLua::LuaScript::LuaScript(void* userdata, fnOpen_t open, fnRead_t read, fnDestroy_t destroy)
-    : L(luaL_newstate()), userdata(userdata), fnOpen(open), fnRead(read), fnDestroy(destroy) {
+ShadyLua::LuaScript::LuaScript(void* userdata, fnOpen_t open, fnClose_t close, fnDestroy_t destroy)
+    : L(luaL_newstate()), userdata(userdata), fnOpen(open), fnClose(close), fnDestroy(destroy) {
     ScriptMap[L] = this;
     LualibBase(L);
     LualibMemory(L);
@@ -56,38 +59,32 @@ ShadyLua::LuaScript::~LuaScript() {
 
 int ShadyLua::LuaScript::load(const char* filename, const char* mode) {
     Reader reader;
-    reader.fnRead = fnRead;
-    reader.userdata = userdata;
-    reader.file = fnOpen(userdata, filename);
-    int result = lua_load(L, Reader::read, &reader, filename, mode);
+    reader.file = this->openFile(filename);
+    int result = lua_load(L, (lua_Reader)Reader::read, &reader, filename, mode);
+    this->closeFile(reader.file);
     if (result != LUA_OK) Logger::Error(lua_tostring(L, 1));
     return result;
 }
 
 ShadyLua::LuaScriptFS::LuaScriptFS(const std::filesystem::path& basePath)
-    : LuaScript(this, LuaScriptFS::fnOpen, LuaScriptFS::fnRead), basePath(basePath) {
-    LualibLoader(L, &package, true);
+    : LuaScript(this, LuaScriptFS::fnOpen, LuaScriptFS::fnClose), basePath(basePath) {
+    LualibLoader(L, &package);
 }
 
-void* ShadyLua::LuaScriptFS::fnOpen(void* userdata, const char* filename) {
+ShadyLua::LuaScriptFS::File* ShadyLua::LuaScriptFS::fnOpen(void* userdata, const char* filename) {
     LuaScriptFS* script = reinterpret_cast<LuaScriptFS*>(userdata);
     std::filesystem::path path(script->basePath / std::filesystem::u8path(filename)); // TODO check utf
 
-    std::ifstream* input = new std::ifstream(path, std::ios::in | std::ios::binary);
-    if (input->fail()) {
+    FileFS* file = new FileFS(path);
+    if (file->input.fail()) {
         Logger::Error("Can't open file: ", filename);
-        delete input;
+        delete file;
         return 0;
-    } return input;
+    } return file;
 }
 
-size_t ShadyLua::LuaScriptFS::fnRead(void* userdata, void* file, char* buffer, size_t size) {
-    if (!file) return 0;
-    std::istream* input = reinterpret_cast<std::istream*>(file);
-    input->read(buffer, size);
-    size = input->gcount();
-    if (size == 0) delete input;
-    return size;
+void ShadyLua::LuaScriptFS::fnClose(void* userdata, File* file) {
+    delete reinterpret_cast<FileFS*>(file);
 }
 
 /*

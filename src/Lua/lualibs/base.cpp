@@ -35,16 +35,16 @@ static int _loadfile(lua_State* L) {
 static int _readfile(lua_State* L) {
     ShadyLua::LuaScript* script = ShadyLua::ScriptMap.at(L);
     const char *filename = luaL_checkstring(L, 1);
-    void* file = script->openFile(filename);
+    auto file = script->openFile(filename);
 
     luaL_Buffer buffer; luaL_buffinit(L, &buffer);
-    size_t size;
     do {
         char* addr = luaL_prepbuffer(&buffer);
-        size = script->readFile(file, addr, LUAL_BUFFERSIZE);
-        luaL_addsize(&buffer, size);
-    } while (size);
+        file->input.read(addr, LUAL_BUFFERSIZE);
+        luaL_addsize(&buffer, file->input.gcount());
+    } while (file->input.gcount());
 
+    script->closeFile(file);
     luaL_pushresult(&buffer);
     return 1;
 }
