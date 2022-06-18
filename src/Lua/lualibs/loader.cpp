@@ -12,12 +12,11 @@
 using namespace luabridge;
 
 namespace {
-	std::unordered_map<ShadyLua::LuaScript*, ShadyCore::Package*> packageMap;
-	std::unordered_map<std::string, std::pair<ShadyLua::LuaScript*, int>> callbackMap;
+	std::unordered_map<ShadyLua::LuaScript*, ShadyCore::PackageEx*> packageMap;
 	std::shared_mutex packageMapLock;
 
 	struct charbuf : std::streambuf {
-		charbuf(const char* begin, const char* end) {
+		inline charbuf(const char* begin, const char* end) {
 			this->setg((char*)begin, (char*)begin, (char*)end);
 		}
 	};
@@ -26,36 +25,6 @@ namespace {
 // TODO check if is better to receive a string_view or a string
 void ShadyLua::EmitSokuEventFileLoader2(const char* filename, std::istream** input, int* size) {
 	std::shared_lock guard(packageMapLock);
-
-	auto iter = callbackMap.find(filename);
-	if (iter != callbackMap.end()) {
-		lua_State* L = iter->second.first->L;
-		lua_rawgeti(L, LUA_REGISTRYINDEX, iter->second.second);
-		lua_pushstring(L, filename);
-		if (lua_pcall(L, 1, 1, 0)) {
-			Logger::Error(lua_tostring(L, -1));
-			lua_pop(L, 1);
-		} switch(lua_type(L, 1)) {
-			case LUA_TSTRING: {
-				size_t dataSize = 0;
-				const char* data = lua_tolstring(L, 1, &dataSize);
-				if (!data || !dataSize) break;
-				// TODO other formats
-				*size = dataSize;
-				*input = new std::stringstream(std::string(data, dataSize),
-					std::ios::in|std::ios::out|std::ios::binary);
-			} break;
-			case LUA_TUSERDATA: {
-				RefCountedObjectPtr<ShadyLua::ResourceProxy> proxy = Stack<ShadyLua::ResourceProxy*>::get(L, 1);
-				auto outputType = ShadyCore::GetDataPackageDefaultType(proxy->type, proxy->resource);
-				std::stringstream* buffer = new std::stringstream(std::ios::in|std::ios::out|std::ios::binary);
-				ShadyCore::getResourceWriter(outputType)(proxy->resource, *buffer);
-				*size = buffer->tellp();
-				*input = buffer;
-			} break;
-		} lua_pop(L, 1);
-		if (*input) return;
-	}
 
 	for (auto& pair : packageMap) {
 		auto& package = pair.second;
@@ -76,11 +45,6 @@ void ShadyLua::EmitSokuEventFileLoader2(const char* filename, std::istream** inp
 void ShadyLua::RemoveLoaderEvents(LuaScript* script) {
 	std::unique_lock lock(packageMapLock);
 	packageMap.erase(script);
-	for (auto i = callbackMap.begin(); i != callbackMap.end(); ++i) {
-		if (i->second.first == script)
-			i = callbackMap.erase(i);
-		else ++i;
-	}
 }
 
 static bool loader_addAlias(const char* alias, const char* target, lua_State* L) {
@@ -96,28 +60,12 @@ static bool loader_addAlias(const char* alias, const char* target, lua_State* L)
 static int loader_addData(lua_State* L) {
 	const char* alias = luaL_checkstring(L, 1);
 	size_t dataSize; const char* data = luaL_checklstring(L, 2, &dataSize);
-
-	std::filesystem::path tempFile = ShadyUtil::TempFile();
-	std::ofstream output(tempFile, std::ios::binary);
-	output.write(data, dataSize);
-	output.close();
+	charbuf buffer(data, data+dataSize);
+	std::istream input(&buffer);
 
 	std::shared_lock guard(packageMapLock);
 	auto package = packageMap[ShadyLua::ScriptMap[L]];
-	lua_pushboolean(L, package->insert(alias, new ShadyCore::FilePackageEntry(package, tempFile, true)) != package->end());
-	return 1;
-}
-
-static int loader_addCallback(lua_State* L) {
-	if (lua_gettop(L) < 2 ) return luaL_error(L, "addCallback takes 2 arguments.");
-	if (!lua_isfunction(L, 2)) return luaL_error(L, "Must pass a callback");
-	const char * alias = luaL_checkstring(L, 1);
-
-	std::shared_lock guard(packageMapLock);
-	int callback = luaL_ref(L, LUA_REGISTRYINDEX);
-	callbackMap[alias] = std::make_pair(ShadyLua::ScriptMap[L], callback);
-
-	lua_pushinteger(L, callback);
+	lua_pushboolean(L, package->insert(alias, input) != package->end());
 	return 1;
 }
 
@@ -164,7 +112,7 @@ static bool loader_removePackage(int childId, lua_State* L) {
 	return child;
 }
 
-void ShadyLua::LualibLoader(lua_State* L, ShadyCore::Package* package, bool isEx) {
+void ShadyLua::LualibLoader(lua_State* L, ShadyCore::PackageEx* package) {
 	packageMap[ShadyLua::ScriptMap[L]] = package;
 	// TODO check lua require() behavior
 	// auto package = luabridge::getGlobal(L, "package");
@@ -176,16 +124,14 @@ void ShadyLua::LualibLoader(lua_State* L, ShadyCore::Package* package, bool isEx
 	//     + ";" + basePath.string() + "\\lua\\?.lua"
 	//     + ";" + basePath.string() + "\\lua\\?\\init.lua";
 
-	auto ns = getGlobalNamespace(L).beginNamespace("loader");
-	ns.addCFunction("addData", loader_addData);
-	ns.addFunction("addCallback", loader_addCallback);
-	ns.addFunction("addResource", loader_addResource);
-	if (isEx) {
-		ns.addFunction("addAlias", loader_addAlias);
-		ns.addFunction("addFile", loader_addFile);
-		ns.addFunction("addPackage", loader_addPackage);
-		ns.addFunction("removeFile", loader_removeFile);
-		ns.addFunction("removePackage", loader_removePackage);
-	}
-	ns.endNamespace();
+	getGlobalNamespace(L)
+		.beginNamespace("loader")
+			.addCFunction("addData", loader_addData)
+			.addFunction("addResource", loader_addResource)
+			.addFunction("addAlias", loader_addAlias)
+			.addFunction("addFile", loader_addFile)
+			.addFunction("addPackage", loader_addPackage)
+			.addFunction("removeFile", loader_removeFile)
+			.addFunction("removePackage", loader_removePackage)
+		.endNamespace();
 }

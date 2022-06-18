@@ -7,6 +7,7 @@
 #include "soku.hpp"
 
 namespace {
+    auto _eventPlayerInfo = reinterpret_cast<void (__fastcall *)(void* unknown, int unused, int index, const SokuLib::PlayerInfo& info)>(0x0046da40);
     auto __readerCreate = reinterpret_cast<void* (__stdcall *)(const char *filename, unsigned int *size, unsigned int *offset)>(0x0041c080);
     auto __loader = reinterpret_cast<int(*)()>(0);
     bool _initialized = false;
@@ -57,6 +58,11 @@ static void renderEvent() {
     Logger::Render();
 }
 
+static void __fastcall eventPlayerInfo(void* unknown, int unused, int index, const SokuLib::PlayerInfo& info) {
+    ShadyLua::EmitSokuEventPlayerInfo(info);
+    return _eventPlayerInfo(unknown, unused, index, info);
+}
+
 static int _HookLoader() {
     if (__loader) __loader();
     _renderEvent = new SokuLib::Trampoline(0x00401040, renderEvent, 5);
@@ -65,6 +71,7 @@ static int _HookLoader() {
     DWORD dwOldProtect;
     VirtualProtect((PVOID)TEXT_SECTION_OFFSET, TEXT_SECTION_SIZE, PAGE_EXECUTE_WRITECOPY, &dwOldProtect);
     __readerCreate = SokuLib::TamperNearJmpOpr(0x0040D227, readerCreate);
+    _eventPlayerInfo = SokuLib::TamperNearJmpOpr(0x46eb1b, eventPlayerInfo);
     VirtualProtect((PVOID)TEXT_SECTION_OFFSET, TEXT_SECTION_SIZE, dwOldProtect, &dwOldProtect);
 
     VirtualProtect((PVOID)RDATA_SECTION_OFFSET, RDATA_SECTION_SIZE, PAGE_EXECUTE_WRITECOPY, &dwOldProtect);

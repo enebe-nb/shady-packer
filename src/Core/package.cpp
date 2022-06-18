@@ -31,7 +31,8 @@ ShadyCore::Package::Key::Key(const std::string_view& str, FileType::Type type)
 
 ShadyCore::Package::~Package() {
 	for (auto& entry : entries) {
-		delete entry.second;
+		if (!entry.second->isOpen()) delete entry.second;
+		else entry.second->markAsDisposable();
 	}
 }
 
@@ -228,7 +229,8 @@ bool ShadyCore::PackageEx::erase(const std::string_view& name) {
 	iterator i = find(name);
 
 	if (i != end()) {
-		delete i->second;
+		if (!i->second->isOpen()) delete i->second;
+		else i->second->markAsDisposable();
 		entries.erase(i);
 		return true;
 	}
@@ -254,7 +256,8 @@ void ShadyCore::PackageEx::erase(Package* package) {
 void ShadyCore::PackageEx::clear() {
 	std::unique_lock lock(*this);
 	for (auto& entry : entries) {
-		delete entry.second;
+		if (!entry.second->isOpen()) delete entry.second;
+		else entry.second->markAsDisposable();
 	} entries.clear();
 	for (auto group : groups) {
 		delete group;

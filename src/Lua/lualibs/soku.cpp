@@ -9,15 +9,17 @@
 #include <shared_mutex>
 #include <unordered_set>
 #include <SokuLib.hpp>
+#include <type_traits>
 
 using namespace luabridge;
 
 namespace {
     constexpr int EVENT_RENDER = 0;
     constexpr int EVENT_LOADER = 1;
+    constexpr int EVENT_PLAYERINFO = 2;
 
     struct eventHash { size_t operator()(const std::pair<int, ShadyLua::LuaScript*> &x) const { return x.first ^ (int)x.second; } };
-    std::unordered_set<std::pair<int, ShadyLua::LuaScript*>, eventHash> eventMap[2];
+    std::unordered_set<std::pair<int, ShadyLua::LuaScript*>, eventHash> eventMap[3];
     std::shared_mutex eventMapLock;
     template <int value> static inline int* enumMap()
         {static const int valueHolder = value; return (int*)&valueHolder;}
@@ -27,6 +29,14 @@ namespace {
             this->setg((char*)begin, (char*)begin, (char*)end);
         }
     };
+
+    template <typename T, std::enable_if_t<std::is_enum<T>::value, bool> = true>
+    struct EnumStack : Stack<typename std::underlying_type<T>::type> {
+        static inline T get(lua_State* L, int index) {
+            return static_cast<T>(Stack<std::underlying_type<T>::type>::get(L, index));
+        }
+    };
+    
 }
 
 void ShadyLua::RemoveEvents(LuaScript* script) {
@@ -47,6 +57,22 @@ static void soku_Player_PlaySE(const SokuLib::PlayerInfo* player, int id) {
         push ecx;
         mov ecx, player;
         call callAddr;
+    }
+}
+
+void ShadyLua::EmitSokuEventPlayerInfo(const SokuLib::PlayerInfo& info) {
+    std::shared_lock guard(eventMapLock);
+    auto& listeners = eventMap[EVENT_PLAYERINFO];
+    for(auto iter = listeners.begin(); iter != listeners.end(); ++iter) {
+        std::lock_guard scriptGuard(iter->second->mutex);
+
+        auto L = iter->second->L;
+        lua_rawgeti(L, LUA_REGISTRYINDEX, iter->first);
+        luabridge::push(L, &info);
+        if (lua_pcall(L, 1, 0, 0)) {
+            Logger::Error(lua_tostring(L, -1));
+            lua_pop(L, 1);
+        }
     }
 }
 
@@ -141,6 +167,9 @@ static void soku_PlaySE(int id) {
     reinterpret_cast<void (*)(int id)>(0x0043E1E0)(id);
 }
 
+template<> struct luabridge::Stack<SokuLib::Character> : EnumStack<SokuLib::Character> {};
+template<> struct luabridge::Stack<SokuLib::Stage> : EnumStack<SokuLib::Stage> {};
+
 void ShadyLua::LualibSoku(lua_State* L) {
     getGlobalNamespace(L)
         .beginNamespace("soku")
@@ -217,18 +246,19 @@ void ShadyLua::LualibSoku(lua_State* L) {
                 .addVariable("CatwalkInGeyser",         enumMap<33>(), false)
                 .addVariable("FusionReactorCore",       enumMap<34>(), false)
             .endNamespace()
-            .beginClass<SokuLib::PlayerInfo>("Player")
+            .beginClass<SokuLib::PlayerInfo>("PlayerInfo")
                 .addProperty("character", &SokuLib::PlayerInfo::character, false)
                 .addProperty("isRight", &SokuLib::PlayerInfo::isRight, false)
                 .addProperty("palette", &SokuLib::PlayerInfo::palette, false)
                 .addProperty("deck", &SokuLib::PlayerInfo::deck, false)
-                .addFunction("PlaySE", soku_Player_PlaySE)
+                // .addFunction("PlaySE", soku_Player_PlaySE) // TODO something does not match with this
             .endClass()
-            .addVariable("P1", &SokuLib::leftPlayerInfo)
-            .addVariable("P2", &SokuLib::rightPlayerInfo)
+            .addVariable("P1", &SokuLib::leftPlayerInfo) // TODO something does not match with this
+            .addVariable("P2", &SokuLib::rightPlayerInfo) // TODO something does not match with this
             .addFunction("PlaySE", soku_PlaySE)
             .addCFunction("SubscribeRender", soku_SubscribeEvent<EVENT_RENDER>)
             .addCFunction("SubscribeFileLoader", soku_SubscribeEvent<EVENT_LOADER>)
+            .addCFunction("SubscribePlayerInfo", soku_SubscribeEvent<EVENT_PLAYERINFO>)
             .addFunction("UnsubscribeEvent", soku_UnsubscribeEvent)
         .endNamespace()
     ;
