@@ -17,7 +17,7 @@ namespace ShadyCore {
 
 		inline StorageType getStorage() const override final { return TYPE_FILE; }
 		inline bool isOpen() const override final { return fileStream.is_open(); }
-		inline std::istream& open() override final { fileStream.open(parent->getBasePath() / filename, std::ios::binary, _SH_DENYWR); return fileStream; }
+		inline std::istream& open() override final { fileStream.open(parent->getBasePath() / filename, std::ios::binary); return fileStream; }
 		inline void close() override final { fileStream.close(); if (disposable) delete this; }
 	};
 

@@ -12,6 +12,6 @@ namespace ShadyCore {
         inline ~EntryReader() { entry.close(); }
     } EntryReader;
 
-    extern const int entry_reader_vtbl;
-    extern const int stream_reader_vtbl;
+    extern const ptrdiff_t entry_reader_vtbl;
+    extern const ptrdiff_t stream_reader_vtbl;
 }

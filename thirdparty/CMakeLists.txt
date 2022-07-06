@@ -42,7 +42,7 @@ add_library(rapidxml INTERFACE)
 target_include_directories(rapidxml INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/rapidxml)
 
 # zlib Library
-add_git_module(zlib git://github.com/madler/zlib.git v1.2.11)
+add_git_module(zlib https://github.com/madler/zlib.git v1.2.11)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/zlib EXCLUDE_FROM_ALL)
 if (MSVC)
     set(ZLIB_LIBRARY ${CMAKE_CURRENT_BINARY_DIR}/zlib/Release/zlibstatic.lib)
@@ -63,12 +63,12 @@ add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/libpng EXCLUDE_FROM_ALL)
 target_include_directories(png_static PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/libpng ${CMAKE_CURRENT_BINARY_DIR}/zlib ${CMAKE_CURRENT_BINARY_DIR}/libpng)
 
 # libzip Library
-add_git_module(libzip git://github.com/nih-at/libzip v1.8.0)
+add_git_module(libzip https://github.com/nih-at/libzip v1.8.0)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/libzip EXCLUDE_FROM_ALL)
 #target_compile_definitions(zip INTERFACE ZIP_STATIC)
 
 # cxxopts Library
-add_git_module(cxxopts git://github.com/jarro2783/cxxopts.git v2.2.1)
+add_git_module(cxxopts https://github.com/jarro2783/cxxopts.git v2.2.1)
 add_library(cxxopts INTERFACE)
 target_include_directories(cxxopts INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/cxxopts/include)
 
@@ -80,33 +80,33 @@ if(SHADY_ENABLE_MODULE)
     add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/curl EXCLUDE_FROM_ALL)
 
     # nlohmann JSON Library
-    add_git_module(json git://github.com/nlohmann/json v3.10.2)
+    add_git_module(json https://github.com/nlohmann/json v3.10.2)
     add_library(json INTERFACE)
     target_include_directories(json INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/json/include)
 
     # Lua Library
-    add_git_module(lua git://github.com/lua/lua v5.4.3)
+    add_git_module(lua https://github.com/lua/lua v5.4.3)
     add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/lua EXCLUDE_FROM_ALL)
-    add_git_module(LuaBridge git://github.com/vinniefalco/LuaBridge 2.6)
+    add_git_module(LuaBridge https://github.com/vinniefalco/LuaBridge 2.6)
     set(LUABRIDGE_TESTING OFF)
     add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/LuaBridge EXCLUDE_FROM_ALL)
 
     # termcolor Library
-#    add_git_module(termcolor git://github.com/ikalnytskyi/termcolor v2.0.0)
+#    add_git_module(termcolor https://github.com/ikalnytskyi/termcolor v2.0.0)
 #    add_library(termcolor INTERFACE)
 #    target_include_directories(termcolor INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/termcolor/include)
 
     # SokuLib Library
-    add_git_module(SokuLib git://github.com/enebe-nb/SokuLib dev)
+    add_git_module(SokuLib https://github.com/enebe-nb/SokuLib dev)
     add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/SokuLib EXCLUDE_FROM_ALL)
 endif()
 
 if(SHADY_ENABLE_TEST)
     # gtest Library
-    add_git_module(googletest git://github.com/google/googletest release-1.11.0)
+    add_git_module(googletest https://github.com/google/googletest release-1.11.0)
     add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/googletest EXCLUDE_FROM_ALL)
 
     # benchmark Library
-    add_git_module(benchmark git://github.com/google/benchmark v1.6.0)
+    add_git_module(benchmark https://github.com/google/benchmark v1.6.0)
     add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/benchmark EXCLUDE_FROM_ALL)
 endif()

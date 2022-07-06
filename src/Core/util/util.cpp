@@ -1,6 +1,7 @@
 #include "riffdocument.hpp"
 #include "xmlprinter.hpp"
 #include "filewatcher.hpp"
+#include <list>
 
 ShadyUtil::RiffDocument::RiffDocument(std::istream& input) : input(input) {
     typedef struct{ char type[4]; uint32_t left; } ListInfo;
@@ -181,7 +182,7 @@ namespace {
 					}
 
 					if (info->NextEntryOffset == 0) break;
-					else info = reinterpret_cast<FILE_NOTIFY_INFORMATION*>((int)info + info->NextEntryOffset);
+					else info = reinterpret_cast<FILE_NOTIFY_INFORMATION*>((ptrdiff_t)info + info->NextEntryOffset);
 				}
 			}
 

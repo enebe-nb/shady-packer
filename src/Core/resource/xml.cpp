@@ -3,6 +3,7 @@
 #include "readerwriter.hpp"
 #include "../util/xmlprinter.hpp"
 #include <map>
+#include <cstring>
 #include <charconv>
 #include <unordered_map>
 
@@ -21,10 +22,19 @@ namespace {
 		};
 
 		static constexpr size_t fnv1a(const char* s, std::size_t count) {
-			size_t val = std::_FNV_offset_basis;
+		#if defined(_WIN64)
+			static_assert(sizeof(size_t) == 8, "This code is for 64-bit size_t.");
+			const size_t fnv_offset_basis = 14695981039346656037ULL;
+			const size_t fnv_prime = 1099511628211ULL;
+		#else /* defined(_WIN64) */
+			static_assert(sizeof(size_t) == 4, "This code is for 32-bit size_t.");
+			const size_t fnv_offset_basis = 2166136261U;
+			const size_t fnv_prime = 16777619U;
+		#endif /* defined(_WIN64) */
+			size_t val = fnv_offset_basis;
 			for (size_t i = 0; i < count; ++i) {
 				val ^= static_cast<size_t>(s[i]);
-				val *= std::_FNV_prime;
+				val *= fnv_prime;
 			} return val;
 		}
 		static constexpr size_t fnv1a(const std::string_view& s) { return fnv1a(s.data(), s.size()); }

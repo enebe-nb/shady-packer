@@ -7,6 +7,11 @@
 #include <filesystem>
 #include <cmath>
 #include <cstring>
+#include <list>
+
+#ifdef min
+#undef min
+#endif
 
 std::streamsize ShadyCore::StreamFilter::xsgetn(char_type* buffer, std::streamsize count) {
 	int buffered = 0;
@@ -17,7 +22,7 @@ std::streamsize ShadyCore::StreamFilter::xsgetn(char_type* buffer, std::streamsi
 	}
 	pos += buffered;
 
-	count = base->sgetn(buffer + buffered, min(count, (std::streamsize)(size - pos)));
+	count = base->sgetn(buffer + buffered, std::min(count, (std::streamsize)(size - pos)));
 	for (int i = buffered; i < count + buffered; ++i) {
 		buffer[i] = filter(buffer[i]);
 	}
@@ -171,7 +176,7 @@ std::istream& ShadyCore::DataPackageEntry::open() {
 	if (!base) base = new std::filebuf();
 	else base->close();
 
-	base->open(parent->getBasePath(), std::ios::in | std::ios::binary, _SH_DENYWR);
+	base->open(parent->getBasePath(), std::ios::in | std::ios::binary);
 	base->pubseekoff(packageOffset, std::ios::beg);
 	fileFilter.setBaseBuffer(base);
 

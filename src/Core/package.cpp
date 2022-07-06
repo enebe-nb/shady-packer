@@ -4,7 +4,7 @@
 #include <fstream>
 #include <iostream>
 #include <list>
-#include <xhash>
+#include <mutex>
 
 static inline std::string_view createNormalizedName(const std::string_view& str) {
 	char* buffer = new char[str.size() + 1];

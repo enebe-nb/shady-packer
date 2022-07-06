@@ -1,6 +1,7 @@
 #include "readerwriter.hpp"
 #include <png.h>
 #include <math.h>
+#include <cstring>
 #include <string>
 
 namespace {
