@@ -72,7 +72,7 @@ void ModList::updateList() {
 }
 
 static inline int _getPackageColor(ModPackage* package) {
-	if (package->requireUpdate) return 0xff8040;
+	if (package->requireUpdate) return package->isLocal() ? 0x909020 : 0xff8040;
 	if (package->isEnabled()) {
 		if (package->package->empty()
 			|| package->package->size() == 1 

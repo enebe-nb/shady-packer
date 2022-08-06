@@ -212,10 +212,6 @@ void readerImageBmp(ShadyCore::Image& resource, std::istream& input) {
 		const int rawRowSize = (resource.bitsPerPixel == 24 ? 4 : resource.bitsPerPixel/8) * resource.paddedWidth;
 		for (int i = 0; i < resource.height; ++i) {
 			input.read((char*)&resource.raw[(resource.height - i - 1)*rawRowSize], rowSize);
-#ifdef _DEBUG
-			if (rawRowSize - rowSize > 0)
-				memset((void*)&resource.raw[(resource.height - i - 1)*rawRowSize + rowSize], 0, rawRowSize - rowSize);
-#endif
 		}
 	}
 }

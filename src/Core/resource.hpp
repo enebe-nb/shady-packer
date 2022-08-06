@@ -93,6 +93,7 @@ namespace ShadyCore {
 			int32_t x, y, w, h;
 
 			inline Image(const char* name) : name(name) {}
+			inline Image(const Image& o) = delete;
 			inline Image(Image&& o) : name(o.name), x(o.x), y(o.y), w(o.w), h(o.h) { (const char*&)o.name = 0; }
 			virtual ~Image();
 		};
@@ -204,6 +205,8 @@ namespace ShadyCore {
 			inline Sequence(uint32_t id, bool isAnimation) : Object(id, isAnimation ? 8 : 9) {}
 			virtual ~Sequence();
 		};
+
+		uint32_t getOrCreateImage(const std::string_view& name);
 
 		// --- DATA ---
 		std::vector<Image> images;
