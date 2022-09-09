@@ -1,10 +1,11 @@
 #include "package.hpp"
 #include "fileentry.hpp"
 #include "util/tempfiles.hpp"
+#include <cstring>
 #include <fstream>
 #include <iostream>
 #include <list>
-#include <xhash>
+#include <mutex>
 
 static inline std::string_view createNormalizedName(const std::string_view& str) {
 	char* buffer = new char[str.size() + 1];
@@ -195,7 +196,8 @@ ShadyCore::Package* ShadyCore::PackageEx::merge(Package* child) {
 
 ShadyCore::Package* ShadyCore::PackageEx::demerge(Package* child) {
 	std::scoped_lock lock(*this, *child);
-	auto iter = std::find(groups.begin(), groups.end(), child);
+	//auto iter = std::find(groups.begin(), groups.end(), child);
+	auto iter = groups.begin(); while(iter != groups.end() && *iter != child) ++iter;
 	if (iter == groups.end()) return 0;
 
 	groups.erase(iter);

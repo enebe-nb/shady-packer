@@ -1,6 +1,8 @@
 #include "riffdocument.hpp"
 #include "xmlprinter.hpp"
-#include "filewatcher.hpp"
+#include <list>
+#include <stack>
+#include <vector>
 
 ShadyUtil::RiffDocument::RiffDocument(std::istream& input) : input(input) {
     typedef struct{ char type[4]; uint32_t left; } ListInfo;
@@ -106,7 +108,10 @@ void ShadyUtil::XmlPrinter::closeNode() {
 	isOpened = false;
 }
 
-#include <Windows.h>
+#ifdef _WIN32
+
+#include "filewatcher.hpp"
+#include <windows.h>
 #include <mutex>
 
 namespace {
@@ -181,7 +186,7 @@ namespace {
 					}
 
 					if (info->NextEntryOffset == 0) break;
-					else info = reinterpret_cast<FILE_NOTIFY_INFORMATION*>((int)info + info->NextEntryOffset);
+					else info = reinterpret_cast<FILE_NOTIFY_INFORMATION*>((ptrdiff_t)info + info->NextEntryOffset);
 				}
 			}
 
@@ -191,7 +196,7 @@ namespace {
 		};
 
 		inline bool empty() { return files.empty(); };
-		inline bool contains(ShadyUtil::FileWatcher* f) { return std::find(files.begin(), files.end(), f) != files.end(); };
+		inline bool contains(ShadyUtil::FileWatcher* f) { for (auto p : files) if (p == f) return true; return false; };
 		inline void add(ShadyUtil::FileWatcher* f) { files.push_back(f); };
 		inline void remove(ShadyUtil::FileWatcher* f) { files.remove(f); };
 		inline bool isFolder(const std::filesystem::path& path) { return std::filesystem::equivalent(folder, path); };
@@ -255,3 +260,5 @@ ShadyUtil::FileWatcher* ShadyUtil::FileWatcher::getNextChange() {
 	changes.pop_front();
 	return watcher;
 }
+
+#endif /* _WIN32 */

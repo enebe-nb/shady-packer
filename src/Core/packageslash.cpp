@@ -1,4 +1,5 @@
 #include "package.hpp"
+#include <cstring>
 
 namespace {
 	const char* dirTable[][2] = {

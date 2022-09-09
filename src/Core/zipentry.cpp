@@ -3,6 +3,7 @@
 #include "util/tempfiles.hpp"
 
 #include <zip.h>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <iostream>

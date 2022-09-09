@@ -7,6 +7,12 @@
 #include <filesystem>
 #include <cmath>
 #include <cstring>
+#include <list>
+
+#ifndef _MSC_VER
+	using std::min;
+	using std::max;
+#endif
 
 std::streamsize ShadyCore::StreamFilter::xsgetn(char_type* buffer, std::streamsize count) {
 	int buffered = 0;
@@ -171,7 +177,11 @@ std::istream& ShadyCore::DataPackageEntry::open() {
 	if (!base) base = new std::filebuf();
 	else base->close();
 
+#ifdef _MSC_VER
 	base->open(parent->getBasePath(), std::ios::in | std::ios::binary, _SH_DENYWR);
+#else
+	base->open(parent->getBasePath(), std::ios::in | std::ios::binary);
+#endif
 	base->pubseekoff(packageOffset, std::ios::beg);
 	fileFilter.setBaseBuffer(base);
 

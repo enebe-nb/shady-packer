@@ -1,7 +1,7 @@
 #include "readerwriter.hpp"
 #include <png.h>
 #include <math.h>
-#include <string>
+#include <cstring>
 
 namespace {
 	bool isTrueColorAvailable = false;

@@ -112,5 +112,5 @@ namespace {
     };
 }
 
-const int ShadyCore::entry_reader_vtbl = (int)&entry_reader_table;
-const int ShadyCore::stream_reader_vtbl = (int)&stream_reader_table;
+const int ShadyCore::entry_reader_vtbl = (ptrdiff_t)&entry_reader_table;
+const int ShadyCore::stream_reader_vtbl = (ptrdiff_t)&stream_reader_table;
