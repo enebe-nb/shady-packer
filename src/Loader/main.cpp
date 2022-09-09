@@ -4,6 +4,8 @@
 
 #include <windows.h>
 #include <fstream>
+#include <SokuLib.hpp>
+#include "menu.hpp"
 
 namespace {
 	const BYTE TARGET_HASH[16] = { 0xdf, 0x35, 0xd1, 0xfb, 0xc7, 0xb5, 0x83, 0x31, 0x7a, 0xda, 0xbe, 0x8c, 0xd9, 0xf5, 0x3b, 0x2e };
@@ -13,6 +15,15 @@ bool iniAutoUpdate;
 bool iniUseLoadLock;
 bool iniEnableLua;
 std::string iniRemoteConfig;
+
+void activate_menu(){
+	SokuLib::activateMenu(new ModMenu());
+}
+
+extern "C" __declspec(dllexport) void InitializeMainMenu(char* name, void(**on_activate)()) {
+	strcpy(name,"Loader");
+	*on_activate = activate_menu;
+}
 
 static bool GetModulePath(HMODULE handle, std::filesystem::path& result) {
 	std::wstring buffer;
