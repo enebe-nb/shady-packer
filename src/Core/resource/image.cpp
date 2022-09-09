@@ -281,19 +281,21 @@ void writerImageBmp(ShadyCore::Image& resource, std::ostream& output) {
 }
 
 void readerPaletteAct(ShadyCore::Palette& resource, std::istream& input) {
-	if (isTrueColorAvailable) for (int i = 0; i < 256; ++i) {
+	if (isTrueColorAvailable) {
 		resource.initialize(32);
-		resource.data[i*4+2] = input.get();
-		resource.data[i*4+1] = input.get();
-		resource.data[i*4  ] = input.get();
-		resource.data[i*4+3] = i == 0 ? 0 : 0xff;
+		for (int i = 0; i < 256; ++i) {
+			resource.data[i*4+2] = input.get();
+			resource.data[i*4+1] = input.get();
+			resource.data[i*4  ] = input.get();
+			resource.data[i*4+3] = i == 0 ? 0 : 0xff;
+		}
 	} else {
 		resource.initialize(16);
 		for (int i = 0; i < 256; ++i) {
 			uint32_t color = 0;
-			((uint8_t*)color)[2] = input.get();
-			((uint8_t*)color)[1] = input.get();
-			((uint8_t*)color)[0] = input.get();
+			((uint8_t*)&color)[2] = input.get();
+			((uint8_t*)&color)[1] = input.get();
+			((uint8_t*)&color)[0] = input.get();
 			uint16_t* data = (uint16_t*)resource.data;
 			data[i] = ShadyCore::Palette::packColor(color, i == 0);
 		}
@@ -312,9 +314,9 @@ void writerPaletteAct(ShadyCore::Palette& resource, std::ostream& output) {
 		for (int i = 0; i < 256; ++i) {
 			uint16_t* data = (uint16_t*)resource.data;
 			uint32_t color = resource.unpackColor(data[i]);
-			output.put(((char*)color)[2]);
-			output.put(((char*)color)[1]);
-			output.put(((char*)color)[0]);
+			output.put(((char*)&color)[2]);
+			output.put(((char*)&color)[1]);
+			output.put(((char*)&color)[0]);
 		}
 	} else {
 		for (int i = 0; i < 256; ++i) {
