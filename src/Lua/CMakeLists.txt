@@ -15,15 +15,11 @@ set(SRC_LUA_Module
 )
 source_group("Source Files\\Module" FILES ${SRC_LUA_Module})
 
-if(NOT WIN32 OR NOT CMAKE_SIZEOF_VOID_P EQUAL 4)
-	message(WARNING Skipping shady-lua: Can only build on Windows 32bits)
-else()
-    add_library(shady-lualib STATIC ${SRC_LUA_Library})
-    target_link_libraries(shady-lualib shady-core liblua LuaBridge SokuLib)
+add_library(shady-lualib STATIC ${SRC_LUA_Library})
+target_link_libraries(shady-lualib shady-core liblua LuaBridge SokuLib)
 
-    add_library(shady-lua MODULE ${SRC_LUA_Module})
-    target_link_libraries(shady-lua -static shady-lualib)
-    set_target_properties(shady-lua PROPERTIES PREFIX "")
+add_library(shady-lua MODULE ${SRC_LUA_Module})
+target_link_libraries(shady-lua -static shady-lualib)
+set_target_properties(shady-lua PROPERTIES PREFIX "")
 
-    install(TARGETS shady-lua LIBRARY DESTINATION soku-modules)
-endif()
+install(TARGETS shady-lua LIBRARY DESTINATION soku-modules)

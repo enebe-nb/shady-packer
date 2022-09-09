@@ -18,25 +18,29 @@ add_compile_options("$<$<CXX_COMPILER_ID:MSVC>:/utf-8>")
 
 set(SHADY_ENABLE_TEST FALSE CACHE BOOL "Enable test building")
 set(SHADY_ENABLE_MODULE TRUE CACHE BOOL "Enable module building")
+if(SHADY_ENABLE_MODULE AND (NOT WIN32 OR NOT CMAKE_SIZEOF_VOID_P EQUAL 4))
+	set(SHADY_ENABLE_MODULE FALSE)
+	message(WARNING "Skipping Shady Modules: Can only build on Windows 32bits")
+endif()
 
 # Dependencies
-add_subdirectory(${CMAKE_SOURCE_DIR}/thirdparty)
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/thirdparty)
 
 # Shady *Core*
-add_subdirectory(${CMAKE_SOURCE_DIR}/src/Core)
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/src/Core)
 # Shady *Cli*
-add_subdirectory(${CMAKE_SOURCE_DIR}/src/Cli)
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/src/Cli)
 # Shady *Dnd*
-add_subdirectory(${CMAKE_SOURCE_DIR}/src/Dnd)
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/src/Dnd)
 
 # Shady *Loader*
 if(SHADY_ENABLE_MODULE)
-	add_subdirectory(${CMAKE_SOURCE_DIR}/src/Loader)
-	add_subdirectory(${CMAKE_SOURCE_DIR}/src/Lua)
+	add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/src/Loader)
+	add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/src/Lua)
 endif()
 
 # Shady *Test*
 if(SHADY_ENABLE_TEST)
 	enable_testing()
-	add_subdirectory(${CMAKE_SOURCE_DIR}/src/Test)
+	add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/src/Test)
 endif()
