@@ -203,7 +203,7 @@ void readerImageBmp(ShadyCore::Image& resource, std::istream& input) {
 			}
 		}
 
-		delete buffer;
+		delete[] buffer;
 	} else {
 		const int rawRowSize = (resource.bitsPerPixel == 24 ? 4 : resource.bitsPerPixel/8) * resource.paddedWidth;
 		for (int i = 0; i < resource.height; ++i) {

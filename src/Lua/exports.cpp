@@ -7,7 +7,7 @@
 
 namespace ShadyCore {
     void* Allocate(size_t s) { return new uint8_t[s]; }
-    void Deallocate(void* p) { delete p; }
+    void Deallocate(void* p) { delete[] (uint8_t*)p; }
 }
 
 extern const BYTE TARGET_HASH[16];
