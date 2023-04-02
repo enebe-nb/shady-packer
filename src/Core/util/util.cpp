@@ -110,7 +110,7 @@ void ShadyUtil::XmlPrinter::closeNode() {
 }
 
 #ifdef _WIN32
-#include <Windows.h>
+#include <windows.h>
 #else
 #define HANDLE void*
 typedef struct OVERLAPPED {
