@@ -5,6 +5,8 @@
 #include <iostream>
 #include <list>
 #include <mutex>
+#include <cstring>
+#include <algorithm>
 
 static inline std::string_view createNormalizedName(const std::string_view& str) {
 	char* buffer = new char[str.size() + 1];

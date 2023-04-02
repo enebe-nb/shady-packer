@@ -18,6 +18,14 @@ inline std::wstring sjis2ws(const std::string_view& str) {
     MultiByteToWideChar(CP_SHIFT_JIS, 0, &str[0], (int)str.size(), &wstrTo[0], size_needed);
     return wstrTo;
 }
+#else
+#include "util/encodingConverter.hpp"
+
+#define ws2sjis convertEncoding<wchar_t, char, UTF16Decode, shiftJISEncode>
+
+inline std::wstring sjis2ws(const std::string_view& str) {
+    return convertEncoding<char, wchar_t, shiftJISDecode, UTF16Encode>(std::string(str));
+}
 
 #endif
 
@@ -30,7 +38,7 @@ void ShadyCore::Package::loadDir(const std::filesystem::path& path) {
 		if (std::filesystem::is_regular_file(iter->path())) {
 			std::filesystem::path relPath = std::filesystem::relative(iter->path(), path);
 			this->insert(
-				ws2sjis(relPath),
+				ws2sjis(relPath.wstring()),
 				new FilePackageEntry(this, relPath)
 			);
 		}
@@ -85,10 +93,10 @@ void ShadyCore::Package::saveDir(const std::filesystem::path& directory) {
 
 ShadyCore::Package::iterator ShadyCore::PackageEx::insert(const std::filesystem::path& filename) {
 	if (filename.is_relative())
-		return Package::insert(ws2sjis(filename), new FilePackageEntry(this, filename));
+		return Package::insert(ws2sjis(filename.wstring()), new FilePackageEntry(this, filename));
 	else {
 		std::filesystem::path relPath = std::filesystem::proximate(filename, std::filesystem::absolute(basePath));
-		return Package::insert(ws2sjis(relPath), new FilePackageEntry(this, filename));
+		return Package::insert(ws2sjis(relPath.wstring()), new FilePackageEntry(this, filename));
 	}
 }
 

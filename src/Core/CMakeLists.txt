@@ -14,7 +14,11 @@ set(SRC_CORE_Util
 	util/riffdocument.hpp
 	util/singleton.hpp
 	util/xmlprinter.hpp
-	util/util.cpp )
+	util/util.cpp
+	util/shiftJISConvTable.inl
+	util/shiftJISReverseConvTable.inl
+	util/encodingConverter.cpp
+	util/encodingConverter.hpp )
 source_group("Source Files\\util" FILES ${SRC_CORE_Util})
 
 set(SRC_CORE_Root

@@ -22,7 +22,7 @@ namespace {
 		};
 
 		static constexpr size_t fnv1a(const char* s, std::size_t count) {
-		#if defined(_WIN64)
+		#if defined(_WIN64) || defined(__x86_64__)
 			static_assert(sizeof(size_t) == 8, "This code is for 64-bit size_t.");
 			const size_t fnv_offset_basis = 14695981039346656037ULL;
 			const size_t fnv_prime = 1099511628211ULL;

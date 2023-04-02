@@ -1,6 +1,11 @@
 #include "reader.hpp"
 #include <fstream>
 
+#ifdef __GNUC__
+#define __fastcall
+#define __cdecl
+#endif
+
 namespace {
     typedef struct {
         int vtable;

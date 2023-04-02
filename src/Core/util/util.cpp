@@ -2,6 +2,8 @@
 #include "xmlprinter.hpp"
 #include "filewatcher.hpp"
 #include <list>
+#include <vector>
+#include <algorithm>
 
 ShadyUtil::RiffDocument::RiffDocument(std::istream& input) : input(input) {
     typedef struct{ char type[4]; uint32_t left; } ListInfo;
@@ -107,7 +109,23 @@ void ShadyUtil::XmlPrinter::closeNode() {
 	isOpened = false;
 }
 
+#ifdef _WIN32
 #include <Windows.h>
+#else
+#define HANDLE void*
+typedef struct OVERLAPPED {
+    unsigned long *Internal;
+    unsigned long *InternalHigh;
+    union {
+        struct {
+            unsigned Offset;
+            unsigned OffsetHigh;
+        } DUMMYSTRUCTNAME;
+        void *Pointer;
+    } DUMMYUNIONNAME;
+    HANDLE    hEvent;
+} *LPOVERLAPPED;
+#endif
 #include <mutex>
 
 namespace {
@@ -131,6 +149,7 @@ namespace {
 		}
 
 		static inline Delegate* create(const std::filesystem::path& folder) {
+#ifdef _WIN32
 			HANDLE handle = CreateFileW(folder.c_str(), FILE_LIST_DIRECTORY,
 				FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
 				nullptr, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OVERLAPPED, nullptr);
@@ -146,17 +165,22 @@ namespace {
 			delegate->folder = folder;
 
 			return delegate;
+#endif
+            return nullptr;
 		}
 
 		inline ~Delegate() { // TODO better cancel
+#ifdef _WIN32
 			DWORD bytes;
 			CancelIoEx(handle, &overlapped);
 			GetOverlappedResult(handle, &overlapped, &bytes, true);
 			CloseHandle(overlapped.hEvent);
 			CloseHandle(handle);
+#endif
 		}
 
 		void doHandle() {
+#ifdef _WIN32
 			DWORD bytes;
 			if (GetOverlappedResult(handle, &overlapped, &bytes, true)) {
 				FILE_NOTIFY_INFORMATION* info = reinterpret_cast<FILE_NOTIFY_INFORMATION*>(buffer);
@@ -189,6 +213,7 @@ namespace {
 			if (!ReadDirectoryChangesW(handle, buffer, bufferSize, false,
 				FILE_NOTIFY_CHANGE_FILE_NAME | FILE_NOTIFY_CHANGE_DIR_NAME | FILE_NOTIFY_CHANGE_LAST_WRITE,
 				nullptr, &overlapped, nullptr)) throw std::runtime_error("Fail to read directory (loop) " + std::to_string(GetLastError())); // TODO
+#endif
 		};
 
 		inline bool empty() { return files.empty(); };
@@ -242,7 +267,7 @@ ShadyUtil::FileWatcher::~FileWatcher() {
 
 ShadyUtil::FileWatcher* ShadyUtil::FileWatcher::getNextChange() {
 	std::lock_guard lock(delegateMutex);
-
+#ifdef _WIN32
 	if (changes.empty() && handles.size()) {
 		DWORD result = WaitForMultipleObjects(handles.size(), handles.data(), false, 0);
 		if (result == WAIT_FAILED) throw std::runtime_error("FileWatcher wait failed: " + std::to_string(GetLastError())); // TODO
@@ -255,4 +280,6 @@ ShadyUtil::FileWatcher* ShadyUtil::FileWatcher::getNextChange() {
 	watcher->action = changes.front().action;
 	changes.pop_front();
 	return watcher;
+#endif
+    return nullptr;
 }
