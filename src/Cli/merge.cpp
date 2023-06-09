@@ -12,16 +12,16 @@ void ShadyCli::MergeCommand::buildOptions() {
     options.positional_help("<files>...");
 }
 
-static inline ShadyCore::Palette* getPalette(std::string filename) {
+static inline ShadyCore::Palette* getPalette(std::filesystem::path filename) {
     if (!std::filesystem::is_regular_file(filename)) {
-        printf("File \"%s\" is not readable.\n", filename.c_str());
+        printf("File \"%s\" is not readable.\n", filename.string().c_str());
         return 0;
     }
 
     std::ifstream input(filename, std::ios::binary);
-    ShadyCore::FileType type = ShadyCore::FileType::get(filename.c_str());
+    ShadyCore::FileType type = ShadyCore::FileType::get(filename.filename().string().c_str());
     if (type != ShadyCore::FileType::TYPE_PALETTE) {
-        printf("File \"%s\" is not a palette.\n", filename.c_str());
+        printf("File \"%s\" is not a palette.\n", filename.string().c_str());
         return 0;
     }
 
