@@ -257,7 +257,7 @@ int ModMenu::onRender() {
 	design.getById(&pos, 203);
 	if(viewPreview.dxHandle) viewPreview.renderScreen(pos->x2, pos->y2, pos->x2 + 200, pos->y2 + 150);
 
-	(guide.*SokuLib::union_cast<void (SokuLib::Guide::*)()>(0x443260))(); // Update
+	(guide.*SokuLib::union_cast<void (SokuLib::Guide::*)()>(0x443260))(); // Render
 	return 0;
 }
 

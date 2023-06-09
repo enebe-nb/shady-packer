@@ -107,9 +107,8 @@ extern "C" __declspec(dllexport) bool CheckVersion(const BYTE hash[16]) {
 
 extern "C" __declspec(dllexport) bool Initialize(HMODULE hMyModule, HMODULE hParentModule) {
 	GetModulePath(hMyModule, modulePath);
-    Logger::Initialize(Logger::LOG_DEBUG | Logger::LOG_ERROR);
+    Logger::Initialize(Logger::LOG_DEBUG | Logger::LOG_ERROR, "shady-lua.log");
 
-    ShadyLua::LoadTamper();
     LoadSettings();
 
 	return TRUE;

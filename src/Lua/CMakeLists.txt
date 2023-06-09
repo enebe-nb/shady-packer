@@ -2,11 +2,11 @@ set(SRC_LUA_Library
     logger.cpp
     script.cpp
     lualibs/base.cpp
+    lualibs/gui.cpp
     lualibs/loader.cpp
     lualibs/memory.cpp
     lualibs/resource.cpp
     lualibs/soku.cpp
-    lualibs/soku-hooks.cpp
 )
 source_group("Source Files\\Library" FILES ${SRC_LUA_Library})
 

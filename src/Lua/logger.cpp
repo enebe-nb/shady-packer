@@ -14,6 +14,7 @@ namespace {
     bool isDirty = false;
 
     std::list<std::string> logContent;
+    std::ofstream logFile;
 }
 
 static SokuLib::SWRFont* createFont() {
@@ -29,8 +30,9 @@ static SokuLib::SWRFont* createFont() {
     return font;
 }
 
-void Logger::Initialize(int flags) {
+void Logger::Initialize(int flags, const std::string_view& filename) {
     logFlags = flags;
+    if (!filename.empty()) logFile.open(filename.data());
 }
 
 void Logger::Finalize() {
@@ -90,6 +92,7 @@ void Logger::Log(int type, const std::string& text) {
 
     std::lock_guard guard(consoleLock);
     logContent.push_back(getTypeName(type) + ": " + text);
+    if (logFile.is_open()) logFile << getTypeName(type) + ": " + text << std::endl;
     isDirty = true; logTimeout = 2000; // TODO use time instead
 
     // size limiting

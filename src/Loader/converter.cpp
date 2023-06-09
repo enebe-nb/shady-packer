@@ -380,8 +380,6 @@ static int _HookLoader() {
 }
 
 void HookLoader() {
-    if (iniEnableLua) ShadyLua::LoadTamper();
-
     DWORD dwOldProtect;
     ::VirtualProtect(reinterpret_cast<LPVOID>(0x007fb596), 5, PAGE_EXECUTE_WRITECOPY, &dwOldProtect);
     bool hasCall = 0xE8 == *(unsigned char*)0x007fb596;
@@ -391,8 +389,6 @@ void HookLoader() {
 }
 
 void UnhookLoader() {
-    ShadyLua::UnloadTamper();
-
     if (!_initialized) return;
     DWORD dwOldProtect;
     VirtualProtect((PVOID)TEXT_SECTION_OFFSET, TEXT_SECTION_SIZE, PAGE_EXECUTE_WRITECOPY, &dwOldProtect);

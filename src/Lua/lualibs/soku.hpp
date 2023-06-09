@@ -8,23 +8,59 @@
 #include <SokuLib.hpp>
 
 namespace ShadyLua {
-    // TODO arguments on Emitters
-    // TODO remake hooks
-    void EmitSokuEventRender();
-    // void EmitSokuEventBattleEvent(int eventId);
-    // void EmitSokuEventGameEvent(int sceneId);
-    // void EmitSokuEventStageSelect(int* stageId);
-    void EmitSokuEventFileLoader(const char* filename, std::istream **input, int*size);
-    void EmitSokuEventFileLoader2(const char* filename, std::istream **input, int*size);
-    void EmitSokuEventPlayerInfo(const SokuLib::PlayerInfo& info);
+    struct Hook {
+        enum Type {
+            FILE_LOADER, READY, PLAYER_INFO, SCENE_CHANGE,
+            Count
+        };
 
-    inline void DefaultRenderHook() {
-        Logger::Render();
-        EmitSokuEventRender();
+        virtual ~Hook() = default;
+    }; extern std::unique_ptr<Hook> hooks[Hook::Type::Count];
+
+    template<DWORD addr, Hook::Type type, auto replFn>
+    struct CallHook : Hook {
+        using typeFn = decltype(replFn);
+        static typeFn origFn;
+        static constexpr Type hookType = type;
+
+        inline CallHook() {
+            DWORD prot; VirtualProtect((LPVOID)addr, 5, PAGE_EXECUTE_WRITECOPY, &prot);
+            origFn = SokuLib::TamperNearJmpOpr(addr, replFn);
+            VirtualProtect((LPVOID)addr, 5, prot, &prot);
+        }
+
+        virtual ~CallHook() {
+            DWORD prot; VirtualProtect((LPVOID)addr, 5, PAGE_EXECUTE_WRITECOPY, &prot);
+            SokuLib::TamperNearJmpOpr(addr, origFn);
+            VirtualProtect((LPVOID)addr, 5, prot, &prot);
+        }
+    };
+
+    template<DWORD addr, Hook::Type type, auto replFn>
+    struct AddressHook : Hook {
+        using typeFn = decltype(replFn);
+        static typeFn origFn;
+        static constexpr Type hookType = type;
+
+        inline AddressHook() {
+            DWORD prot; VirtualProtect((LPVOID)addr, 4, PAGE_EXECUTE_WRITECOPY, &prot);
+            origFn = SokuLib::TamperDword(addr, replFn);
+            VirtualProtect((LPVOID)addr, 4, prot, &prot);
+        }
+
+        virtual ~AddressHook() {
+            DWORD prot; VirtualProtect((LPVOID)addr, 4, PAGE_EXECUTE_WRITECOPY, &prot);
+            SokuLib::TamperDword(addr, origFn);
+            VirtualProtect((LPVOID)addr, 4, prot, &prot);
+        }
+    };
+
+    template<typename hookClass>
+    inline void initHook() {
+        static_assert(std::is_base_of<ShadyLua::Hook, hookClass>::value, "hookType not derived from ShadyLua::Hook");
+        if (!ShadyLua::hooks[hookClass::hookType]) ShadyLua::hooks[hookClass::hookType].reset(new hookClass());
     }
 
-    void LoadTamper();
-    void UnloadTamper();
     class LuaScript;
     void RemoveEvents(LuaScript*);
     void RemoveLoaderEvents(LuaScript*);

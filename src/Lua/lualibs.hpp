@@ -10,4 +10,5 @@ namespace ShadyLua {
     void LualibResource(lua_State* L);
     void LualibSoku(lua_State* L);
     void LualibLoader(lua_State* L, ShadyCore::PackageEx* package);
+    void LualibGui(lua_State* L);
 }
