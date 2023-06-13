@@ -68,7 +68,10 @@ extern "C" __declspec(dllexport) bool Initialize(HMODULE hMyModule, HMODULE hPar
 #else
 	Logger::Initialize(Logger::LOG_ERROR);
 #endif
+	DWORD prot; VirtualProtect((LPVOID)0x0043dda6, 5, PAGE_EXECUTE_WRITECOPY, &prot);
 	__onRender = SokuLib::TamperNearJmpOpr(0x0043dda6, onRender);
+	VirtualProtect((LPVOID)0x0043dda6, 5, prot, &prot);
+
 	GetModulePath(hMyModule, ModPackage::basePath);
 	ModPackage::basePackage.reset(new ShadyCore::PackageEx(ModPackage::basePath));
 	LoadSettings();
