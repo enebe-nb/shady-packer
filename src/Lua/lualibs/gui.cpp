@@ -8,6 +8,20 @@ using namespace luabridge;
 namespace {
     template <int value> static inline int* enumMap()
         {static const int valueHolder = value; return (int*)&valueHolder;}
+
+    struct ValueProxy {
+        union { float number; int gauge; };
+    };
+}
+
+static ValueProxy* gui_design_getValue(SokuLib::CDesign::Object* object) {
+    auto value = new ValueProxy(); // <-- this have memory leak, but it's hard to prevent this
+    if (*(int*)object == SokuLib::ADDR_VTBL_CDESIGN_GAUGE) {
+        reinterpret_cast<SokuLib::CDesign::Gauge*>(object)->gauge.set(&value->gauge, 0, 100);
+    } else if (*(int*)object == SokuLib::ADDR_VTBL_CDESIGN_NUMBER) {
+        reinterpret_cast<SokuLib::CDesign::Number*>(object)->number.set(&value->number);
+    }
+    return value;
 }
 
 static int gui_OpenMenu(lua_State* L) {
@@ -31,15 +45,21 @@ static int gui_menu_getRenderer(lua_State* L) {
 
 static int gui_scene_getRenderer(lua_State* L) {
     if (lua_gettop(L) < 1) return luaL_error(L, "instance of gui.Scene not found");
-    auto menu = Stack<ShadyLua::SceneProxy*>::get(L, 1);
-    Stack<ShadyLua::Renderer*>::push(L, &menu->renderer);
+    auto scene = Stack<ShadyLua::SceneProxy*>::get(L, 1);
+    Stack<ShadyLua::Renderer*>::push(L, &scene->renderer);
     return 1;
 }
 
-template <typename T>
-static T* gui_design_GetItemById(SokuLib::CDesign* schema, int id) {
-    SokuLib::CDesign::Object* object; schema->getById(&object, id);
-    return (T*)object;
+static int gui_renderer_getEffects(lua_State* L) {
+    if (lua_gettop(L) < 1) return luaL_error(L, "instance of gui.Renderer not found");
+    auto renderer = Stack<ShadyLua::Renderer*>::get(L, 1);
+    Stack<ShadyLua::EffectManagerProxy*>::push(L, &renderer->effects);
+    return 1;
+}
+
+static SokuLib::CDesign::Object* gui_design_GetItemById(SokuLib::CDesign* schema, int id) {
+    SokuLib::CDesign::Object* object = 0; schema->getById(&object, id);
+    return object;
 }
 
 static SokuLib::CDesign::Object* gui_design_GetItem(SokuLib::CDesign* schema, int index) {
@@ -67,15 +87,16 @@ ShadyLua::SpriteProxy::~SpriteProxy() {
 //(const char* name = 0, int offsetX = 0, int offsetY = 0, int width = -1, int height = -1, int anchorX = 0, int anchorY = 0);
 int ShadyLua::SpriteProxy::setTexture3(lua_State* L) {
     const int argc = lua_gettop(L);
-    const char* name = (argc < 1) ? nullptr : luaL_checkstring(L, 1);
-    int oX = (argc < 2) ? 0 : luaL_checkinteger(L, 2);
-    int oY = (argc < 3) ? 0 : luaL_checkinteger(L, 3);
-    int w = (argc < 4) ? -1 : luaL_checkinteger(L, 4);
-    int h = (argc < 5) ? -1 : luaL_checkinteger(L, 5);
-    int aX = (argc < 6) ? 0 : luaL_checkinteger(L, 6);
-    int aY = (argc < 7) ? 0 : luaL_checkinteger(L, 7);
+    const char* name = (argc < 2) ? nullptr : luaL_checkstring(L, 2);
+    int oX = (argc < 3) ? 0 : luaL_checkinteger(L, 3);
+    int oY = (argc < 4) ? 0 : luaL_checkinteger(L, 4);
+    int w = (argc < 5) ? -1 : luaL_checkinteger(L, 5);
+    int h = (argc < 6) ? -1 : luaL_checkinteger(L, 6);
+    int aX = (argc < 7) ? 0 : luaL_checkinteger(L, 7);
+    int aY = (argc < 8) ? 0 : luaL_checkinteger(L, 8);
     if (dxHandle) SokuLib::textureMgr.remove(dxHandle);
     int texture; SokuLib::textureMgr.loadTexture(&texture, name, w == -1 ? &w : nullptr, h == -1 ? &h : nullptr);
+    if (!texture) Logger::Warning("Texture not found: ", name);
     setTexture(texture, oX, oY, w, h, aX, aY);
     Stack<SpriteProxy*>::push(L, this);
     return 1;
@@ -84,14 +105,14 @@ int ShadyLua::SpriteProxy::setTexture3(lua_State* L) {
 //(const char* str, SokuLib::SWRFont &font, int width, int height);
 int ShadyLua::SpriteProxy::setText(lua_State* L) {
     const int argc = lua_gettop(L);
-    const char* str = luaL_checkstring(L, 1);
-    auto font = Stack<ShadyLua::FontProxy*>::get(L, 2);
-    int w = luaL_checkinteger(L, 3);
-    int h = luaL_checkinteger(L, 4);
+    const char* str = luaL_checkstring(L, 2);
+    auto font = Stack<ShadyLua::FontProxy*>::get(L, 3);
+    int w = luaL_checkinteger(L, 4);
+    int h = luaL_checkinteger(L, 5);
     int outW, outH;
     if (dxHandle) SokuLib::textureMgr.remove(dxHandle);
     font->prepare();
-    int texture; SokuLib::textureMgr.createTextTexture(&texture, str, *font->handles, w, h, &outW, &outH);
+    int texture; SokuLib::textureMgr.createTextTexture(&texture, str, *font->handle, w, h, &outW, &outH);
     setTexture2(texture, 0, 0, w, h);
     Stack<SpriteProxy*>::push(L, this);
     lua_pushinteger(L, outW);
@@ -133,7 +154,7 @@ void ShadyLua::Renderer::render() {
         effects.Render(i);
         auto range = sprites.equal_range(i);
         for (auto iter = range.first; iter != range.second; ++iter) {
-            iter->second.render(0, 0); // TODO check position
+            if (iter->second.isEnabled) iter->second.render(0, 0); // TODO check position
         }
     }
 }
@@ -152,6 +173,7 @@ int ShadyLua::Renderer::createSprite(lua_State* L) {
     auto& sprite = this->sprites.emplace(std::piecewise_construct, std::forward_as_tuple(layer), std::forward_as_tuple())->second;
     activeLayers.insert(layer);
     int texture; SokuLib::textureMgr.loadTexture(&texture, name, w == -1 ? &w : nullptr, h == -1 ? &h : nullptr);
+    if (!texture) Logger::Warning("Texture not found: ", name);
     sprite.setTexture(texture, oX, oY, w, h, aX, aY);
     Stack<SpriteProxy*>::push(L, &sprite);
     activeLayers.insert(layer);
@@ -169,7 +191,7 @@ int ShadyLua::Renderer::createText(lua_State* L) {
     int outW, outH;
     auto& sprite = this->sprites.emplace(std::piecewise_construct, std::forward_as_tuple(layer), std::forward_as_tuple())->second;
     font->prepare();
-    int texture; SokuLib::textureMgr.createTextTexture(&texture, str, *font->handles, w, h, &outW, &outH);
+    int texture; SokuLib::textureMgr.createTextTexture(&texture, str, *font->handle, w, h, &outW, &outH);
     sprite.setTexture2(texture, 0, 0, w, h);
     Stack<SpriteProxy*>::push(L, &sprite);
     lua_pushinteger(L, outW);
@@ -214,7 +236,8 @@ int ShadyLua::Renderer::destroy(lua_State* L) {
                 if (sprite == &iter->second) { sprites.erase(iter); break; }
             }
         } else if (Stack<Effect*>::Helper::isInstance(L, i)) {
-            throw std::exception("TODO destruction of effects is not implemented.");
+            auto effect = Stack<Effect*>::get(L, i);
+            effect->unknown158 = false;
         } else if (Stack<MenuCursorProxy*>::Helper::isInstance(L, i)) {
             auto cursor = Stack<MenuCursorProxy*>::get(L, i);
             for (auto iter = cursors.begin(); iter != cursors.end(); ++iter) {
@@ -233,10 +256,11 @@ void ShadyLua::Renderer::clear() {
 }
 
 ShadyLua::MenuProxy::MenuProxy(int handler, lua_State* L)
-    : processHandler(handler), data(L), script(ShadyLua::ScriptMap[L]) {}
+    : processHandler(handler), data(newTable(L)), script(ShadyLua::ScriptMap[L]) {}
 
 void ShadyLua::MenuProxy::_() {}
 int ShadyLua::MenuProxy::onProcess() {
+    if (!ShadyLua::ScriptMap.contains(script->L))  return 0;
     int ret = 1;
     renderer.update();
     if (processHandler != LUA_REFNIL) { 
@@ -248,6 +272,8 @@ int ShadyLua::MenuProxy::onProcess() {
             Logger::Error(lua_tostring(L, -1));
         } else if (lua_isnumber(L, -1)) {
             ret = lua_tointeger(L, -1);
+        } else if (lua_isboolean(L, -1)) {
+            ret = lua_toboolean(L, -1);
         } lua_pop(L, 1);
     }
     return ret;
@@ -263,8 +289,17 @@ bool ShadyLua::MenuProxy::ShowMessage(const char* text) {
     return true;
 }
 
+int ShadyLua::EffectManagerProxy::loadPattern(lua_State* L) {
+    const int argc = lua_gettop(L);
+    const char* name = luaL_checkstring(L, 2);
+    int reserve = argc < 3 ? 0 : luaL_checkinteger(L, 3);
+    LoadPattern(name, reserve);
+    return 0;
+}
+
 std::unordered_multimap<SokuLib::IScene*, ShadyLua::SceneProxy*> ShadyLua::SceneProxy::listeners;
-ShadyLua::SceneProxy::SceneProxy(lua_State* L) : data(L), script(ShadyLua::ScriptMap[L]) {}
+ShadyLua::SceneProxy::SceneProxy(lua_State* L)
+    : processHandler(LUA_REFNIL), data(newTable(L)), script(ShadyLua::ScriptMap[L]) {}
 int ShadyLua::SceneProxy::onProcess() {
     renderer.update();
     if (processHandler != LUA_REFNIL) { 
@@ -279,108 +314,135 @@ int ShadyLua::SceneProxy::onProcess() {
             auto ret = lua_tointeger(L, -1);
             lua_pop(L, 1);
             return ret;
+        } else if (lua_isboolean(L, -1)) {
+            auto ret = lua_toboolean(L, -1);
+            lua_pop(L, 1);
+            return ret;
         }
     }
     return -1;
+}
+
+ShadyLua::FontProxy::FontProxy() {
+    weight = 400; height = 14;
+    italic = shadow = useOffset = false;
+    offsetX = offsetY = charSpaceX = charSpaceY = 0;
+    bufferSize = 100000;
+    r1 = g1 = b1 = b2 = r2 = g2 = 0xff;
+    strcpy_s(faceName, (char*)0x858764);
 }
 
 void ShadyLua::LualibGui(lua_State* L) {
     getGlobalNamespace(L)
         .beginNamespace("gui")
             .addCFunction("OpenMenu", gui_OpenMenu)
-            .addFunction("IsOpenMenu", gui_IsOpenMenu)
+            .addFunction("isMenuOpen", gui_IsOpenMenu)
             .beginClass<ShadyLua::Renderer>("Renderer")
-                .addData("Schema", &ShadyLua::Renderer::guiSchema, false)
-                .addData("IsActive", &ShadyLua::Renderer::isActive, true)
+                .addData("design", &ShadyLua::Renderer::guiSchema, false)
+                .addProperty("effects", gui_renderer_getEffects, 0)
+                .addData("isActive", &ShadyLua::Renderer::isActive, true)
 
-                .addFunction("LoadEffectPattern", &ShadyLua::Renderer::LoadEffectPattern)
-                .addFunction("CreateSprite", &ShadyLua::Renderer::createSprite)
-                .addFunction("CreateText", &ShadyLua::Renderer::createText)
-                .addFunction("CreateEffect", &ShadyLua::Renderer::createEffect)
-                .addFunction("CreateCursorH", &ShadyLua::Renderer::createCursor<true>)
-                .addFunction("CreateCursorV", &ShadyLua::Renderer::createCursor<false>)
+                .addFunction("createSprite", &ShadyLua::Renderer::createSprite)
+                .addFunction("createText", &ShadyLua::Renderer::createText)
+                .addFunction("createEffect", &ShadyLua::Renderer::createEffect)
+                .addFunction("createCursorH", &ShadyLua::Renderer::createCursor<true>)
+                .addFunction("createCursorV", &ShadyLua::Renderer::createCursor<false>)
 
-                .addFunction("Destroy", &ShadyLua::Renderer::destroy) // TODO test to set nil to things
+                .addFunction("destroy", &ShadyLua::Renderer::destroy) // TODO test to set nil to things
             .endClass()
             .beginClass<ShadyLua::MenuProxy>("Menu")
-                .addProperty("Renderer", gui_menu_getRenderer, 0)
-                .addProperty("Input", gui_getInput, 0)
-                .addData("Data", &MenuProxy::data, true)
+                .addProperty("renderer", gui_menu_getRenderer, 0)
+                .addProperty("input", gui_getInput, 0)
+                .addData("data", &MenuProxy::data, true)
 
-                .addFunction("ShowMessage", &MenuProxy::ShowMessage)
+                //.addFunction("ShowMessage", &MenuProxy::ShowMessage)
             .endClass()
             .beginClass<ShadyLua::SceneProxy>("Scene")
-                .addProperty("Renderer", gui_scene_getRenderer, 0)
-                .addProperty("Input", gui_getInput, 0)
+                .addProperty("renderer", gui_scene_getRenderer, 0)
+                .addProperty("input", gui_getInput, 0)
+                .addData("data", &SceneProxy::data, true)
             .endClass()
             .beginClass<SokuLib::CDesign>("Design")
                 .addConstructor<void(*)(void), RefCountedPtr<SokuLib::CDesign> >()
-                .addFunction("SetColor", &SokuLib::CDesign::setColor)
-                .addFunction("LoadResource", &SokuLib::CDesign::loadResource)
-                .addFunction("Clear", &SokuLib::CDesign::clear)
-                .addFunction("GetGaugeById", gui_design_GetItemById<SokuLib::CDesign::Gauge>)
-                .addFunction("GetNumberById", gui_design_GetItemById<SokuLib::CDesign::Number>)
-                .addFunction("GetSpriteById", gui_design_GetItemById<SokuLib::CDesign::Sprite>)
-                .addFunction("GetObjectById", gui_design_GetItemById<SokuLib::CDesign::Object>)
-                .addFunction("GetItem", gui_design_GetItem)
-                .addFunction("GetItemCount", gui_design_GetItemCount)
+                .addFunction("setColor", &SokuLib::CDesign::setColor)
+                .addFunction("loadResource", &SokuLib::CDesign::loadResource)
+                .addFunction("clear", &SokuLib::CDesign::clear)
+                .addFunction("getItemById", gui_design_GetItemById)
+                .addFunction("getItem", gui_design_GetItem)
+                .addFunction("getItemCount", gui_design_GetItemCount)
+            .endClass()
+            .beginClass<SokuLib::CDesign::Object>("DesignObject")
+                .addData("x", &SokuLib::CDesign::Object::x2, true)
+                .addData("y", &SokuLib::CDesign::Object::y2, true)
+                .addData("isActive", &SokuLib::CDesign::Object::active, true)
+                .addFunction("setColor", &SokuLib::CDesign::Object::setColor)
+                .addFunction("getValueControl", gui_design_getValue)
+            .endClass()
+            .beginClass<ValueProxy>("DesignValue")
+                .addData("gauge", &ValueProxy::gauge, true)
+                .addData("number", &ValueProxy::number, true)
             .endClass()
             .beginClass<SokuLib::KeyInput>("KeyInput")
-                .addData("HAxis", &SokuLib::KeyInput::horizontalAxis, false)
-                .addData("VAxis", &SokuLib::KeyInput::verticalAxis, false)
-                .addData("A", &SokuLib::KeyInput::a, false)
-                .addData("B", &SokuLib::KeyInput::b, false)
-                .addData("C", &SokuLib::KeyInput::c, false)
-                .addData("D", &SokuLib::KeyInput::d, false)
-                .addData("Change", &SokuLib::KeyInput::changeCard, false)
-                .addData("Spell", &SokuLib::KeyInput::spellcard, false)
+                .addData("axisH", &SokuLib::KeyInput::horizontalAxis, false)
+                .addData("axisV", &SokuLib::KeyInput::verticalAxis, false)
+                .addData("a", &SokuLib::KeyInput::a, false)
+                .addData("b", &SokuLib::KeyInput::b, false)
+                .addData("c", &SokuLib::KeyInput::c, false)
+                .addData("d", &SokuLib::KeyInput::d, false)
+                .addData("change", &SokuLib::KeyInput::changeCard, false)
+                .addData("spell", &SokuLib::KeyInput::spellcard, false)
             .endClass()
             .beginClass<ShadyLua::SpriteProxy>("Sprite")
-                .addData("IsEnabled", &ShadyLua::SpriteProxy::isEnabled, true)
-                .addData("Position", &ShadyLua::SpriteProxy::pos, true)
-                .addData("Scale", &ShadyLua::SpriteProxy::scale, true)
-                .addData("Rotation", &ShadyLua::SpriteProxy::rotation, true)
-                .addFunction("SetColor", &ShadyLua::SpriteProxy::setColor)
-                .addFunction("SetTexture", &ShadyLua::SpriteProxy::setTexture3)
-                .addFunction("SetText", &ShadyLua::SpriteProxy::setText)
+                .addData("isEnabled", &ShadyLua::SpriteProxy::isEnabled, true)
+                .addData("position", &ShadyLua::SpriteProxy::pos, true)
+                .addData("scale", &ShadyLua::SpriteProxy::scale, true)
+                .addData("rotation", &ShadyLua::SpriteProxy::rotation, true)
+                .addFunction("setColor", &ShadyLua::SpriteProxy::setColor)
+                .addFunction("setTexture", &ShadyLua::SpriteProxy::setTexture3)
+                .addFunction("setText", &ShadyLua::SpriteProxy::setText)
             .endClass()
             .beginClass<ShadyLua::MenuCursorProxy>("Cursor")
-                .addData("Active", &MenuCursorProxy::active, true)
-                .addData("Index", &MenuCursorProxy::pos, true)
-                .addFunction("SetPosition", &MenuCursorProxy::setPosition)
-                .addFunction("SetRange", &MenuCursorProxy::setRange)
+                .addData("isActive", &MenuCursorProxy::active, true)
+                .addData("index", &MenuCursorProxy::pos, true)
+                .addFunction("setPosition", &MenuCursorProxy::setPosition)
+                .addFunction("setRange", &MenuCursorProxy::setRange)
+            .endClass()
+            .beginClass<ShadyLua::EffectManagerProxy>("EffectManager")
+                .addFunction("loadResource", &ShadyLua::EffectManagerProxy::loadPattern)
+                .addFunction("clear", &ShadyLua::EffectManagerProxy::ClearPattern)
+                .addFunction("clearEffects", &ShadyLua::EffectManagerProxy::ClearEffects)
             .endClass()
             .beginClass<ShadyLua::Renderer::Effect>("Effect")
-                .addData("IsEnabled", &ShadyLua::Renderer::Effect::isActive, true)
-                .addData("IsAlive", &ShadyLua::Renderer::Effect::unknown158, true)
-                .addData("Position", &ShadyLua::Renderer::Effect::position, true)
-                .addData("Speed", &ShadyLua::Renderer::Effect::speed, true)
-                .addData("Gravity", &ShadyLua::Renderer::Effect::gravity, true)
-                .addData("Center", &ShadyLua::Renderer::Effect::center, true)
+                .addData("isEnabled", &ShadyLua::Renderer::Effect::isActive, true)
+                .addData("isAlive", &ShadyLua::Renderer::Effect::unknown158, true)
+                .addData("position", &ShadyLua::Renderer::Effect::position, true)
+                .addData("speed", &ShadyLua::Renderer::Effect::speed, true)
+                .addData("gravity", &ShadyLua::Renderer::Effect::gravity, true)
+                .addData("center", &ShadyLua::Renderer::Effect::center, true)
                 // TODO render options
-                .addFunction("SetActionSequence", &ShadyLua::Renderer::Effect::setActionSequence)
-                .addFunction("SetAction", &ShadyLua::Renderer::Effect::setAction)
-                .addFunction("SetSequence", &ShadyLua::Renderer::Effect::setSequence)
-                .addFunction("ResetSequence", &ShadyLua::Renderer::Effect::resetSequence)
-                .addFunction("PrevSequence", &ShadyLua::Renderer::Effect::prevSequence)
-                .addFunction("NextSequence", &ShadyLua::Renderer::Effect::nextSequence)
-                .addFunction("SetPose", &ShadyLua::Renderer::Effect::setPose)
-                .addFunction("PrevPose", &ShadyLua::Renderer::Effect::prevPose)
-                .addFunction("NextPose", &ShadyLua::Renderer::Effect::nextPose)
+                .addFunction("setActionSequence", &ShadyLua::Renderer::Effect::setActionSequence)
+                .addFunction("setAction", &ShadyLua::Renderer::Effect::setAction)
+                .addFunction("setSequence", &ShadyLua::Renderer::Effect::setSequence)
+                .addFunction("resetSequence", &ShadyLua::Renderer::Effect::resetSequence)
+                .addFunction("prevSequence", &ShadyLua::Renderer::Effect::prevSequence)
+                .addFunction("nextSequence", &ShadyLua::Renderer::Effect::nextSequence)
+                .addFunction("setPose", &ShadyLua::Renderer::Effect::setPose)
+                .addFunction("prevPose", &ShadyLua::Renderer::Effect::prevPose)
+                .addFunction("nextPose", &ShadyLua::Renderer::Effect::nextPose)
             .endClass()
             .beginClass<ShadyLua::FontProxy>("Font")
                 .addConstructor<void(*)(void), RefCountedPtr<ShadyLua::FontProxy>>()
-                .addFunction("SetFontName", &ShadyLua::FontProxy::setFontName)
-                .addFunction("SetColor", &ShadyLua::FontProxy::setColor)
-                .addProperty("Height", &ShadyLua::FontProxy::height, true)
-                .addProperty("Weight", &ShadyLua::FontProxy::weight, true)
-                .addProperty("Italic", &ShadyLua::FontProxy::italic, true)
-                .addProperty("Shadow", &ShadyLua::FontProxy::shadow, true)
-                .addProperty("Wrap", &ShadyLua::FontProxy::useOffset, true)
-                .addProperty("OffsetX", &ShadyLua::FontProxy::offsetX, true)
-                .addProperty("OffsetY", &ShadyLua::FontProxy::offsetY, true)
-                .addProperty("SpacingX", &ShadyLua::FontProxy::charSpaceX, true)
-                .addProperty("SpacingY", &ShadyLua::FontProxy::charSpaceY, true)
+                .addFunction("setFontName", &ShadyLua::FontProxy::setFontName)
+                .addFunction("setColor", &ShadyLua::FontProxy::setColor)
+                .addProperty("height", &ShadyLua::FontProxy::height, true)
+                .addProperty("weight", &ShadyLua::FontProxy::weight, true)
+                .addProperty("italic", &ShadyLua::FontProxy::italic, true)
+                .addProperty("shadow", &ShadyLua::FontProxy::shadow, true)
+                .addProperty("wrap", &ShadyLua::FontProxy::useOffset, true)
+                .addProperty("offsetX", &ShadyLua::FontProxy::offsetX, true)
+                .addProperty("offsetY", &ShadyLua::FontProxy::offsetY, true)
+                .addProperty("spacingX", &ShadyLua::FontProxy::charSpaceX, true)
+                .addProperty("spacingY", &ShadyLua::FontProxy::charSpaceY, true)
             .endClass()
         .endNamespace()
     ;

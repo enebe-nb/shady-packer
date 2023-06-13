@@ -10,6 +10,7 @@
 namespace {
 	const BYTE TARGET_HASH[16] = { 0xdf, 0x35, 0xd1, 0xfb, 0xc7, 0xb5, 0x83, 0x31, 0x7a, 0xda, 0xbe, 0x8c, 0xd9, 0xf5, 0x3b, 0x2e };
 	bool _initialized = false, _initialized2 = false;
+	auto __onRender = reinterpret_cast<bool (__fastcall *)(void* renderer)>(0x00444790);
 }
 bool iniAutoUpdate;
 bool iniUseLoadLock;
@@ -52,15 +53,22 @@ extern "C" __declspec(dllexport) bool CheckVersion(const BYTE hash[16]) {
 	return ::memcmp(TARGET_HASH, hash, sizeof TARGET_HASH) == 0;
 }
 
+static bool __fastcall onRender(void* renderer) {
+    bool ret = __onRender(renderer);
+    Logger::Render();
+    return ret;
+}
+
 extern "C" __declspec(dllexport) bool Initialize(HMODULE hMyModule, HMODULE hParentModule) {
 	if (!_initialized) _initialized = true;
 	else return FALSE;
 
 #ifdef _DEBUG
-	Logger::Initialize(Logger::LOG_ALL);
+	Logger::Initialize(Logger::LOG_ALL, "shady-loader.log");
 #else
 	Logger::Initialize(Logger::LOG_ERROR);
 #endif
+	__onRender = SokuLib::TamperNearJmpOpr(0x0043dda6, onRender);
 	GetModulePath(hMyModule, ModPackage::basePath);
 	ModPackage::basePackage.reset(new ShadyCore::PackageEx(ModPackage::basePath));
 	LoadSettings();

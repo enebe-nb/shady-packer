@@ -68,7 +68,7 @@ int ShadyLua::LuaScript::load(const char* filename, const char* mode) {
 }
 
 ShadyLua::LuaScriptFS::LuaScriptFS(const std::filesystem::path& basePath)
-    : LuaScript(this, LuaScriptFS::fnOpen, LuaScriptFS::fnClose), basePath(basePath) {
+    : LuaScript(this, LuaScriptFS::fnOpen, LuaScriptFS::fnClose), basePath(basePath), package(basePath) {
     LualibLoader(L, &package);
 }
 

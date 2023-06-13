@@ -91,6 +91,10 @@ if(SHADY_ENABLE_MODULE)
     set(LUABRIDGE_TESTING OFF)
     add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/LuaBridge EXCLUDE_FROM_ALL)
 
+    # Lua Extra Libraries
+    add_git_module(luafilesystem https://github.com/lunarmodules/luafilesystem v1_8_0)
+    add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/luafilesystem EXCLUDE_FROM_ALL)
+
     # SokuLib Library
     add_git_module(SokuLib https://github.com/enebe-nb/SokuLib dev)
     add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/SokuLib EXCLUDE_FROM_ALL)

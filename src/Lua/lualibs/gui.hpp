@@ -23,12 +23,17 @@ namespace ShadyLua {
         void setRange(int x, int y, int dx = 0, int dy = 0);
     };
 
+    class EffectManagerProxy : public SokuLib::v2::EffectManager_Select {
+    public:
+        int loadPattern(lua_State* L);
+    };
+
     class Renderer {
     public:
         std::deque<MenuCursorProxy> cursors;
         SokuLib::CDesign guiSchema;
         std::multimap<int, SpriteProxy> sprites;
-        SokuLib::v2::EffectManager_Select effects;
+        EffectManagerProxy effects;
         std::set<char> activeLayers;
         bool isActive = true;
 
@@ -37,7 +42,6 @@ namespace ShadyLua {
         void update();
         void render();
 
-        inline void LoadEffectPattern(const char* filename, int reserve) { effects.LoadPattern(filename, reserve); }
         int createSprite(lua_State* L);
         int createText(lua_State* L);
         int createEffect(lua_State* L);
@@ -79,12 +83,12 @@ namespace ShadyLua {
 
     class FontProxy : public SokuLib::FontDescription {
     public:
-        SokuLib::SWRFont* handles = 0;
+        SokuLib::SWRFont* handle = 0;
 
-        inline FontProxy() { /* TODO defaults */ }
-        inline ~FontProxy() { if (handles) { handles->destruct(); delete handles; } handles = 0; }
+        FontProxy();
+        inline ~FontProxy() { if (handle) { handle->destruct(); delete handle; } handle = 0; }
         inline void setFontName(const char* name) { strcpy(faceName, name); }
         inline void setColor(int c1, int c2) { r1 = c1 >> 16; g1 = c1 >> 8; b1 = c1; r2 = c2 >> 16; g2 = c2 >> 8; b2 = c2; }
-        inline void prepare() { if (!handles) { handles = new SokuLib::SWRFont(); handles->create(); }  handles->setIndirect(*this); }
+        inline void prepare() { if (!handle) { handle = new SokuLib::SWRFont(); handle->create(); }  handle->setIndirect(*this); }
     };
 }

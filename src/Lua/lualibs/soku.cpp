@@ -14,7 +14,7 @@
 
 using namespace luabridge;
 
-std::unique_ptr<ShadyLua::Hook> ShadyLua::hooks[Hook::Type::Count];
+std::unordered_map<DWORD, std::unique_ptr<ShadyLua::Hook>> ShadyLua::hooks;
 
 namespace {
     enum Event {
@@ -44,7 +44,7 @@ namespace {
 
 // ---- ReadyHook ----
 static bool __fastcall ReadyHook_replFn(void* unknown, int unused, void* data);
-using ReadyHook = ShadyLua::CallHook<0x007fb871, ShadyLua::Hook::Type::READY, ReadyHook_replFn>;
+using ReadyHook = ShadyLua::CallHook<0x007fb871, ReadyHook_replFn>;
 ReadyHook::typeFn ReadyHook::origFn = reinterpret_cast<ReadyHook::typeFn>(0x00407970);
 static bool __fastcall ReadyHook_replFn(void* unknown, int unused, void* data) {
     auto ret = ReadyHook::origFn(unknown, unused, data);
@@ -65,7 +65,7 @@ static bool __fastcall ReadyHook_replFn(void* unknown, int unused, void* data) {
 
 // ---- PlayerInfoHook ----
 static void __fastcall PlayerInfoHook_replFn(void* unknown, int unused, int index, const SokuLib::PlayerInfo& info);
-using PlayerInfoHook = ShadyLua::CallHook<0x0046eb1b, ShadyLua::Hook::Type::PLAYER_INFO, PlayerInfoHook_replFn>;
+using PlayerInfoHook = ShadyLua::CallHook<0x0046eb1b, PlayerInfoHook_replFn>;
 PlayerInfoHook::typeFn PlayerInfoHook::origFn = reinterpret_cast<PlayerInfoHook::typeFn>(0x0046da40);
 static void __fastcall PlayerInfoHook_replFn(void* unknown, int unused, int index, const SokuLib::PlayerInfo& info) {
     std::shared_lock guard(eventMapLock);
@@ -113,7 +113,7 @@ namespace {
 
     static void __fastcall scene_onLeave(SokuLib::IScene* scene, int unused, int sceneId) {
         auto& vt = scene_hookedVT[*(int*)scene];
-        reinterpret_cast<void(__fastcall*)(SokuLib::IScene*, int, int)>(vt[2])(scene, unused, sceneId);
+        reinterpret_cast<void(__fastcall*)(SokuLib::IScene*, int, int)>(vt[5])(scene, unused, sceneId);
 
         auto range = ShadyLua::SceneProxy::listeners.equal_range(scene);
         for (auto i = range.first; i != range.second; ++i) {
@@ -140,7 +140,7 @@ namespace {
 
 // ---- SceneHook (Change) ----
 static SokuLib::IScene* __fastcall SceneHook_replFn(void* sceneManager, int unused, int sceneId);
-using SceneHook = ShadyLua::AddressHook<0x00861af0, ShadyLua::Hook::Type::SCENE_CHANGE, SceneHook_replFn>;
+using SceneHook = ShadyLua::AddressHook<0x00861af0, SceneHook_replFn>;
 SceneHook::typeFn SceneHook::origFn = reinterpret_cast<SceneHook::typeFn>(0x0041e420);
 static SokuLib::IScene* __fastcall SceneHook_replFn(void* sceneManager, int unused, int sceneId) {
     SokuLib::IScene* scene = SceneHook::origFn(sceneManager, unused, sceneId);
@@ -177,12 +177,19 @@ static SokuLib::IScene* __fastcall SceneHook_replFn(void* sceneManager, int unus
 
 void ShadyLua::RemoveEvents(LuaScript* script) {
     RemoveLoaderEvents(script);
-    std::unique_lock lock(eventMapLock);
+    { std::unique_lock lock(eventMapLock);
     for (auto& hooks : eventMap) {
         auto i = hooks.begin(); while (i != hooks.end()) {
             if (i->second == script) i = hooks.erase(i);
             else ++i;
         }
+    } }
+
+    auto i = ShadyLua::SceneProxy::listeners.begin(); while(i != ShadyLua::SceneProxy::listeners.end()) {
+        if (i->second->script == script) {
+            delete i->second;
+            i = ShadyLua::SceneProxy::listeners.erase(i);
+        } else ++i;
     }
 }
 
@@ -238,77 +245,82 @@ void ShadyLua::LualibSoku(lua_State* L) {
     getGlobalNamespace(L)
         .beginNamespace("soku")
             .beginNamespace("BattleEvent")
-                .addVariable("GameStart",       enumMap<0>(), false)
-                .addVariable("RoundPreStart",   enumMap<1>(), false)
-                .addVariable("RoundStart",      enumMap<2>(), false)
-                .addVariable("RoundEnd",        enumMap<3>(), false)
-                .addVariable("GameEnd",         enumMap<5>(), false)
-                .addVariable("EndScreen",       enumMap<6>(), false)
-                .addVariable("ResultScreen",    enumMap<7>(), false)
+                .addConstant("GameStart",       0)
+                .addConstant("RoundPreStart",   1)
+                .addConstant("RoundStart",      2)
+                .addConstant("RoundEnd",        3)
+                .addConstant("GameEnd",         5)
+                .addConstant("EndScreen",       6)
+                .addConstant("ResultScreen",    7)
             .endNamespace()
             .beginNamespace("Character")
-                .addVariable("Reimu",     enumMap<0>(), false)
-                .addVariable("Marisa",    enumMap<1>(), false)
-                .addVariable("Sakuya",    enumMap<2>(), false)
-                .addVariable("Alice",     enumMap<3>(), false)
-                .addVariable("Patchouli", enumMap<4>(), false)
-                .addVariable("Youmu",     enumMap<5>(), false)
-                .addVariable("Remilia",   enumMap<6>(), false)
-                .addVariable("Yuyuko",    enumMap<7>(), false)
-                .addVariable("Yukari",    enumMap<8>(), false)
-                .addVariable("Suika",     enumMap<9>(), false)
-                .addVariable("Reisen",    enumMap<10>(), false)
-                .addVariable("Aya",       enumMap<11>(), false)
-                .addVariable("Komachi",   enumMap<12>(), false)
-                .addVariable("Iku",       enumMap<13>(), false)
-                .addVariable("Tenshi",    enumMap<14>(), false)
-                .addVariable("Sanae",     enumMap<15>(), false)
-                .addVariable("Cirno",     enumMap<16>(), false)
-                .addVariable("Meiling",   enumMap<17>(), false)
-                .addVariable("Utsuho",    enumMap<18>(), false)
-                .addVariable("Suwako",    enumMap<19>(), false)
-                .addVariable("Random",    enumMap<20>(), false)
-                .addVariable("Namazu",    enumMap<21>(), false)
+                .addConstant("Reimu",     SokuLib::Character::CHARACTER_REIMU)
+                .addConstant("Marisa",    SokuLib::Character::CHARACTER_MARISA)
+                .addConstant("Sakuya",    SokuLib::Character::CHARACTER_SAKUYA)
+                .addConstant("Alice",     SokuLib::Character::CHARACTER_ALICE)
+                .addConstant("Patchouli", SokuLib::Character::CHARACTER_PATCHOULI)
+                .addConstant("Youmu",     SokuLib::Character::CHARACTER_YOUMU)
+                .addConstant("Remilia",   SokuLib::Character::CHARACTER_REMILIA)
+                .addConstant("Yuyuko",    SokuLib::Character::CHARACTER_YUYUKO)
+                .addConstant("Yukari",    SokuLib::Character::CHARACTER_YUKARI)
+                .addConstant("Suika",     SokuLib::Character::CHARACTER_SUIKA)
+                .addConstant("Reisen",    SokuLib::Character::CHARACTER_REISEN)
+                .addConstant("Aya",       SokuLib::Character::CHARACTER_AYA)
+                .addConstant("Komachi",   SokuLib::Character::CHARACTER_KOMACHI)
+                .addConstant("Iku",       SokuLib::Character::CHARACTER_IKU)
+                .addConstant("Tenshi",    SokuLib::Character::CHARACTER_TENSHI)
+                .addConstant("Sanae",     SokuLib::Character::CHARACTER_SANAE)
+                .addConstant("Cirno",     SokuLib::Character::CHARACTER_CIRNO)
+                .addConstant("Meiling",   SokuLib::Character::CHARACTER_MEILING)
+                .addConstant("Utsuho",    SokuLib::Character::CHARACTER_UTSUHO)
+                .addConstant("Suwako",    SokuLib::Character::CHARACTER_SUWAKO)
+                .addConstant("Random",    SokuLib::Character::CHARACTER_RANDOM)
+                .addConstant("Namazu",    SokuLib::Character::CHARACTER_NAMAZU)
             .endNamespace()
             .beginNamespace("Scene")
-                .addVariable("Logo",            enumMap<0>(), false)
-                .addVariable("Opening",         enumMap<1>(), false)
-                .addVariable("Title",           enumMap<2>(), false)
-                .addVariable("Select",          enumMap<3>(), false)
-                .addVariable("Battle",          enumMap<5>(), false)
-                .addVariable("SelectSV",        enumMap<8>(), false)
-                .addVariable("SelectCL",        enumMap<9>(), false)
-                .addVariable("LoadingSV",       enumMap<10>(), false)
-                .addVariable("LoadingCL",       enumMap<11>(), false)
-                .addVariable("LoadingWatch",    enumMap<12>(), false)
-                .addVariable("BattleSV",        enumMap<13>(), false)
-                .addVariable("BattleCL",        enumMap<14>(), false)
-                .addVariable("BattleWatch",     enumMap<15>(), false)
-                .addVariable("SelectStage",     enumMap<16>(), false)
-                .addVariable("Ending",          enumMap<20>(), false)
-                .addVariable("Submenu",         enumMap<21>(), false)
+                .addConstant("Logo",            (int)SokuLib::Scene::SCENE_LOGO)
+                .addConstant("Opening",         (int)SokuLib::Scene::SCENE_OPENING)
+                .addConstant("Title",           (int)SokuLib::Scene::SCENE_TITLE)
+                .addConstant("Select",          (int)SokuLib::Scene::SCENE_SELECT)
+                .addConstant("Battle",          (int)SokuLib::Scene::SCENE_BATTLE)
+                .addConstant("Loading",         (int)SokuLib::Scene::SCENE_LOADING)
+                .addConstant("SelectSV",        (int)SokuLib::Scene::SCENE_SELECTSV)
+                .addConstant("SelectCL",        (int)SokuLib::Scene::SCENE_SELECTCL)
+                .addConstant("LoadingSV",       (int)SokuLib::Scene::SCENE_LOADINGSV)
+                .addConstant("LoadingCL",       (int)SokuLib::Scene::SCENE_LOADINGCL)
+                .addConstant("LoadingWatch",    (int)SokuLib::Scene::SCENE_LOADINGWATCH)
+                .addConstant("BattleSV",        (int)SokuLib::Scene::SCENE_BATTLESV)
+                .addConstant("BattleCL",        (int)SokuLib::Scene::SCENE_BATTLECL)
+                .addConstant("BattleWatch",     (int)SokuLib::Scene::SCENE_BATTLEWATCH)
+                .addConstant("SelectStage",     (int)SokuLib::Scene::SCENE_SELECTSCENARIO)
+                .addConstant("Ending",          (int)SokuLib::Scene::SCENE_ENDING)
+                //.addVariable("Submenu",         21)
             .endNamespace()
             .beginNamespace("Stage")
-                .addVariable("HakureiShrine",           enumMap<0>(), false)
-                .addVariable("ForestOfMagic",           enumMap<1>(), false)
-                .addVariable("CreekOfGenbu",            enumMap<2>(), false)
-                .addVariable("YoukaiMountain",          enumMap<3>(), false)
-                .addVariable("MysteriousSeaOfClouds",   enumMap<4>(), false)
-                .addVariable("BhavaAgra",               enumMap<5>(), false)
-                .addVariable("RepairedHakureiShrine",   enumMap<10>(), false)
-                .addVariable("KirisameMagicShop",       enumMap<11>(), false)
-                .addVariable("SDMClockTower",           enumMap<12>(), false)
-                .addVariable("ForestOfDolls",           enumMap<13>(), false)
-                .addVariable("SDMLibrary",              enumMap<14>(), false)
-                .addVariable("Netherworld",             enumMap<15>(), false)
-                .addVariable("SDMFoyer",                enumMap<16>(), false)
-                .addVariable("HakugyokurouSnowyGarden", enumMap<17>(), false)
-                .addVariable("BambooForestOfTheLost",   enumMap<18>(), false)
-                .addVariable("ShoreOfMistyLake",        enumMap<30>(), false)
-                .addVariable("MoriyaShrine",            enumMap<31>(), false)
-                .addVariable("MouthOfGeyser",           enumMap<32>(), false)
-                .addVariable("CatwalkInGeyser",         enumMap<33>(), false)
-                .addVariable("FusionReactorCore",       enumMap<34>(), false)
+                .addConstant("HakureiShrine",           SokuLib::Stage::STAGE_HAKUREI_SHRINE_BROKEN)
+                .addConstant("ForestOfMagic",           SokuLib::Stage::STAGE_FOREST_OF_MAGIC)
+                .addConstant("CreekOfGenbu",            SokuLib::Stage::STAGE_CREEK_OF_GENBU)
+                .addConstant("YoukaiMountain",          SokuLib::Stage::STAGE_YOUKAI_MOUNTAIN)
+                .addConstant("MysteriousSeaOfClouds",   SokuLib::Stage::STAGE_MYSTERIOUS_SEA_OF_CLOUD)
+                .addConstant("BhavaAgra",               SokuLib::Stage::STAGE_BHAVA_AGRA)
+                .addConstant("Space",                   SokuLib::Stage::STAGE_SPACE)
+                .addConstant("RepairedHakureiShrine",   SokuLib::Stage::STAGE_HAKUREI_SHRINE)
+                .addConstant("KirisameMagicShop",       SokuLib::Stage::STAGE_KIRISAME_MAGIC_SHOP)
+                .addConstant("SDMClockTower",           SokuLib::Stage::STAGE_SCARLET_DEVIL_MANSION_CLOCK_TOWER)
+                .addConstant("ForestOfDolls",           SokuLib::Stage::STAGE_FOREST_OF_DOLLS)
+                .addConstant("SDMLibrary",              SokuLib::Stage::STAGE_SCARLET_DEVIL_MANSION_LIBRARY)
+                .addConstant("Netherworld",             SokuLib::Stage::STAGE_NETHERWORLD)
+                .addConstant("SDMFoyer",                SokuLib::Stage::STAGE_SCARLET_DEVIL_MANSION_FOYER)
+                .addConstant("HakugyokurouSnowyGarden", SokuLib::Stage::STAGE_HAKUGYOKUROU_SNOWY_GARDEN)
+                .addConstant("BambooForestOfTheLost",   SokuLib::Stage::STAGE_BAMBOO_FOREST_OF_THE_LOST)
+                .addConstant("ShoreOfMistyLake",        SokuLib::Stage::STAGE_SHORE_OF_MISTY_LAKE)
+                .addConstant("MoriyaShrine",            SokuLib::Stage::STAGE_MORIYA_SHRINE)
+                .addConstant("MouthOfGeyser",           SokuLib::Stage::STAGE_MOUTH_OF_GEYSER)
+                .addConstant("CatwalkInGeyser",         SokuLib::Stage::STAGE_CATWALK_OF_GEYSER)
+                .addConstant("FusionReactorCore",       SokuLib::Stage::STAGE_FUSION_REACTOR_CORE)
+                .addConstant("SDMClockTowerBG",         SokuLib::Stage::STAGE_SCARLET_DEVIL_MANSION_CLOCK_TOWER_SKETCH_BG)
+                .addConstant("SDMClockTowerBlurry",     SokuLib::Stage::STAGE_SCARLET_DEVIL_MANSION_CLOCK_TOWER_BLURRY)
+                .addConstant("SDMClockTowerSketch",     SokuLib::Stage::STAGE_SCARLET_DEVIL_MANSION_CLOCK_TOWER_SKETCH)
             .endNamespace()
             .beginClass<SokuLib::PlayerInfo>("PlayerInfo")
                 .addProperty("character", &SokuLib::PlayerInfo::character, false)
@@ -317,18 +329,20 @@ void ShadyLua::LualibSoku(lua_State* L) {
                 .addProperty("deck", &SokuLib::PlayerInfo::deck, false)
                 // .addFunction("PlaySE", soku_Player_PlaySE) // TODO something does not match with this
             .endClass()
-            .addProperty("IsReady", (bool*)(0x89ff90 + 0x4c), false)
+            .addProperty("isReady", (bool*)(0x89ff90 + 0x4c), false)
             .addVariable("P1", &SokuLib::leftPlayerInfo) // TODO something does not match with this
             .addVariable("P2", &SokuLib::rightPlayerInfo) // TODO something does not match with this
-            .addVariable("SceneId", &SokuLib::sceneId, false)
-            .addFunction("CheckFKey", soku_checkFKey)
-            .addFunction("PlaySE", soku_PlaySE)
+            .addVariable("player1info", &SokuLib::leftPlayerInfo) // TODO something does not match with this
+            .addVariable("player2info", &SokuLib::rightPlayerInfo) // TODO something does not match with this
+            .addVariable("sceneId", &SokuLib::sceneId, false)
+            .addFunction("checkFKey", soku_checkFKey)
+            .addFunction("playSE", soku_PlaySE)
+
             .addCFunction("SubscribePlayerInfo", soku_SubscribeEvent<Event::PLAYERINFO>)
             .addCFunction("SubscribeSceneChange", soku_SubscribeEvent<Event::SCENECHANGE>)
             .addCFunction("SubscribeReady", soku_SubscribeEvent<Event::READY>)
             .addFunction("UnsubscribeEvent", soku_UnsubscribeEvent)
             .beginClass<SokuLib::Vector2f>("Vector2f")
-                .addConstructor<void(*)(void)>()
                 .addData("x", &SokuLib::Vector2f::x, true)
                 .addData("y", &SokuLib::Vector2f::y, true)
             .endClass()

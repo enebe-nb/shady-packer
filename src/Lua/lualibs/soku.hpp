@@ -6,22 +6,18 @@
 #include "../../Core/resource/readerwriter.hpp"
 #include <LuaBridge/RefCountedObject.h>
 #include <SokuLib.hpp>
+#include <unordered_map>
 
 namespace ShadyLua {
     struct Hook {
-        enum Type {
-            FILE_LOADER, READY, PLAYER_INFO, SCENE_CHANGE,
-            Count
-        };
-
         virtual ~Hook() = default;
-    }; extern std::unique_ptr<Hook> hooks[Hook::Type::Count];
+    }; extern std::unordered_map<DWORD, std::unique_ptr<Hook>> hooks;
 
-    template<DWORD addr, Hook::Type type, auto replFn>
+    template<DWORD addr, auto replFn>
     struct CallHook : Hook {
         using typeFn = decltype(replFn);
         static typeFn origFn;
-        static constexpr Type hookType = type;
+        static constexpr DWORD ADDR = addr;
 
         inline CallHook() {
             DWORD prot; VirtualProtect((LPVOID)addr, 5, PAGE_EXECUTE_WRITECOPY, &prot);
@@ -36,11 +32,11 @@ namespace ShadyLua {
         }
     };
 
-    template<DWORD addr, Hook::Type type, auto replFn>
+    template<DWORD addr, auto replFn>
     struct AddressHook : Hook {
         using typeFn = decltype(replFn);
         static typeFn origFn;
-        static constexpr Type hookType = type;
+        static constexpr DWORD ADDR = addr;
 
         inline AddressHook() {
             DWORD prot; VirtualProtect((LPVOID)addr, 4, PAGE_EXECUTE_WRITECOPY, &prot);
@@ -58,7 +54,7 @@ namespace ShadyLua {
     template<typename hookClass>
     inline void initHook() {
         static_assert(std::is_base_of<ShadyLua::Hook, hookClass>::value, "hookType not derived from ShadyLua::Hook");
-        if (!ShadyLua::hooks[hookClass::hookType]) ShadyLua::hooks[hookClass::hookType].reset(new hookClass());
+        if (!ShadyLua::hooks[hookClass::ADDR]) ShadyLua::hooks[hookClass::ADDR].reset(new hookClass());
     }
 
     class LuaScript;

@@ -10,7 +10,8 @@ namespace {
     SokuLib::SWRFont* consoleFont = 0;
     SokuLib::Sprite consoleView;
     std::mutex consoleLock;
-    int logFlags, logTimeout = 0;
+    std::time_t timerStart = 0;
+    int logFlags = 0;
     bool isDirty = false;
 
     std::list<std::string> logContent;
@@ -56,7 +57,7 @@ void Logger::Clear() {
 void Logger::Render() {
     if (logContent.empty()) return;
 
-    std::lock_guard guard(consoleLock);
+    { std::lock_guard guard(consoleLock);
     if (isDirty) {
         if (!consoleFont) consoleFont = createFont();
         isDirty = false;
@@ -69,11 +70,16 @@ void Logger::Render() {
         int texture, width, height;
         int* x = SokuLib::textureMgr.createTextTexture(&texture, content.c_str(), *consoleFont, 632, 472, &width, &height);
         consoleView.setTexture2(texture, 0, 0, width, height);
-    }
+    } }
 
-    if (logTimeout > 0) {
-        consoleView.render(4, 476 - consoleView.size.y);
-        if (--logTimeout == 0) logContent.clear();
+    if (timerStart != 0) {
+        std::time_t timerEnd; std::time(&timerEnd);
+        if (std::difftime(timerEnd, timerStart) < 8.) {
+            consoleView.render(4, 476 - consoleView.size.y);
+        } else {
+            Clear();
+            timerStart = 0;
+        }
     }
 }
 
@@ -93,7 +99,7 @@ void Logger::Log(int type, const std::string& text) {
     std::lock_guard guard(consoleLock);
     logContent.push_back(getTypeName(type) + ": " + text);
     if (logFile.is_open()) logFile << getTypeName(type) + ": " + text << std::endl;
-    isDirty = true; logTimeout = 2000; // TODO use time instead
+    isDirty = true; std::time(&timerStart);
 
     // size limiting
     while(logContent.size() > 10) logContent.pop_front();

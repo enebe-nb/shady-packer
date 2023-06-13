@@ -25,7 +25,7 @@ namespace {
 
 // ---- LoaderHook ---
 static void* __stdcall LoaderHook_replFn(const char* filename, unsigned int* _size, unsigned int* _offset);
-using LoaderHook = ShadyLua::CallHook<0x0040d227, ShadyLua::Hook::Type::FILE_LOADER, LoaderHook_replFn>;
+using LoaderHook = ShadyLua::CallHook<0x0040d227, LoaderHook_replFn>;
 LoaderHook::typeFn LoaderHook::origFn = reinterpret_cast<LoaderHook::typeFn>(0x0041c080);
 static void* __stdcall LoaderHook_replFn(const char* filename, unsigned int* _size, unsigned int* _offset) {
 	int esi_value;
@@ -133,19 +133,19 @@ static bool loader_removePackage(int childId, lua_State* L) {
 
 void ShadyLua::LualibLoader(lua_State* L, ShadyCore::PackageEx* package) {
 	packageMap[ShadyLua::ScriptMap[L]] = package;
-	// TODO check lua require() behavior
-	// auto package = luabridge::getGlobal(L, "package");
-	// package["cpath"] = package["cpath"].tostring()
-	//     + ";" + basePath.string() + "\\?.dll";
-	// package["path"] = package["path"].tostring()
-	//     + ";" + basePath.string() + "\\?.lua"
-	//     + ";" + basePath.string() + "\\?\\init.lua"
-	//     + ";" + basePath.string() + "\\lua\\?.lua"
-	//     + ";" + basePath.string() + "\\lua\\?\\init.lua";
+	auto p = luabridge::getGlobal(L, "package");
+	p["cpath"] = p["cpath"].tostring()
+	    + ";" + package->getBasePath().string() + "\\?.dll";
+	p["path"] = p["path"].tostring()
+	    + ";" + package->getBasePath().string() + "\\?.lua"
+	    + ";" + package->getBasePath().string() + "\\?\\init.lua"
+	    + ";" + package->getBasePath().string() + "\\lua\\?.lua"
+	    + ";" + package->getBasePath().string() + "\\lua\\?\\init.lua";
 	initHook<LoaderHook>();
 
 	getGlobalNamespace(L)
 		.beginNamespace("loader")
+			.addConstant("basePath", package->getBasePath().string())
 			.addCFunction("addData", loader_addData)
 			.addFunction("addResource", loader_addResource)
 			.addFunction("addAlias", loader_addAlias)

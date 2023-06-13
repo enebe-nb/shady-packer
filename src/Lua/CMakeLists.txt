@@ -21,5 +21,6 @@ target_link_libraries(shady-lualib shady-core liblua LuaBridge SokuLib)
 add_library(shady-lua MODULE ${SRC_LUA_Module})
 target_link_libraries(shady-lua -static shady-lualib)
 set_target_properties(shady-lua PROPERTIES PREFIX "")
+add_dependencies(shady-lua lfs)
 
 install(TARGETS shady-lua LIBRARY DESTINATION soku-modules)
