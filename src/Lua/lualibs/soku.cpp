@@ -214,6 +214,10 @@ static int soku_SubscribeEvent(lua_State* L) {
 
     // iterators valid on insertion
     eventMap[eventType].insert(std::make_pair(callback, ShadyLua::ScriptMap[L]));
+    if constexpr(eventType == Event::READY) if (*(bool*)(0x89ff90 + 0x4c)) {
+        lua_rawgeti(L, LUA_REGISTRYINDEX, callback);
+        if (lua_pcall(L, 0, 0, 0)) { Logger::Error(lua_tostring(L, -1)); lua_pop(L, 1); } 
+    }
     lua_pushnumber(L, callback);
     return 1;
 }

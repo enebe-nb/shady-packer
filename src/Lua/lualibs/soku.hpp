@@ -7,6 +7,7 @@
 #include <LuaBridge/RefCountedObject.h>
 #include <SokuLib.hpp>
 #include <unordered_map>
+#include <lua.h>
 
 namespace ShadyLua {
     struct Hook {
@@ -72,5 +73,6 @@ namespace ShadyLua {
 		inline ResourceProxy(ShadyCore::FileType::Type type)
 			: resource(ShadyCore::createResource(type)), type(type), isOwner(true) {}
 		inline ~ResourceProxy() { if(isOwner) ShadyCore::destroyResource(type, resource); }
+		void push(lua_State* L);
 	};
 }

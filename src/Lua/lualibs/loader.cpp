@@ -43,6 +43,7 @@ static void* __stdcall LoaderHook_replFn(const char* filename, unsigned int* _si
 			ShadyCore::convertResource(inputType.type,
 							inputType.format, iter.open(),
 							outputType.format, *stream);
+			iter.close();
 			*_size = iter->second->getSize();
 			*_offset = 0x40000000; // just to hold a value
 			*(int*)esi_value = ShadyCore::stream_reader_vtbl;
