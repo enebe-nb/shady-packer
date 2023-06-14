@@ -134,14 +134,6 @@ static bool loader_removePackage(int childId, lua_State* L) {
 
 void ShadyLua::LualibLoader(lua_State* L, ShadyCore::PackageEx* package) {
 	packageMap[ShadyLua::ScriptMap[L]] = package;
-	auto p = luabridge::getGlobal(L, "package");
-	p["cpath"] = p["cpath"].tostring()
-	    + ";" + package->getBasePath().string() + "\\?.dll";
-	p["path"] = p["path"].tostring()
-	    + ";" + package->getBasePath().string() + "\\?.lua"
-	    + ";" + package->getBasePath().string() + "\\?\\init.lua"
-	    + ";" + package->getBasePath().string() + "\\lua\\?.lua"
-	    + ";" + package->getBasePath().string() + "\\lua\\?\\init.lua";
 	initHook<LoaderHook>();
 
 	getGlobalNamespace(L)

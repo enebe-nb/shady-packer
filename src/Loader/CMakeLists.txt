@@ -21,7 +21,7 @@ target_compile_definitions(benchmark PUBLIC $<$<CONFIG:Debug>:_ITERATOR_DEBUG_LE
 add_library(shady-loader MODULE ${SRC_LOADER_Common} ${SRC_LOADER_Loader})
 target_link_libraries(shady-loader -static shady-core shady-lualib libcurl json)
 set_target_properties(shady-loader PROPERTIES PREFIX "")
-install(TARGETS shady-loader LIBRARY DESTINATION soku-modules)
+install(TARGETS shady-loader LIBRARY DESTINATION modules/shady-loader)
 
 file(GLOB SRC_LOADER_Pack ${CMAKE_CURRENT_SOURCE_DIR}/data/*)
 add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/shady-loader.dat"
@@ -33,4 +33,4 @@ add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/shady-loader.dat"
 )
 add_custom_target(shady-loader-pack DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/shady-loader.dat" shady-cli)
 add_dependencies(shady-loader shady-loader-pack)
-install(FILES "${CMAKE_CURRENT_BINARY_DIR}/shady-loader.dat" DESTINATION soku-modules)
+install(FILES "${CMAKE_CURRENT_BINARY_DIR}/shady-loader.dat" DESTINATION modules/shady-loader)

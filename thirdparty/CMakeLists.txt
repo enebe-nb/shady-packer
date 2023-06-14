@@ -94,6 +94,8 @@ if(SHADY_ENABLE_MODULE)
     # Lua Extra Libraries
     add_git_module(luafilesystem https://github.com/lunarmodules/luafilesystem v1_8_0)
     add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/luafilesystem EXCLUDE_FROM_ALL)
+    add_git_module(luasocket https://github.com/lunarmodules/luasocket v3.1.0)
+    add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/luasocket EXCLUDE_FROM_ALL)
 
     # SokuLib Library
     add_git_module(SokuLib https://github.com/enebe-nb/SokuLib dev)

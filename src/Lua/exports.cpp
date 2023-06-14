@@ -29,6 +29,22 @@ static bool GetModulePath(HMODULE handle, std::filesystem::path& result) {
 	return len;
 }
 
+static inline ShadyLua::LuaScript* startScript(const std::filesystem::path& scriptPath) {
+    const auto basePath = scriptPath.parent_path();
+    auto script = new ShadyLua::LuaScriptFS(basePath);
+    auto package = luabridge::getGlobal(script->L, "package");
+    package["cpath"] = package["cpath"].tostring()
+        + ";" + modulePath.string() + "\\libs\\?.dll"
+        + ";" + basePath.string() + "\\?.dll";
+    package["path"] = package["path"].tostring()
+        + ";" + modulePath.string() + "\\libs\\?.lua"
+        + ";" + modulePath.string() + "\\libs\\?\\init.lua"
+        + ";" + basePath.string() + "\\?.lua"
+        + ";" + basePath.string() + "\\?\\init.lua";
+    if (script->load((const char*)scriptPath.filename().u8string().c_str()) == LUA_OK) script->run();
+    return script;
+}
+
 static void LoadSettings() {
     wchar_t buffer[32767];
     int len = GetPrivateProfileSectionW(L"Scripts", buffer, 32767, (modulePath / L"shady-lua.ini").c_str());
@@ -38,10 +54,7 @@ static void LoadSettings() {
     while(len = wcslen(line)) {
         std::filesystem::path scriptPath(wcschr(line, L'=') + 1);
         scriptPath = modulePath / scriptPath;
-        auto script = new ShadyLua::LuaScriptFS(scriptPath.parent_path());
-        auto package = luabridge::getGlobal(script->L, "package");
-        package["cpath"] = package["cpath"].tostring() + ";" + modulePath.string() + "\\?.dll";
-        if (script->load((const char*)scriptPath.filename().u8string().c_str()) == LUA_OK) script->run();
+        auto script = startScript(scriptPath);
         watchers[ShadyUtil::FileWatcher::create(scriptPath)] = std::make_pair(script, scriptPath);
         line += len + 1;
     }
@@ -61,8 +74,7 @@ static void __fastcall onProcessHook_replFn(void* sceneManager) {
         case ShadyUtil::FileWatcher::CREATED:
         case ShadyUtil::FileWatcher::MODIFIED:
             if (script.first) delete script.first;
-            script.first = new ShadyLua::LuaScriptFS(script.second.parent_path());
-            if (script.first->load((const char*)script.second.filename().u8string().c_str()) == LUA_OK) script.first->run();
+            script.first = startScript(script.second);
             break;
         case ShadyUtil::FileWatcher::REMOVED:
             if (script.first) delete script.first;

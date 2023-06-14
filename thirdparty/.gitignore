@@ -11,7 +11,7 @@ libpng/
 libzip/
 lua/
 luafilesystem/
-Lua-cURLv3/
+luasocket/
 LuaBridge/
 rapidxml/
 rtaudio/
