@@ -49,7 +49,7 @@ TEST_F(ZipEntrySuite, StreamRead) {
 	// Try read 5 but we have 2
 	EXPECT_EQ(stream.read(buffer, 5).gcount(), 2);
 
-	entry.close();
+	entry.close(stream);
 }
 
 TEST_F(ZipEntrySuite, StreamSeek) {
@@ -103,7 +103,7 @@ TEST_F(ZipEntrySuite, PackageRead) {
 
 		EXPECT_TRUE(testing::isSameData(input, expected)) << "filename: " << data;
 
-		package.find(data).close();
+		package.find(data).close(input);
 		expected.close();
 	}
 }
@@ -134,8 +134,8 @@ TEST_F(ZipEntrySuite, PackageWrite) {
 			std::istream& inputS = i.open();
 			std::istream& expectedS = entry.second->open();
 			EXPECT_TRUE(testing::isSameData(inputS, expectedS)) << "filename: " << filename << ", package: " << packageName;
-			entry.second->close();
-			i.close();
+			entry.second->close(expectedS);
+			i.close(inputS);
 		}
 
 		delete input;

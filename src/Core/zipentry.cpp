@@ -129,7 +129,7 @@ static zip_int64_t zipInputFunc(void* userdata, void* data, zip_uint64_t len, zi
 	case ZIP_SOURCE_READ:
 		return zipData->stream->read((char*)data, len).gcount();
 	case ZIP_SOURCE_CLOSE:
-		zipData->entry->close();
+		zipData->entry->close(*zipData->stream);
 		zipData->stream = 0;
 		return 0;
 	case ZIP_SOURCE_STAT:
@@ -205,6 +205,40 @@ static zip_int64_t zipOutputFunc(void* userdata, void* data, zip_uint64_t len, z
 
 //-------------------------------------------------------------
 
+namespace {
+	std::mutex streamLock;
+	struct StreamData {
+		std::istream zipStream;
+		ShadyCore::ZipStream zipBuffer;
+		inline StreamData() : zipStream(&zipBuffer) {}
+	};
+	// won't have many elements at same time (list is better)
+	std::list<StreamData> streamList;
+}
+
+std::istream& ShadyCore::ZipPackageEntry::open() {
+	++openCount;
+	auto& streamData = streamList.emplace_back();
+	streamData.zipBuffer.open(parent->getBasePath(), name);
+	return streamData.zipStream;
+}
+
+void ShadyCore::ZipPackageEntry::close(std::istream& zipStream) {
+	{ std::lock_guard lock(streamLock);
+	for (auto iter = streamList.begin(); iter != streamList.end(); ++iter) {
+		if (&zipStream == &iter->zipStream) {
+			--openCount;
+			iter->zipBuffer.close();
+			streamList.erase(iter);
+			break;
+		}
+	} }
+
+	if (disposable) delete this; // TODO && openCount?
+}
+
+//-------------------------------------------------------------
+
 void ShadyCore::Package::loadZip(const std::filesystem::path& path) {
 	auto handle = CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ, 0, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
 	if (handle == INVALID_HANDLE_VALUE) return;
@@ -253,7 +287,7 @@ ShadyCore::FileType ShadyCore::GetZipPackageDefaultType(const FT& inputType, Sha
 				if (strcmp(buffer, "layout") == 0) { format = FT::SCHEMA_GAME_GUI; break; }
 				if (!strchr("?", buffer[0])) break;
 			}
-			entry->close();
+			entry->close(input);
 		} else format = inputType.format;
 		return FT(FT::TYPE_SCHEMA, format, format == FT::SCHEMA_GAME_GUI ? FT::getExtValue(".dat") : FT::getExtValue(".pat"));
 	} return outputTypes[inputType.type];
@@ -284,7 +318,7 @@ void ShadyCore::Package::saveZip(const std::filesystem::path& filename) {
 			output.close();
 
 			inputSource = zip_source_file_create(convertedFiles.back().string().c_str(), 0, 0, 0);
-			entry->close();
+			entry->close(input);
 		}
 
 		std::string filename(i->first.name);

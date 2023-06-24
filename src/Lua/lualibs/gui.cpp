@@ -245,6 +245,7 @@ int ShadyLua::Renderer::destroy(lua_State* L) {
             }
         }
     }
+    return 0;
 }
 
 void ShadyLua::Renderer::clear() {

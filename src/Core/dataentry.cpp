@@ -170,31 +170,45 @@ void ShadyCore::DataFileFilter::seek(off_type spos, std::ios::seekdir sdir) {
 }
 
 //-------------------------------------------------------------
-
-std::istream& ShadyCore::DataPackageEntry::open() {
-	fileStream.clear();
-	std::filebuf* base = (std::filebuf*) fileFilter.getBaseBuffer();
-	if (!base) base = new std::filebuf();
-	else base->close();
-
-#ifdef _MSC_VER
-	base->open(parent->getBasePath(), std::ios::in | std::ios::binary, _SH_DENYWR);
-#else
-	base->open(parent->getBasePath(), std::ios::in | std::ios::binary);
-#endif
-	base->pubseekoff(packageOffset, std::ios::beg);
-	fileFilter.setBaseBuffer(base);
-
-	return fileStream;
+namespace {
+	std::mutex streamLock;
+	struct StreamData {
+		std::filebuf baseBuffer;
+		std::istream fileStream;
+		ShadyCore::DataFileFilter fileFilter;
+		inline StreamData(unsigned int offset, unsigned int size)
+			: fileStream(&fileFilter), fileFilter(&baseBuffer, offset, size) {}
+	};
+	// won't have many elements at same time (list is better)
+	std::list<StreamData> streamList;
 }
 
-void ShadyCore::DataPackageEntry::close() {
-	const std::streambuf* base = fileFilter.getBaseBuffer();
-	if (base) {
-		delete base;
-		fileFilter.setBaseBuffer(0);
-	}
-	if (disposable) delete this;
+
+std::istream& ShadyCore::DataPackageEntry::open() {
+	++openCount;
+	auto& streamData = streamList.emplace_back(packageOffset, packageSize);
+
+#ifdef _MSC_VER
+	streamData.baseBuffer.open(parent->getBasePath(), std::ios::in | std::ios::binary, _SH_DENYWR);
+#else
+	streamData.baseBuffer.open(parent->getBasePath(), std::ios::in | std::ios::binary);
+#endif
+	streamData.baseBuffer.pubseekoff(packageOffset, std::ios::beg);
+
+	return streamData.fileStream;
+}
+
+void ShadyCore::DataPackageEntry::close(std::istream& fileStream) {
+	{ std::lock_guard lock(streamLock);
+	for (auto iter = streamList.begin(); iter != streamList.end(); ++iter) {
+		if (&fileStream == &iter->fileStream) {
+			--openCount;
+			streamList.erase(iter);
+			break;
+		}
+	} }
+
+	if (disposable) delete this; // TODO && openCount?
 }
 
 //-------------------------------------------------------------
@@ -254,7 +268,7 @@ ShadyCore::FileType ShadyCore::GetDataPackageDefaultType(const FT& inputType, Sh
 				if (strcmp(buffer, "layout") == 0) { format = FT::SCHEMA_GAME_GUI; break; }
 				if (!strchr("?", buffer[0])) break;
 			}
-			entry->close();
+			entry->close(input);
 		} else format = inputType.format;
 		return FT(FT::TYPE_SCHEMA, format, format == FT::SCHEMA_GAME_GUI ? FT::getExtValue(".dat") : FT::getExtValue(".pat"));
 	} else return outputTypes[inputType.type];
@@ -290,7 +304,7 @@ void ShadyCore::Package::saveData(const std::filesystem::path& filename) {
 
 		ShadyCore::convertResource(inputType.type, inputType.format, input, targetType.format, output);
 
-		entry->close();
+		entry->close(input);
 		Package::underlineToSlash(tempFiles.back().first);
 		targetType.appendExtValue(tempFiles.back().first);
 		listSize += 9 + tempFiles.back().first.size();

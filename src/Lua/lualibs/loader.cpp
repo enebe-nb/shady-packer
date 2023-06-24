@@ -40,10 +40,11 @@ static void* __stdcall LoaderHook_replFn(const char* filename, unsigned int* _si
 			auto outputType = ShadyCore::GetDataPackageDefaultType(inputType, iter->second);
 			// TODO reduce copying
 			auto stream = new std::stringstream(std::ios::in|std::ios::out|std::ios::binary);
+			auto& input = iter.open();
 			ShadyCore::convertResource(inputType.type,
-							inputType.format, iter.open(),
+							inputType.format, input,
 							outputType.format, *stream);
-			iter.close();
+			iter.close(input);
 			*_size = iter->second->getSize();
 			*_offset = 0x40000000; // just to hold a value
 			*(int*)esi_value = ShadyCore::stream_reader_vtbl;

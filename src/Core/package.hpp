@@ -56,7 +56,7 @@ namespace ShadyCore {
 			inline BasePackageEntry& entry() const { return *operator*().second; }
 			FileType fileType() const;
 			inline std::istream& open() const { return operator*().second->open(); }
-			inline void close() const { return operator*().second->close(); }
+			inline void close(std::istream& s) const { return operator*().second->close(s); }
 		};
 
 		Package(const std::filesystem::path& basePath);

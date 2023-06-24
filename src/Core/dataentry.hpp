@@ -65,26 +65,25 @@ namespace ShadyCore {
 	public:
 		DataFileFilter(std::streambuf* base, unsigned int offset, unsigned int size)
 			: StreamFilter(base, size), offset(offset) { key = (offset >> 1) | 0x23; }
-		inline DataFileFilter(unsigned int offset, unsigned int size) : DataFileFilter(0, offset, size) {};
-
-		inline void setBaseBuffer(std::streambuf* b) { base = b; pos = 0; }
-		inline const std::streambuf* getBaseBuffer() const { return base; }
+		//inline DataFileFilter(unsigned int offset, unsigned int size) : DataFileFilter(0, offset, size) {};
 	};
 
 	class DataPackageEntry : public BasePackageEntry {
 	private:
 		unsigned int packageOffset;
-		std::istream fileStream;
-		DataFileFilter fileFilter;
+		unsigned int packageSize;
+		// std::istream fileStream;
+		// DataFileFilter fileFilter;
 
 	public:
 		inline DataPackageEntry(Package* parent, unsigned int offset, unsigned int size)
-			: BasePackageEntry(parent, size), fileStream(&fileFilter), fileFilter(offset, size), packageOffset(offset) {}
+			//: BasePackageEntry(parent, size), fileStream(&fileFilter), fileFilter(offset, size), packageOffset(offset) {}
+			: BasePackageEntry(parent, size), packageOffset(offset), packageSize(size) {}
 
 		inline StorageType getStorage() const override final { return TYPE_DATA; }
-		inline bool isOpen() const override final { return fileFilter.getBaseBuffer(); }
+		//inline bool isOpen() const override final { return fileFilter.getBaseBuffer(); }
 		std::istream& open() override;
-		void close() override;
+		void close(std::istream&) override;
 	};
 
 	ShadyCore::FileType GetDataPackageDefaultType(const ShadyCore::FileType& inputType, ShadyCore::BasePackageEntry* entry);

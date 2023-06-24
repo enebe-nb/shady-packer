@@ -33,7 +33,7 @@ TEST_F(FileEntrySuite, FileTemporary) {
 	std::istream& input = entry->open();
 	std::ifstream expected("test-data/decrypted/data/my-text.txt");
 	EXPECT_TRUE(testing::isSameData(input, expected));
-	entry->close();
+	entry->close(input);
 
 	delete entry;
 	EXPECT_TRUE(!std::filesystem::exists(tempFile));
@@ -49,7 +49,7 @@ TEST_F(FileEntrySuite, PackageRead) {
 
 		EXPECT_TRUE(testing::isSameData(input, expected)) << "filename: " << data;
 
-		package.find(data)->second->close();
+		package.find(data)->second->close(input);
 		expected.close();
 	}
 }

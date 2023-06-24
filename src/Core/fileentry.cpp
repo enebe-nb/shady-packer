@@ -21,7 +21,38 @@ inline std::wstring sjis2ws(const std::string_view& str) {
 
 #endif
 
+//-------------------------------------------------------------
+
+namespace {
+	std::mutex streamLock;
+	// won't have many elements at same time (list is better)
+	std::list<std::ifstream> streamList;
+}
+
 ShadyCore::FilePackageEntry::~FilePackageEntry() { if (deleteOnDestroy) std::filesystem::remove(filename); }
+
+std::istream& ShadyCore::FilePackageEntry::open() {
+	++openCount;
+#ifdef _MSC_VER
+	return streamList.emplace_back(parent->getBasePath() / filename, std::ios::binary, _SH_DENYWR);
+#else
+	return streamList.emplace_back(parent->getBasePath() / filename, std::ios::binary);
+#endif
+}
+
+void ShadyCore::FilePackageEntry::close(std::istream& stream) {
+	{ std::lock_guard lock(streamLock);
+	for (auto iter = streamList.begin(); iter != streamList.end(); ++iter) {
+		if (&stream == iter.operator->()) {
+			--openCount;
+			iter->close();
+			streamList.erase(iter);
+			break;
+		}
+	} }
+
+	if (disposable) delete this; // TODO && openCount?
+}
 
 //-------------------------------------------------------------
 
@@ -73,7 +104,7 @@ void ShadyCore::Package::saveDir(const std::filesystem::path& directory) {
 
 		ShadyCore::convertResource(targetType.type, inputType.format, input, targetType.format, output);
 
-		i.close();
+		i.close(input);
 		output.close();
 
 		std::wstring filename = sjis2ws(i->first.name);

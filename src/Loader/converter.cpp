@@ -70,8 +70,9 @@ static bool __fastcall textReader(int output, const char* filename) {
         auto iter = ModPackage::basePackage->find(filename, ShadyCore::FileType::TYPE_TEXT);
         if (iter != ModPackage::basePackage->end()) {
             auto filetype = iter.fileType();
-            ShadyCore::getResourceReader(filetype)((ShadyCore::Resource*)output, iter.open());
-            iter.close();
+            auto& input = iter.open();
+            ShadyCore::getResourceReader(filetype)((ShadyCore::Resource*)output, input);
+            iter.close(input);
             return true;
         }
     } return __textReader(output, filename);
@@ -83,8 +84,9 @@ static bool __fastcall tableReader(int output, const char* filename) {
         auto iter = ModPackage::basePackage->find(filename, ShadyCore::FileType::TYPE_TABLE);
         if (iter != ModPackage::basePackage->end()) {
             auto filetype = iter.fileType();
-            ShadyCore::getResourceReader(filetype)((ShadyCore::Resource*)output, iter.open());
-            iter.close();
+            auto& input = iter.open();
+            ShadyCore::getResourceReader(filetype)((ShadyCore::Resource*)output, input);
+            iter.close(input);
             return true;
         }
     } return __tableReader(output, filename);
@@ -96,8 +98,9 @@ static bool __fastcall labelReader(const char* filename, int unused, int output)
         auto iter = ModPackage::basePackage->find(filename, ShadyCore::FileType::TYPE_LABEL);
         if (iter != ModPackage::basePackage->end()) {
             auto filetype = iter.fileType();
-            ShadyCore::getResourceReader(filetype)((ShadyCore::Resource*)(output + 0x12e8), iter.open());
-            iter.close();
+            auto& input = iter.open();
+            ShadyCore::getResourceReader(filetype)((ShadyCore::Resource*)(output + 0x12e8), input);
+            iter.close(input);
             return true;
         }
     } return __labelReader(filename, unused, output);
@@ -109,8 +112,9 @@ static bool __fastcall sfxReader(int output, const char* filename) {
         auto iter = ModPackage::basePackage->find(filename, ShadyCore::FileType::TYPE_SFX);
         if (iter != ModPackage::basePackage->end()) {
             auto filetype = iter.fileType();
-            ShadyCore::getResourceReader(filetype)((ShadyCore::Resource*)output, iter.open());
-            iter.close();
+            auto& input = iter.open();
+            ShadyCore::getResourceReader(filetype)((ShadyCore::Resource*)output, input);
+            iter.close(input);
             return true;
         }
     } return __sfxReader(output, filename);
@@ -123,8 +127,9 @@ static bool __fastcall paletteReader(int a, int unused, const char* filename, in
         auto iter = ModPackage::basePackage->find(filename, ShadyCore::FileType::TYPE_PALETTE);
         if (iter != ModPackage::basePackage->end()) {
             auto filetype = iter.fileType();
-            ShadyCore::getResourceReader(filetype)((ShadyCore::Resource*)output, iter.open());
-            iter.close();
+            auto& input = iter.open();
+            ShadyCore::getResourceReader(filetype)((ShadyCore::Resource*)output, input);
+            iter.close(input);
             return true;
         }
     } return super(a, unused, filename, output, b);
@@ -170,8 +175,9 @@ static bool __fastcall imageReader(ShadyCore::Image* output, const char* filenam
         auto iter = ModPackage::basePackage->find(filename, ShadyCore::FileType::TYPE_IMAGE);
         if (iter != ModPackage::basePackage->end()) {
             auto filetype = iter.fileType();
-            ShadyCore::getResourceReader(filetype)((ShadyCore::Resource*)output, iter.open());
-            iter.close();
+            auto& input = iter.open();
+            ShadyCore::getResourceReader(filetype)((ShadyCore::Resource*)output, input);
+            iter.close(input);
             return true;
         }
     }
@@ -287,7 +293,7 @@ static bool __fastcall schemaCreateReader(void** output, int unused, const char*
                 std::istream& input = iter.open();
                 std::stringstream* buffer = new std::stringstream(std::ios::in|std::ios::out|std::ios::binary);
                 ShadyCore::convertResource(type.type, type.format, input, targetFormat, *buffer);
-                iter.close();
+                iter.close(input);
 
                 reader[0] = ShadyCore::stream_reader_vtbl;
                 reader[1] = (int)buffer;

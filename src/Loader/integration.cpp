@@ -80,7 +80,7 @@ static ShadyLua::LuaScript::File* _lua_open(void* userdata, const char* filename
 
 static void _lua_close(void* userdata, ShadyLua::LuaScript::File* file) {
     _lua_file* _file = reinterpret_cast<_lua_file*>(file);
-    _file->entry->close();
+    _file->entry->close(file->input);
     delete file;
 }
 

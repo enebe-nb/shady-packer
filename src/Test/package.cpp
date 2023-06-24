@@ -11,20 +11,22 @@ TEST(PackageSuite, DontReplaceEntry) {
 	package.insert("data/my-text.txt", "test-data/decrypted/data/my-pattern.xml");
 
 	char buffer[13];
-	EXPECT_EQ(package.find("data/my-text.txt").open().read(buffer, 13).gcount(), 12);
+	auto* input = &package.find("data/my-text.txt").open();
+	EXPECT_EQ(input->read(buffer, 13).gcount(), 12);
 	buffer[12] = '\0';
 	EXPECT_EQ(strcmp(buffer, "Hello World!"), 0);
-	package.find("data/my-text.txt").close();
+	package.find("data/my-text.txt").close(*input);
 
 	package.merge("test-data/zip-package.dat");
 	package.merge("test-data/data-package.dat");
 
 	auto iter = package.find("data/my-text.cv0");
+	input = &iter.open();
 	EXPECT_EQ(iter.fileType().format, ShadyCore::FileType::TEXT_NORMAL);
-	EXPECT_EQ(iter.open().read(buffer, 13).gcount(), 12);
+	EXPECT_EQ(input->read(buffer, 13).gcount(), 12);
 	buffer[12] = '\0';
 	EXPECT_EQ(strcmp(buffer, "Hello World!"), 0);
-	iter.close();
+	iter.close(*input);
 }
 
 TEST(PackageSuite, FileType) {

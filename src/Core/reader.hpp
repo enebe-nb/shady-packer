@@ -9,7 +9,7 @@ namespace ShadyCore {
         std::istream& data;
         inline EntryReader(BasePackageEntry& entry)
             : entry(entry), data(entry.open()) {}
-        inline ~EntryReader() { if (entry.isOpen()); entry.close(); }
+        inline ~EntryReader() { entry.close(data); }
     } EntryReader;
 
     extern const int entry_reader_vtbl;

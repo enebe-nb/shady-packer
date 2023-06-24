@@ -101,8 +101,8 @@ namespace ShadyCore {
 
 		inline StorageType getStorage() const final { return entry.getStorage(); }
 		inline std::istream& open() final { return entry.open(); }
-		inline bool isOpen() const final { return entry.isOpen(); }
-		inline void close() final { entry.close(); if (disposable) delete this; }
+		//inline bool isOpen() const final { return entry.isOpen(); }
+		inline void close(std::istream& s) final { entry.close(s); if (disposable) delete this; }
 	};
 }
 

@@ -42,21 +42,14 @@ namespace ShadyCore {
 	private:
 		const std::string name;
 
-		std::deque<ZipStream> zipBuffer;
-		std::deque<std::istream> zipStream;
 	public:
 		inline ZipPackageEntry(Package* parent, const std::string& name, unsigned int size)
 			: BasePackageEntry(parent, size), name(name) {}
 
 		inline StorageType getStorage() const override final { return TYPE_ZIP; }
-		inline bool isOpen() const override final { return zipBuffer.size(); }
-		inline std::istream& open() override final {
-			zipBuffer.emplace_back();
-			zipStream.emplace_back(&zipBuffer.back());
-			zipBuffer.back().open(parent->getBasePath(), name);
-			return zipStream.back();
-		}
-		inline void close() override final { zipBuffer.front().close(); zipBuffer.pop_front(); zipStream.pop_front(); if (disposable && !zipBuffer.size()) delete this; }
+		//inline bool isOpen() const override final { return zipBuffer.size(); }
+		std::istream& open() override final;
+		void close(std::istream&) override final;
 	};
 
 	ShadyCore::FileType GetZipPackageDefaultType(const ShadyCore::FileType& inputType, ShadyCore::BasePackageEntry* entry);

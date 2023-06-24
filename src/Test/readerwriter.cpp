@@ -106,7 +106,7 @@ TEST_P(ReaderWriterSuite, PackageRead) {
 			std::ifstream expected(data.files[i].second, std::ios::binary);
 			EXPECT_TRUE(testing::isSameData(output, expected))  << "package["<< data.files[i].second.filename() << "]";
 			input.seekg(0);
-		} iter.close();
+		} iter.close(input);
 	}
 
 	std::filesystem::remove(zipFile);
