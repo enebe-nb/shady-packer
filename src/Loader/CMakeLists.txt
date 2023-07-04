@@ -14,10 +14,6 @@ set(SRC_LOADER_Loader
 )
 source_group("Source Files\\Loader" FILES ${SRC_LOADER_Loader})
 
-target_compile_definitions(shady-core PUBLIC $<$<CONFIG:Debug>:_ITERATOR_DEBUG_LEVEL=1>)
-target_compile_definitions(gtest PUBLIC $<$<CONFIG:Debug>:_ITERATOR_DEBUG_LEVEL=1>)
-target_compile_definitions(benchmark PUBLIC $<$<CONFIG:Debug>:_ITERATOR_DEBUG_LEVEL=1>)
-
 add_library(shady-loader MODULE ${SRC_LOADER_Common} ${SRC_LOADER_Loader})
 target_link_libraries(shady-loader -static shady-core shady-lualib libcurl json)
 set_target_properties(shady-loader PROPERTIES PREFIX "")

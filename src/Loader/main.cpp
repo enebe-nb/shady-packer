@@ -66,7 +66,7 @@ extern "C" __declspec(dllexport) bool Initialize(HMODULE hMyModule, HMODULE hPar
 #ifdef _DEBUG
 	Logger::Initialize(Logger::LOG_ALL, "shady-loader.log");
 #else
-	Logger::Initialize(Logger::LOG_ERROR);
+	Logger::Initialize(Logger::LOG_ERROR | Logger::LOG_WARNING);
 #endif
 	DWORD prot; VirtualProtect((LPVOID)0x0043dda6, 5, PAGE_EXECUTE_WRITECOPY, &prot);
 	__onRender = SokuLib::TamperNearJmpOpr(0x0043dda6, onRender);

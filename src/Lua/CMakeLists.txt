@@ -2,6 +2,7 @@ set(SRC_LUA_Library
     logger.cpp
     script.cpp
     lualibs/base.cpp
+    lualibs/battle.cpp
     lualibs/gui.cpp
     lualibs/loader.cpp
     lualibs/memory.cpp
@@ -24,6 +25,11 @@ set_target_properties(shady-lua PROPERTIES PREFIX "")
 add_dependencies(shady-lua lfs liblua-socket liblua-mime)
 
 install(TARGETS shady-lua LIBRARY DESTINATION modules/shady-lua)
+install(FILES
+    example/example.lua
+    example/example.zip
+    example/shady-lua.ini
+DESTINATION modules/shady-lua)
 
 # Install Extra Libraries
 set(LUASOCKET_SRCPATH ${CMAKE_CURRENT_SOURCE_DIR}/../../thirdparty/luasocket/src)

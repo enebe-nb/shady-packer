@@ -61,6 +61,7 @@ namespace ShadyLua {
     class LuaScript;
     void RemoveEvents(LuaScript*);
     void RemoveLoaderEvents(LuaScript*);
+    void RemoveBattleEvents(LuaScript*);
 
 	class ResourceProxy : public luabridge::RefCountedObject {
 	public:

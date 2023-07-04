@@ -18,7 +18,7 @@ std::unordered_map<DWORD, std::unique_ptr<ShadyLua::Hook>> ShadyLua::hooks;
 
 namespace {
     enum Event {
-        /*RENDER,*/ PLAYERINFO, SCENECHANGE, READY,
+        /*RENDER,*/ PLAYERINFO, SCENECHANGE, READY, BATTLE,
         Count
     };
     struct eventHash { size_t operator()(const std::pair<int, ShadyLua::LuaScript*> &x) const { return x.first ^ (int)x.second; } };
@@ -61,6 +61,27 @@ static bool __fastcall ReadyHook_replFn(void* unknown, int unused, void* data) {
         }
     }
     return ret;
+}
+
+// ---- BattleHook ----
+static void BattleHook_replFn(const SokuLib::GameStartParams& params);
+using BattleHook = ShadyLua::CallHook<0x0043e63b, BattleHook_replFn>;
+BattleHook::typeFn BattleHook::origFn = reinterpret_cast<BattleHook::typeFn>(0x004386a0);
+static void BattleHook_replFn(const SokuLib::GameStartParams& params) {
+    std::shared_lock guard(eventMapLock);
+    auto& listeners = eventMap[Event::BATTLE];
+    for(auto iter = listeners.begin(); iter != listeners.end(); ++iter) {
+        std::lock_guard scriptGuard(iter->second->mutex);
+
+        auto L = iter->second->L;
+        lua_rawgeti(L, LUA_REGISTRYINDEX, iter->first);
+        luabridge::push(L, &params);
+        if (lua_pcall(L, 1, 0, 0)) {
+            Logger::Error(lua_tostring(L, -1));
+            lua_pop(L, 1);
+        }
+    }
+    return BattleHook::origFn(params);
 }
 
 // ---- PlayerInfoHook ----
@@ -177,6 +198,7 @@ static SokuLib::IScene* __fastcall SceneHook_replFn(void* sceneManager, int unus
 
 void ShadyLua::RemoveEvents(LuaScript* script) {
     RemoveLoaderEvents(script);
+    RemoveBattleEvents(script);
     { std::unique_lock lock(eventMapLock);
     for (auto& hooks : eventMap) {
         auto i = hooks.begin(); while (i != hooks.end()) {
@@ -193,16 +215,6 @@ void ShadyLua::RemoveEvents(LuaScript* script) {
     }
 }
 
-static void soku_Player_PlaySE(const SokuLib::PlayerInfo* player, int id) {
-    constexpr int callAddr = 0x00464980;
-    __asm {
-        mov ecx, id;
-        push ecx;
-        mov ecx, player;
-        call callAddr;
-    }
-}
-
 template<int eventType>
 static int soku_SubscribeEvent(lua_State* L) {
     if (lua_gettop(L) < 1 || !lua_isfunction(L, 1)) return luaL_error(L, "Must pass a callback");
@@ -211,6 +223,7 @@ static int soku_SubscribeEvent(lua_State* L) {
     if constexpr(eventType == Event::READY) ShadyLua::initHook<ReadyHook>();
     if constexpr(eventType == Event::PLAYERINFO) ShadyLua::initHook<PlayerInfoHook>();
     if constexpr(eventType == Event::SCENECHANGE) ShadyLua::initHook<SceneHook>();
+    if constexpr(eventType == Event::BATTLE) ShadyLua::initHook<BattleHook>();
 
     // iterators valid on insertion
     eventMap[eventType].insert(std::make_pair(callback, ShadyLua::ScriptMap[L]));
@@ -228,7 +241,7 @@ static void soku_UnsubscribeEvent(int id, lua_State* L) {
     for (auto& map : eventMap) map.erase(std::make_pair(id, ShadyLua::ScriptMap[L]));
 }
 
-static void soku_PlaySE(int id) {
+static void soku_PlaySFX(int id) {
     reinterpret_cast<void (*)(int id)>(0x0043E1E0)(id);
 }
 
@@ -326,25 +339,18 @@ void ShadyLua::LualibSoku(lua_State* L) {
                 .addConstant("SDMClockTowerBlurry",     SokuLib::Stage::STAGE_SCARLET_DEVIL_MANSION_CLOCK_TOWER_BLURRY)
                 .addConstant("SDMClockTowerSketch",     SokuLib::Stage::STAGE_SCARLET_DEVIL_MANSION_CLOCK_TOWER_SKETCH)
             .endNamespace()
-            .beginClass<SokuLib::PlayerInfo>("PlayerInfo")
-                .addProperty("character", &SokuLib::PlayerInfo::character, false)
-                .addProperty("isRight", &SokuLib::PlayerInfo::isRight, false)
-                .addProperty("palette", &SokuLib::PlayerInfo::palette, false)
-                .addProperty("deck", &SokuLib::PlayerInfo::deck, false)
-                // .addFunction("PlaySE", soku_Player_PlaySE) // TODO something does not match with this
-            .endClass()
             .addProperty("isReady", (bool*)(0x89ff90 + 0x4c), false)
-            .addVariable("P1", &SokuLib::leftPlayerInfo) // TODO something does not match with this
-            .addVariable("P2", &SokuLib::rightPlayerInfo) // TODO something does not match with this
-            .addVariable("player1info", &SokuLib::leftPlayerInfo) // TODO something does not match with this
-            .addVariable("player2info", &SokuLib::rightPlayerInfo) // TODO something does not match with this
+            .addVariable("P1", &SokuLib::leftPlayerInfo)
+            .addVariable("P2", &SokuLib::rightPlayerInfo)
             .addVariable("sceneId", &SokuLib::sceneId, false)
             .addFunction("checkFKey", soku_checkFKey)
-            .addFunction("playSE", soku_PlaySE)
+            .addFunction("playSE", soku_PlaySFX)
+            .addFunction("playSFX", soku_PlaySFX)
 
             .addCFunction("SubscribePlayerInfo", soku_SubscribeEvent<Event::PLAYERINFO>)
             .addCFunction("SubscribeSceneChange", soku_SubscribeEvent<Event::SCENECHANGE>)
             .addCFunction("SubscribeReady", soku_SubscribeEvent<Event::READY>)
+            .addCFunction("SubscribeBattle", soku_SubscribeEvent<Event::BATTLE>)
             .addFunction("UnsubscribeEvent", soku_UnsubscribeEvent)
             .beginClass<SokuLib::Vector2f>("Vector2f")
                 .addData("x", &SokuLib::Vector2f::x, true)

@@ -45,6 +45,7 @@ ShadyLua::LuaScript::LuaScript(void* userdata, fnOpen_t open, fnClose_t close, f
     LualibResource(L);
     LualibSoku(L);
     LualibGui(L);
+    LualibBattle(L);
 }
 
 ShadyLua::LuaScript::~LuaScript() {
