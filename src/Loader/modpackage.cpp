@@ -109,7 +109,8 @@ namespace {
 						if (!i->second->hasError) {
 							p->previewName = "shady_preview_" + p->name + ".png";
 							ModPackage::basePackage->insert(p->previewName, i->second->data);
-						} p->downloadingPreview = false;
+							p->downloadingPreview = false;
+						}
 
  						delete i->second;
 						i = imageTasks.erase(i);
@@ -162,7 +163,7 @@ namespace {
 			try {
 				std::filesystem::remove(filename);
 			} catch (std::filesystem::filesystem_error err) {return;}
-			FetchFile* task = new FetchFile(package->driveId(), filename);
+			FetchFile* task = new FetchFile(package->hasFile() ? package->file() : package->driveId(), filename);
 			fileTasks.emplace_back(package, task);
 			task->start();
 
@@ -205,6 +206,7 @@ void ModPackage::downloadPreview() { downloadController.downloadImage(this); }
 
 void ModPackage::merge(const nlohmann::json::value_type& remote) {
 	data["id"] = remote.value("id", "");
+	data["file"] = remote.value("file", "");
 	data["creator"] = remote.value("creator", "");
 	data["description"] = remote.value("description", "");
 	data["preview"] = remote.value("preview", "");

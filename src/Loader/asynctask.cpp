@@ -7,6 +7,7 @@
 
 namespace {
     std::string cookieFile = (ShadyUtil::TempDir() / "shady-cookies.jar").string();
+    std::string baseJson = "http://shady.pinkysmile.fr/config.json";
 }
 
 static size_t write_callback(char *ptr, size_t size, size_t nmemb, void *userdata) {
@@ -32,6 +33,15 @@ static std::string findConfirmUrl(const std::filesystem::path& filename) {
 void FetchFile::run() {
     CURL* curl = curl_easy_init();
     if (!curl) { return; }
+    CURLU *urlp = curl_url();
+    if (fileId.size() == 33 && fileId[0] == '1') {
+        if (CURLUE_OK != curl_url_set(urlp, CURLUPART_URL, ("https://drive.google.com/uc?export=download&id=" + fileId).c_str(), 0)) return;
+    } else if (fileId.starts_with("http://") || fileId.starts_with("https://")) {
+        if (CURLUE_OK != curl_url_set(urlp, CURLUPART_URL, fileId.c_str(), 0)) return;
+    } else {
+        if (CURLUE_OK != curl_url_set(urlp, CURLUPART_URL, baseJson.c_str(), 0)) return;
+        if (CURLUE_OK != curl_url_set(urlp, CURLUPART_PATH, ("/"+fileId).c_str(), 0)) return;
+    }
 
     curl_easy_setopt(curl, CURLOPT_AUTOREFERER, 1L);
     curl_easy_setopt(curl, CURLOPT_ACCEPT_ENCODING, "");
@@ -41,7 +51,7 @@ void FetchFile::run() {
     std::ofstream output; output.open(filename, std::ios::out | std::ios::binary);
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, &output);
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_callback);
-    curl_easy_setopt(curl, CURLOPT_URL, ("https://drive.google.com/uc?export=download&id=" + fileId).c_str());
+    curl_easy_setopt(curl, CURLOPT_CURLU, urlp);
 
     CURLcode result = curl_easy_perform(curl);
     if (result == CURLE_OK) {
@@ -57,10 +67,17 @@ void FetchFile::run() {
 
     long response; curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response);
     if (result != CURLE_OK || response != 200) std::filesystem::remove(filename);
+    curl_url_cleanup(urlp);
     curl_easy_cleanup(curl);
 }
 
 void FetchJson::run() {
+    std::string url;
+    if (fileId.size() == 33 && fileId[0] == '1') url = "https://drive.google.com/uc?export=download&id=" + fileId;
+    else if (fileId.starts_with("http://") || fileId.starts_with("https://")) url = fileId;
+    else url = baseJson;
+    if (url.empty()) return;
+
     CURL* curl = curl_easy_init();
     if (!curl) { return; }
 
@@ -71,17 +88,29 @@ void FetchJson::run() {
     std::stringstream buffer;
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, &buffer);
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_callback);
-    curl_easy_setopt(curl, CURLOPT_URL, ("https://drive.google.com/uc?export=download&id=" + fileId).c_str());
+    curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
 
     CURLcode result = curl_easy_perform(curl);
     long response; curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response);
-    if (result == CURLE_OK && response == 200) try {buffer >> data;} catch (...) {}
+    if (result == CURLE_OK && response == 200) {
+        baseJson = url;
+        try {buffer >> data;} catch (...) {}
+    }
     curl_easy_cleanup(curl);
 }
 
 void FetchImage::run() {
     CURL* curl = curl_easy_init();
     if (!curl) { return; }
+    CURLU *urlp = curl_url();
+    if (fileId.size() == 33 && fileId[0] == '1') {
+        if (CURLUE_OK != curl_url_set(urlp, CURLUPART_URL, ("https://drive.google.com/uc?export=download&id=" + fileId).c_str(), 0)) return;
+    } else if (fileId.starts_with("http://") || fileId.starts_with("https://")) {
+        if (CURLUE_OK != curl_url_set(urlp, CURLUPART_URL, fileId.c_str(), 0)) return;
+    } else {
+        if (CURLUE_OK != curl_url_set(urlp, CURLUPART_URL, baseJson.c_str(), 0)) return;
+        if (CURLUE_OK != curl_url_set(urlp, CURLUPART_PATH, ("/"+fileId).c_str(), 0)) return;
+    }
 
     curl_easy_setopt(curl, CURLOPT_AUTOREFERER, 1L);
     curl_easy_setopt(curl, CURLOPT_ACCEPT_ENCODING, "");
@@ -89,11 +118,12 @@ void FetchImage::run() {
 
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, &data);
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_callback);
-    curl_easy_setopt(curl, CURLOPT_URL, ("https://drive.google.com/uc?export=download&id=" + fileId).c_str());
+    curl_easy_setopt(curl, CURLOPT_CURLU, urlp);
 
     CURLcode result = curl_easy_perform(curl);
 
     long response; curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response);
     hasError = (result != CURLE_OK || response != 200);
+    curl_url_cleanup(urlp);
     curl_easy_cleanup(curl);
 }

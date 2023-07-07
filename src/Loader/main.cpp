@@ -107,7 +107,7 @@ void LoadSettings() {
 	iniEnableLua = GetPrivateProfileIntA("Options", "enableLua", true, ipath.c_str());
 	iniRemoteConfig.resize(64);
 	size_t len = GetPrivateProfileStringA("Options", "remoteConfig",
-		"1EpxozKDE86N3Vb8b4YIwx798J_YfR_rt", iniRemoteConfig.data(), 64, ipath.c_str());
+		"http://shady.pinkysmile.fr/config.json", iniRemoteConfig.data(), 64, ipath.c_str());
 	iniRemoteConfig.resize(len);
 }
 

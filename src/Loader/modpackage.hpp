@@ -31,7 +31,9 @@ public:
 
     inline bool isEnabled() {return package;}
     inline bool isLocal() {return fileExists && (!data.count("version") || data.value("version", "").empty());}
+    inline bool hasFile() {return !data.value("file", "").empty();}
     inline std::string driveId() {return data.value("id", "");}
+    inline std::string file() {return data.value("file", "");}
     inline std::string version() {return data.value("version", "");}
     inline std::string creator() {return data.value("creator", "");}
     inline std::string description() {return data.value("description", "");}
