@@ -100,36 +100,37 @@ BOOL WINAPI DllMain(HMODULE hModule, DWORD fdwReason, LPVOID lpReserved) {
 }
 
 void LoadSettings() {
-	const std::string ipath = (ModPackage::basePath / L"shady-loader.ini").string();
+	const std::filesystem::path ipath = ModPackage::basePath / L"shady-loader.ini";
 
-	iniAutoUpdate = GetPrivateProfileIntA("Options", "autoUpdate", true, ipath.c_str());
-	iniUseLoadLock = GetPrivateProfileIntA("Options", "useLoadLock", false, ipath.c_str());
-	iniEnableLua = GetPrivateProfileIntA("Options", "enableLua", true, ipath.c_str());
-	iniRemoteConfig.resize(64);
-	size_t len = GetPrivateProfileStringA("Options", "remoteConfig",
-		"http://shady.pinkysmile.fr/config.json", iniRemoteConfig.data(), 64, ipath.c_str());
-	iniRemoteConfig.resize(len);
+	iniAutoUpdate = GetPrivateProfileIntW(L"Options", L"autoUpdate", true, ipath.c_str());
+	iniUseLoadLock = GetPrivateProfileIntW(L"Options", L"useLoadLock", false, ipath.c_str());
+	iniEnableLua = GetPrivateProfileIntW(L"Options", L"enableLua", true, ipath.c_str());
+	wchar_t buffer[2048];
+	size_t len = GetPrivateProfileStringW(L"Options", L"remoteConfig",
+			L"http://shady.pinkysmile.fr/config.json", buffer, 2048, ipath.c_str());
+	iniRemoteConfig = ws2utf(buffer);
 }
 
 void SaveSettings() {
-	const std::string ipath = (ModPackage::basePath / L"shady-loader.ini").string();
+	const std::filesystem::path ipath = ModPackage::basePath / L"shady-loader.ini";
 
-	WritePrivateProfileStringA("Options", "autoUpdate", iniAutoUpdate ? "1" : "0", ipath.c_str());
-	WritePrivateProfileStringA("Options", "useLoadLock", iniUseLoadLock ? "1" : "0", ipath.c_str());
-	WritePrivateProfileStringA("Options", "enableLua", iniEnableLua ? "1" : "0", ipath.c_str());
-	WritePrivateProfileStringA("Options", "remoteConfig", iniRemoteConfig.c_str(), ipath.c_str());
+	WritePrivateProfileStringW(L"Options", L"autoUpdate", iniAutoUpdate ? L"1" : L"0", ipath.c_str());
+	WritePrivateProfileStringW(L"Options", L"useLoadLock", iniUseLoadLock ? L"1" : L"0", ipath.c_str());
+	WritePrivateProfileStringW(L"Options", L"enableLua", iniEnableLua ? L"1" : L"0", ipath.c_str());
+	WritePrivateProfileStringW(L"Options", L"remoteConfig", utf2ws(iniRemoteConfig).c_str(), ipath.c_str());
 
 	nlohmann::json root;
-	std::stringstream order;
+	std::wstringstream order;
 	{ std::shared_lock lock(ModPackage::descMutex);
 	for (auto& package : ModPackage::descPackage) {
 		root[package->name] = package->data;
 		if (package->fileExists) {
-			order << package->name << ",";
-			WritePrivateProfileStringA("Packages", package->name.c_str(), package->package ? "1" : "0", ipath.c_str());
+			auto packageName = utf2ws(package->name);
+			order << packageName.c_str() << ",";
+			WritePrivateProfileStringW(L"Packages", packageName.c_str(), package->package ? L"1" : L"0", ipath.c_str());
 		}
 	} }
-	WritePrivateProfileStringA("Options", "order", order.str().c_str(), ipath.c_str());
+	WritePrivateProfileStringW(L"Options", L"order", order.str().c_str(), ipath.c_str());
 
 	std::ofstream output(ModPackage::basePath / L"packages.json");
 	output << root;

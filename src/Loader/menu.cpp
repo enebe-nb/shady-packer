@@ -2,6 +2,7 @@
 #include "modpackage.hpp"
 #include "menu.hpp"
 #include "../Core/util/filewatcher.hpp"
+#include "th123intl.hpp"
 
 namespace {
 	ModPackage* selectedPackage = 0;
@@ -60,12 +61,14 @@ void ModList::renderScroll(float x, float y, int offset, int size, int view) {
 }
 
 void ModList::updateList() {
+	auto cp = th123intl::GetTextCodePage();
 	this->names.clear();
 	this->types.clear();
 	ModPackage::descMutex.lock_shared();
 	for (auto package : ModPackage::descPackage) {
+		std::string name; th123intl::ConvertCodePage(CP_UTF8, package->name, cp, name);
 		this->names.emplace_back();
-		this->names.back().assign(package->name.c_str(), package->name.length());
+		this->names.back().assign(name.c_str(), name.size());
 		this->types.push_back(package->isEnabled());
 	} ModPackage::descMutex.unlock_shared();
 	this->updateResources();
@@ -262,6 +265,7 @@ int ModMenu::onRender() {
 }
 
 void ModMenu::updateView(int index) {
+	auto cp = th123intl::GetTextCodePage();
 	std::shared_lock lock(ModPackage::descMutex);
 	ModPackage* package = ModPackage::descPackage[index];
 	SokuLib::FontDescription fontDesc {
@@ -275,7 +279,10 @@ void ModMenu::updateView(int index) {
 	int textureId;
 
 	font.setIndirect(fontDesc);
-	SokuLib::textureMgr.createTextTexture(&textureId, package->name.c_str(), font, 330, 24, 0, 0);
+	{
+		std::string name; th123intl::ConvertCodePage(CP_UTF8, package->name, cp, name);
+		SokuLib::textureMgr.createTextTexture(&textureId, name.c_str(), font, 330, 24, 0, 0);
+	}
 	if (viewTitle.dxHandle) SokuLib::textureMgr.remove(viewTitle.dxHandle);
 	viewTitle.setTexture2(textureId, 0, 0, 330, 24);
 
@@ -286,13 +293,18 @@ void ModMenu::updateView(int index) {
 	std::string temp;
 	if (package->isLocal()) temp = "<color 404040>This is a local Package.</color>";
 	else {
-		temp += "Version: <color 404040>" + package->version() + "</color><br>";
-		temp += "Creator: <color 404040>" + package->creator() + "</color><br>";
-		temp += "Description: <color 404040>" + package->description() + "</color><br>";
+		std::string cpStr;
+		th123intl::ConvertCodePage(CP_UTF8, package->version(), cp, cpStr);
+		temp += "Version: <color 404040>" + cpStr + "</color><br>";
+		th123intl::ConvertCodePage(CP_UTF8, package->creator(), cp, cpStr);
+		temp += "Creator: <color 404040>" + cpStr + "</color><br>";
+		th123intl::ConvertCodePage(CP_UTF8, package->description(), cp, cpStr);
+		temp += "Description: <color 404040>" + cpStr + "</color><br>";
 		temp += "Tags: ";
 		for (int i = 0; i < package->tags.size(); ++i) {
 			if (i > 0) temp += ", ";
-			temp += "<color 404040>" + package->tags[i] + "</color>";
+			th123intl::ConvertCodePage(CP_UTF8, package->tags[i], cp, cpStr);
+			temp += "<color 404040>" + cpStr + "</color>";
 		}
 	}
 
