@@ -25,6 +25,23 @@ namespace {
 			this->setg((char*)begin, (char*)begin, (char*)end);
 		}
 	};
+
+	struct ExposedMods {
+		std::vector<const char*> list;
+		inline ExposedMods() { list.push_back(NULL); }
+		inline ~ExposedMods() {
+			for (auto mod : list) if (mod) delete[] mod;
+		}
+
+		void add(ModPackage* package) {
+			for (auto mod : list) if (package->name == mod) return;
+			size_t size = package->name.size();
+			char* name = new char[size + 1];
+			name[size] = '\0';
+			memcpy(name, package->name.data(), size);
+			list.insert(--list.end(), name);
+		}
+	} exposedMods;
 }
 
 static bool loader_addAlias(const char* alias, const char* target) {
@@ -111,6 +128,7 @@ void EnablePackage(ModPackage* p) {
         ShadyLua::LuaScript* script = new ShadyLua::LuaScript(loader, _lua_open, _lua_close, _lua_destroy);
         LualibLoader(script->L);
         p->script = script;
+        exposedMods.add(p);
     } }
 
     if (p->script) {
@@ -126,3 +144,25 @@ void DisablePackage(ModPackage* p) {
     if (p->package) ModPackage::basePackage->erase(p->package);
     p->script = p->package = 0;
 }
+
+extern "C" __declspec(dllexport) const char** getModsList() {
+	return exposedMods.list.data();
+}
+
+extern "C" __declspec(dllexport) bool setEnabled(bool enabled, char *moduleName) {
+	ModPackage* package = 0;
+	{ std::shared_lock lock(ModPackage::descMutex);
+	for(auto& p : ModPackage::descPackage) {
+		if (p->name == moduleName) {
+			package = p;
+			break;
+		}
+	} }
+
+	if (!package) return false;
+	if (enabled && !package->isEnabled()) EnablePackage(package);
+	if (!enabled && package->isEnabled()) DisablePackage(package);
+	return true;
+}
+
+extern "C" __declspec(dllexport) bool canBeDisabled = true;

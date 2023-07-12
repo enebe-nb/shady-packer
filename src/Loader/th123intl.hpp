@@ -37,9 +37,9 @@ namespace th123intl {
             if (!MultiByteToWideChar(fromCP, inFlags, from.data(), from.size(), buffer.data(), buffer.size()))
                 { to.resize(0); return; }
 
-            size = WideCharToMultiByte(toCP, outFlags, buffer.data(), -1, NULL, NULL, NULL, NULL);
+            size = WideCharToMultiByte(toCP, outFlags, buffer.data(), buffer.size(), NULL, NULL, NULL, NULL);
             to.resize(size);
-            if (!WideCharToMultiByte(toCP, outFlags, buffer.data(), -1, to.data(), to.size(), NULL, NULL))
+            if (!WideCharToMultiByte(toCP, outFlags, buffer.data(), buffer.size(), to.data(), to.size(), NULL, NULL))
                 { to.resize(0); return; }
         }
     }
