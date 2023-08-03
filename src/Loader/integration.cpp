@@ -34,7 +34,7 @@ namespace {
 		}
 
 		void add(ModPackage* package) {
-			for (auto mod : list) if (package->name == mod) return;
+			for (auto mod : list) if (mod && package->name == mod) return;
 			size_t size = package->name.size();
 			char* name = new char[size + 1];
 			name[size] = '\0';
