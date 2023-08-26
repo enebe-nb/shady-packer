@@ -23,34 +23,20 @@ inline std::wstring sjis2ws(const std::string_view& str) {
 
 //-------------------------------------------------------------
 
-namespace {
-	std::mutex streamLock;
-	// won't have many elements at same time (list is better)
-	std::list<std::ifstream> streamList;
-}
-
 ShadyCore::FilePackageEntry::~FilePackageEntry() { if (deleteOnDestroy) std::filesystem::remove(filename); }
 
 std::istream& ShadyCore::FilePackageEntry::open() {
 	++openCount;
 #ifdef _MSC_VER
-	return streamList.emplace_back(parent->getBasePath() / filename, std::ios::binary, _SH_DENYWR);
+	return *new std::ifstream(parent->getBasePath() / filename, std::ios::binary, _SH_DENYWR);
 #else
-	return streamList.emplace_back(parent->getBasePath() / filename, std::ios::binary);
+	return *new std::ifstream(parent->getBasePath() / filename, std::ios::binary);
 #endif
 }
 
 void ShadyCore::FilePackageEntry::close(std::istream& stream) {
-	{ std::lock_guard lock(streamLock);
-	for (auto iter = streamList.begin(); iter != streamList.end(); ++iter) {
-		if (&stream == iter.operator->()) {
-			--openCount;
-			iter->close();
-			streamList.erase(iter);
-			break;
-		}
-	} }
-
+	delete &stream;
+	if (openCount > 0) --openCount;
 	if (disposable) delete this; // TODO && openCount?
 }
 

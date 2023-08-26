@@ -171,44 +171,34 @@ void ShadyCore::DataFileFilter::seek(off_type spos, std::ios::seekdir sdir) {
 
 //-------------------------------------------------------------
 namespace {
-	std::mutex streamLock;
 	struct StreamData {
+		std::istream fileStream; // must be first
 		std::filebuf baseBuffer;
-		std::istream fileStream;
 		ShadyCore::DataFileFilter fileFilter;
 		inline StreamData(unsigned int offset, unsigned int size)
 			: fileStream(&fileFilter), fileFilter(&baseBuffer, offset, size) {}
 	};
-	// won't have many elements at same time (list is better)
-	std::list<StreamData> streamList;
 }
 
 
 std::istream& ShadyCore::DataPackageEntry::open() {
 	++openCount;
-	auto& streamData = streamList.emplace_back(packageOffset, packageSize);
+	auto streamData = new StreamData(packageOffset, packageSize);
 
 #ifdef _MSC_VER
-	streamData.baseBuffer.open(parent->getBasePath(), std::ios::in | std::ios::binary, _SH_DENYWR);
+	streamData->baseBuffer.open(parent->getBasePath(), std::ios::in | std::ios::binary, _SH_DENYWR);
 #else
-	streamData.baseBuffer.open(parent->getBasePath(), std::ios::in | std::ios::binary);
+	streamData->baseBuffer.open(parent->getBasePath(), std::ios::in | std::ios::binary);
 #endif
-	streamData.baseBuffer.pubseekoff(packageOffset, std::ios::beg);
+	streamData->baseBuffer.pubseekoff(packageOffset, std::ios::beg);
 
-	return streamData.fileStream;
+	return streamData->fileStream;
 }
 
 void ShadyCore::DataPackageEntry::close(std::istream& fileStream) {
-	{ std::lock_guard lock(streamLock);
-	for (auto iter = streamList.begin(); iter != streamList.end(); ++iter) {
-		if (&fileStream == &iter->fileStream) {
-			--openCount;
-			streamList.erase(iter);
-			break;
-		}
-	} }
-
-	if (disposable) delete this; // TODO && openCount?
+	delete (StreamData*)&fileStream;
+	if (openCount > 0) --openCount;
+	if (disposable && !openCount) delete this;
 }
 
 //-------------------------------------------------------------

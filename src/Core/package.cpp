@@ -1,6 +1,7 @@
 #include "package.hpp"
 #include "fileentry.hpp"
 #include "util/tempfiles.hpp"
+#include "zipentry.hpp"
 #include <cstring>
 #include <fstream>
 #include <iostream>
@@ -35,6 +36,8 @@ ShadyCore::Package::~Package() {
 		if (!entry.second->isOpen()) delete entry.second;
 		else entry.second->markAsDisposable();
 	}
+
+	ZipPackageEntry::closeArchive(this);
 }
 
 ShadyCore::Package::iterator ShadyCore::Package::insert(const std::string_view& name, BasePackageEntry* entry) {
@@ -100,9 +103,12 @@ namespace ShadyCore {
 		inline AliasPackageEntry(Package* parent, BasePackageEntry& entry) : BasePackageEntry(parent, entry.getSize()), entry(entry) {}
 
 		inline StorageType getStorage() const final { return entry.getStorage(); }
-		inline std::istream& open() final { return entry.open(); }
-		//inline bool isOpen() const final { return entry.isOpen(); }
-		inline void close(std::istream& s) final { entry.close(s); if (disposable) delete this; }
+		inline std::istream& open() final { ++openCount; return entry.open(); }
+		inline void close(std::istream& s) final {
+			entry.close(s);
+			if (openCount > 0) --openCount;
+			if (disposable && !openCount) delete this;
+		}
 	};
 }
 

@@ -34,7 +34,7 @@ namespace ShadyCore {
 		int_type uflow() override;
 	public:
 		inline bool isOpen() const { return pkgFile; }
-		void open(const std::filesystem::path&, const std::string&);
+		void open(void*, const std::string&);
 		void close();
 	};
 
@@ -50,6 +50,7 @@ namespace ShadyCore {
 		//inline bool isOpen() const override final { return zipBuffer.size(); }
 		std::istream& open() override final;
 		void close(std::istream&) override final;
+		static void closeArchive(Package*);
 	};
 
 	ShadyCore::FileType GetZipPackageDefaultType(const ShadyCore::FileType& inputType, ShadyCore::BasePackageEntry* entry);

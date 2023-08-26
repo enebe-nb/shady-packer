@@ -7,6 +7,61 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <set>
+
+namespace {
+	struct ZipArchive;
+	using zipArchives_t = std::set<ZipArchive>;
+	zipArchives_t zipArchives;
+	std::mutex zipArchivesMutex;
+
+	struct ZipArchive {
+		ShadyCore::Package* const key;
+		mutable std::condition_variable terminate;
+		mutable std::thread* thread = 0;
+		mutable zip_t* handle = 0;
+		mutable int count = 0;
+
+		inline ZipArchive(ShadyCore::Package* const key) : key(key) {}
+		ZipArchive(const ZipArchive&) = delete;
+		ZipArchive(ZipArchive&&) = delete;
+		ZipArchive& operator=(const ZipArchive&) = delete;
+		ZipArchive& operator=(ZipArchive&&) = delete;
+		inline bool operator<(const ZipArchive& o) const { return key < o.key; }
+
+		void run() const;
+		inline void start() const { if (!thread) thread = new std::thread(&ZipArchive::run, this); }
+	};
+	inline bool operator<(const ZipArchive& l, ShadyCore::Package* const& r) { return l.key < r; }
+	inline bool operator<(ShadyCore::Package* const& l, const ZipArchive& r) { return l < r.key; }
+
+	void ZipArchive::run() const {
+		std::unique_lock lock(zipArchivesMutex);
+		std::cv_status result;
+		do {
+			result = terminate.wait_for(lock, std::chrono::minutes(10));
+		} while(count);
+		std::thread* oldThread = thread;
+		zip_t* oldHandle = handle;
+		thread = 0; handle = 0;
+		if (result == std::cv_status::no_timeout) {
+			zipArchives.erase(*this); // TODO test
+		}
+		lock.unlock();
+
+		if (oldHandle) zip_close(oldHandle);
+		if (oldThread) {
+			oldThread->detach();
+			delete oldThread;
+		}
+	}
+
+	struct StreamData {
+		std::istream zipStream; // must be first
+		ShadyCore::ZipStream zipBuffer;
+		inline StreamData() : zipStream(&zipBuffer) {}
+	};
+}
 
 std::streambuf::int_type ShadyCore::ZipStream::underflow() {
 	if (hasBufVal) return bufVal;
@@ -86,11 +141,8 @@ std::streambuf::pos_type ShadyCore::ZipStream::seekpos(pos_type spos, std::ios::
 	return seekoff(spos, std::ios::beg, mode);
 }
 
-void ShadyCore::ZipStream::open(const std::filesystem::path& packageFile, const std::string& name) {
-	auto handle = CreateFileW(packageFile.c_str(), GENERIC_READ, FILE_SHARE_READ, 0, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
-	if (handle == INVALID_HANDLE_VALUE) return;
-	pkgFile = zip_open_from_source(zip_source_win32handle_create(handle, 0, 0, 0), ZIP_RDONLY, 0);
-
+void ShadyCore::ZipStream::open(void* packageFile, const std::string& name) {
+	pkgFile = packageFile;
 	zip_stat_t stat;
 	zip_stat_init(&stat);
 	zip_stat((zip_t*)pkgFile, name.c_str(), 0, &stat);
@@ -103,7 +155,6 @@ void ShadyCore::ZipStream::open(const std::filesystem::path& packageFile, const 
 
 void ShadyCore::ZipStream::close() {
 	zip_fclose((zip_file_t*)innerFile);
-	zip_close((zip_t*)pkgFile);
 }
 
 //-------------------------------------------------------------
@@ -205,36 +256,49 @@ static zip_int64_t zipOutputFunc(void* userdata, void* data, zip_uint64_t len, z
 
 //-------------------------------------------------------------
 
-namespace {
-	std::mutex streamLock;
-	struct StreamData {
-		std::istream zipStream;
-		ShadyCore::ZipStream zipBuffer;
-		inline StreamData() : zipStream(&zipBuffer) {}
-	};
-	// won't have many elements at same time (list is better)
-	std::list<StreamData> streamList;
-}
-
 std::istream& ShadyCore::ZipPackageEntry::open() {
 	++openCount;
-	auto& streamData = streamList.emplace_back();
-	streamData.zipBuffer.open(parent->getBasePath(), name);
-	return streamData.zipStream;
+	std::unique_lock lock(zipArchivesMutex);
+	auto archive = zipArchives.find(parent);
+	if (archive == zipArchives.end()) throw std::exception("Zip Archive was not in the list");
+	++archive->count;
+	archive->start();
+	lock.unlock();
+
+	if (!archive->handle) {
+		auto file = CreateFileW(parent->getBasePath().c_str(), GENERIC_READ, FILE_SHARE_READ, 0, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
+#ifdef _DEBUG
+		if (file == INVALID_HANDLE_VALUE) throw std::exception(std::system_category().message(GetLastError()).c_str());
+#endif
+		archive->handle = zip_open_from_source(zip_source_win32handle_create(file, 0, 0, 0), ZIP_RDONLY, 0);
+	}
+
+	auto streamData = new StreamData();
+	streamData->zipBuffer.open(archive->handle, name);
+	return streamData->zipStream;
 }
 
 void ShadyCore::ZipPackageEntry::close(std::istream& zipStream) {
-	{ std::lock_guard lock(streamLock);
-	for (auto iter = streamList.begin(); iter != streamList.end(); ++iter) {
-		if (&zipStream == &iter->zipStream) {
-			--openCount;
-			iter->zipBuffer.close();
-			streamList.erase(iter);
-			break;
-		}
-	} }
+	auto streamData = (StreamData*)&zipStream;
+	streamData->zipBuffer.close();
+	delete streamData;
 
-	if (disposable) delete this; // TODO && openCount?
+	std::unique_lock lock(zipArchivesMutex);
+	auto archive = zipArchives.find(parent);
+	if (archive == zipArchives.end()) throw std::exception("Zip Archive was not in the list");
+	if (archive->count > 0) --archive->count;
+	if (openCount > 0) --openCount;
+	if (disposable && !openCount) {
+		archive->terminate.notify_all();
+		delete this;
+	}
+}
+
+void ShadyCore::ZipPackageEntry::closeArchive(Package* package) {
+	std::unique_lock lock(zipArchivesMutex);
+	auto archive = zipArchives.find(package);
+	if (archive != zipArchives.end())
+		archive->terminate.notify_all();
 }
 
 //-------------------------------------------------------------
@@ -254,6 +318,7 @@ void ShadyCore::Package::loadZip(const std::filesystem::path& path) {
 	}
 
 	zip_close(file);
+	{ std::unique_lock lock(zipArchivesMutex); zipArchives.emplace(this); }
 }
 
 namespace {

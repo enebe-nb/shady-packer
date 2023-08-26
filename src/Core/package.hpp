@@ -36,9 +36,10 @@ namespace ShadyCore {
 		using MapType = std::unordered_map<Key, BasePackageEntry*, Key::hash>;
 		// --- DATA ---
 		MapType entries;
-		std::filesystem::path basePath;
+		const std::filesystem::path basePath;
 
-		Package() = default;
+		static inline struct default_constructor_t { explicit default_constructor_t() = default; } default_constructor;
+		inline Package(default_constructor_t, const std::filesystem::path& basePath) : basePath(basePath) {}
 
 		void loadData(const std::filesystem::path&);
 		void loadDir(const std::filesystem::path&);
@@ -85,7 +86,7 @@ namespace ShadyCore {
 		std::vector<Package*> groups;
 
 	public:
-		inline PackageEx(const std::filesystem::path& basePath = std::filesystem::current_path()) { this->basePath = basePath; }
+		inline PackageEx(const std::filesystem::path& basePath = std::filesystem::current_path()) : Package(default_constructor, basePath) {}
 		virtual ~PackageEx();
 
 		Package* merge(Package* package);

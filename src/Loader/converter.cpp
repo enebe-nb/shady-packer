@@ -26,6 +26,7 @@ namespace {
     auto __schemaCreateReaderA = reinterpret_cast<bool (__fastcall *)(void** output, int unused, const char* filename)>(0x0040d1e0);
     auto __schemaCreateReaderB = reinterpret_cast<bool (__fastcall *)(void** output, int unused, const char* filename)>(0x0040d1e0);
     auto __schemaCreateReaderC = reinterpret_cast<bool (__fastcall *)(void** output, int unused, const char* filename)>(0x0040d1e0);
+    auto __sokuCleanup = reinterpret_cast<void (__fastcall *)(void* ecx)>(0x00407b50);
 
     // avail code [0x408e30:0x408ea5] 
     // keep ebx state, return to 0x408ea5
@@ -345,6 +346,11 @@ static int __fastcall titleOnRender(SokuLib::Title* t) {
     return ret;
 }
 
+static void __fastcall sokuCleanup(void* ecx) {
+    __sokuCleanup(ecx);
+    ModPackage::basePackage->clear();
+}
+
 template<int N> static inline void TamperCode(int addr, uint8_t(&code)[N]) {
     for (int i = 0; i < N; ++i) {
         uint8_t swap = *(uint8_t*)(addr+i);
@@ -373,6 +379,7 @@ static int _HookLoader() {
     __schemaCreateReaderA = SokuLib::TamperNearJmpOpr(0x0040b36b, schemaCreateReader<__schemaCreateReaderA, ShadyCore::FileType::SCHEMA_GAME_GUI>);
     __schemaCreateReaderB = SokuLib::TamperNearJmpOpr(0x0043b4bf, schemaCreateReader<__schemaCreateReaderB, ShadyCore::FileType::SCHEMA_GAME_ANIM>);
     __schemaCreateReaderC = SokuLib::TamperNearJmpOpr(0x00467a80, schemaCreateReader<__schemaCreateReaderC, ShadyCore::FileType::SCHEMA_GAME_PATTERN>);
+    __sokuCleanup = SokuLib::TamperNearJmpOpr(0x007fb8a1, sokuCleanup);
     VirtualProtect((PVOID)TEXT_SECTION_OFFSET, TEXT_SECTION_SIZE, dwOldProtect, &dwOldProtect);
 
     VirtualProtect((PVOID)RDATA_SECTION_OFFSET, RDATA_SECTION_SIZE, PAGE_EXECUTE_WRITECOPY, &dwOldProtect);
@@ -410,6 +417,7 @@ void UnhookLoader() {
     SokuLib::TamperNearJmpOpr(0x0040b36b, __schemaCreateReaderA); // gui
     SokuLib::TamperNearJmpOpr(0x0043b4bf, __schemaCreateReaderB); // effect
     SokuLib::TamperNearJmpOpr(0x00467a80, __schemaCreateReaderC); // pattern
+    SokuLib::TamperNearJmpOpr(0x007fb8a1, __sokuCleanup);
     VirtualProtect((PVOID)TEXT_SECTION_OFFSET, TEXT_SECTION_SIZE, dwOldProtect, &dwOldProtect);
 
     VirtualProtect((PVOID)RDATA_SECTION_OFFSET, RDATA_SECTION_SIZE, PAGE_EXECUTE_WRITECOPY, &dwOldProtect);
