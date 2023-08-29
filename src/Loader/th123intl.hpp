@@ -27,37 +27,34 @@ namespace th123intl {
         return curLocale = (_locale_t)proc();
     }
 
-    template<int inFlags = MB_USEGLYPHCHARS, int outFlags = WC_COMPOSITECHECK|WC_DEFAULTCHAR>
-    inline void ConvertCodePage(unsigned int fromCP, const std::string_view& from, unsigned int toCP, std::string& to) {
-        if (fromCP == toCP) { to = from; return; }
-        else {
-            std::wstring buffer;
-            size_t size = MultiByteToWideChar(fromCP, inFlags, from.data(), from.size(), NULL, NULL);
-            buffer.resize(size);
-            if (!MultiByteToWideChar(fromCP, inFlags, from.data(), from.size(), buffer.data(), buffer.size()))
-                { to.resize(0); return; }
-
-            size = WideCharToMultiByte(toCP, outFlags, buffer.data(), buffer.size(), NULL, NULL, NULL, NULL);
-            to.resize(size);
-            if (!WideCharToMultiByte(toCP, outFlags, buffer.data(), buffer.size(), to.data(), to.size(), NULL, NULL))
-                { to.resize(0); return; }
-        }
-    }
-
     template<int flags = WC_COMPOSITECHECK|WC_DEFAULTCHAR>
-    inline void ConvertCodePage(const std::wstring_view& from, unsigned int toCP, std::string& to) {
-        size_t size = WideCharToMultiByte(toCP, flags, from.data(), from.size(), NULL, NULL, NULL, NULL);
+    inline bool ConvertCodePage(const std::wstring_view& from, unsigned int toCP, std::string& to) {
+        const DWORD dwFlags = toCP == CP_UTF8 || toCP == 54936 ? flags & WC_ERR_INVALID_CHARS : flags;
+        size_t size = WideCharToMultiByte(toCP, dwFlags, from.data(), from.size(), NULL, NULL, NULL, NULL);
         to.resize(size);
-        if (!WideCharToMultiByte(toCP, flags, from.data(), from.size(), to.data(), to.size(), NULL, NULL))
-            { to.resize(0); return; }
+        if (!size) return false;
+        const bool ret = WideCharToMultiByte(toCP, dwFlags, from.data(), from.size(), to.data(), to.size(), NULL, NULL);
+        if (!ret) to.resize(0);
+        return ret;
     }
 
     template<int flags = MB_USEGLYPHCHARS>
-    inline void ConvertCodePage(unsigned int fromCP, const std::string_view& from, std::wstring& to) {
-        size_t size = MultiByteToWideChar(fromCP, flags, from.data(), from.size(), NULL, NULL);
+    inline bool ConvertCodePage(unsigned int fromCP, const std::string_view& from, std::wstring& to) {
+        const DWORD dwFlags = fromCP == CP_UTF8 || fromCP == 54936  ? flags & WC_ERR_INVALID_CHARS : flags;
+        size_t size = MultiByteToWideChar(fromCP, dwFlags, from.data(), from.size(), NULL, NULL);
         to.resize(size);
-        if (!MultiByteToWideChar(fromCP, flags, from.data(), from.size(), to.data(), to.size()))
-            { to.resize(0); return; }
+        if (!size) return false;
+        const bool ret = MultiByteToWideChar(fromCP, dwFlags, from.data(), from.size(), to.data(), to.size());
+        if (!ret) to.resize(0);
+        return ret;
+    }
+
+    template<int inFlags = MB_USEGLYPHCHARS, int outFlags = WC_COMPOSITECHECK|WC_DEFAULTCHAR>
+    inline bool ConvertCodePage(unsigned int fromCP, const std::string_view& from, unsigned int toCP, std::string& to) {
+        if (fromCP == toCP) { to = from; return true; }
+        std::wstring buffer;
+        if (!ConvertCodePage<inFlags>(fromCP, from, buffer)) { to.resize(0); return false; }
+        return ConvertCodePage<outFlags>(buffer, toCP, to);
     }
 }
 

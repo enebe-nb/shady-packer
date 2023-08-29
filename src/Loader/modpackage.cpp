@@ -1,6 +1,7 @@
 #include "modpackage.hpp"
 #include "main.hpp"
 #include "../Core/package.hpp"
+#include "th123intl.hpp"
 #include <fstream>
 #include <mutex>
 #include <cctype>
@@ -70,8 +71,9 @@ namespace {
 					if (i->second->isDone()) {
 						ModPackage* p = i->first;
 						ModPackage::descMutex.lock();
-
 						std::filesystem::path filename(p->path);
+						ModPackage::descMutex.unlock();
+
 						filename += L".part";
 						if (std::filesystem::exists(filename)) {
 							std::filesystem::path target(filename);
@@ -80,17 +82,19 @@ namespace {
 							std::filesystem::remove(target, err);
 							if (!err) std::filesystem::rename(filename, target, err);
 							if (!err) {
+								ModPackage::descMutex.lock();
 								p->data["version"] = p->data.value("remoteVersion", "");
 								p->requireUpdate = false;
 								p->fileExists = true;
+								ModPackage::descMutex.unlock();
 							}
 
 							if (err) {
-								ModPackage::descMutex.unlock();
 								++i; continue;
 							}
 						}
 
+						ModPackage::descMutex.lock();
 						p->downloading = false;
 						ModPackage::descMutex.unlock();
 						SaveSettings();
@@ -190,6 +194,16 @@ namespace {
 	} downloadController;
 }
 
+static inline std::string ws2utf(const std::wstring_view& wstr) {
+    std::string ret; th123intl::ConvertCodePage(wstr, CP_UTF8, ret);
+    return ret;
+}
+
+static inline std::wstring utf2ws(const std::string_view& str) {
+    std::wstring ret; th123intl::ConvertCodePage(CP_UTF8, str, ret);
+    return ret;
+}
+
 ModPackage::ModPackage(const std::string& name, const nlohmann::json::value_type& data)
 	: name(name), path(basePath / (utf2ws(name) + L".zip")), data(data), fileExists(std::filesystem::exists(path)) {
 
@@ -261,7 +275,7 @@ void LoadPackage() {
 	{ wchar_t buffer[4096], *context = 0; int i = 0;
 		GetPrivateProfileStringW(L"Options", L"order", L"", buffer, 4096, spath.c_str());
 		for(wchar_t* token = wcstok_s(buffer, L",", &context); token; token = wcstok_s(0, L",", &context)) {
-			std::string name(ws2utf(token));
+			std::string name; th123intl::ConvertCodePage(token, CP_UTF8, name);
 			if (i >= ModPackage::descPackage.size()) break;
 			if (ModPackage::descPackage[i]->name == name) {++i; continue;}
 			for (int j = i + 1; j < ModPackage::descPackage.size(); ++j)

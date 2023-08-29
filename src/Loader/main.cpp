@@ -1,6 +1,7 @@
 #include "main.hpp"
 #include "modpackage.hpp"
 #include "../Lua/logger.hpp"
+#include "th123intl.hpp"
 
 #include <windows.h>
 #include <fstream>
@@ -108,16 +109,17 @@ void LoadSettings() {
 	wchar_t buffer[2048];
 	size_t len = GetPrivateProfileStringW(L"Options", L"remoteConfig",
 			L"http://shady.pinkysmile.fr/config.json", buffer, 2048, ipath.c_str());
-	iniRemoteConfig = ws2utf(buffer);
+	th123intl::ConvertCodePage(buffer, CP_UTF8, iniRemoteConfig);
 }
 
 void SaveSettings() {
 	const std::filesystem::path ipath = ModPackage::basePath / L"shady-loader.ini";
+	std::wstring tmpstr; th123intl::ConvertCodePage(CP_UTF8, iniRemoteConfig, tmpstr);
 
 	WritePrivateProfileStringW(L"Options", L"autoUpdate", iniAutoUpdate ? L"1" : L"0", ipath.c_str());
 	WritePrivateProfileStringW(L"Options", L"useLoadLock", iniUseLoadLock ? L"1" : L"0", ipath.c_str());
 	WritePrivateProfileStringW(L"Options", L"enableLua", iniEnableLua ? L"1" : L"0", ipath.c_str());
-	WritePrivateProfileStringW(L"Options", L"remoteConfig", utf2ws(iniRemoteConfig).c_str(), ipath.c_str());
+	WritePrivateProfileStringW(L"Options", L"remoteConfig", tmpstr.c_str(), ipath.c_str());
 
 	nlohmann::json root;
 	std::wstringstream order;
@@ -125,7 +127,8 @@ void SaveSettings() {
 	for (auto& package : ModPackage::descPackage) {
 		root[package->name] = package->data;
 		if (package->fileExists) {
-			auto packageName = utf2ws(package->name);
+			std::wstring packageName;
+			th123intl::ConvertCodePage(CP_UTF8, package->name, packageName);
 			order << packageName.c_str() << ",";
 			WritePrivateProfileStringW(L"Packages", packageName.c_str(), package->package ? L"1" : L"0", ipath.c_str());
 		}

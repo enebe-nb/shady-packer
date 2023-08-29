@@ -139,6 +139,10 @@ TEST_F(ZipEntrySuite, PackageWrite) {
 		}
 
 		delete input;
-		std::filesystem::remove(tempFile);
+		bool successful = false; do try {
+			std::filesystem::remove(tempFile); successful = true;
+		} catch(std::filesystem::filesystem_error e) {
+			std::this_thread::sleep_for(std::chrono::seconds(1));
+		} while(!successful);
 	}
 }
