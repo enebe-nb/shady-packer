@@ -308,7 +308,7 @@ void UnloadPackage() {
 	std::unique_lock lock(ModPackage::descMutex);
 	for (auto& package : ModPackage::descPackage) {
 		if (package->isEnabled()) {
-			DisablePackage(package);
+			//DisablePackage(package);
 			if (package->watcher) {
 				delete package->watcher;
 				package->watcher = 0;

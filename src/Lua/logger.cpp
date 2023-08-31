@@ -57,7 +57,7 @@ void Logger::Clear() {
 void Logger::Render() {
     if (logContent.empty()) return;
 
-    { std::lock_guard guard(consoleLock);
+    if (consoleLock.try_lock()) {
     if (isDirty) {
         if (!consoleFont) consoleFont = createFont();
         isDirty = false;
@@ -70,7 +70,7 @@ void Logger::Render() {
         int texture, width, height;
         int* x = SokuLib::textureMgr.createTextTexture(&texture, content.c_str(), *consoleFont, 632, 472, &width, &height);
         consoleView.setTexture2(texture, 0, 0, width, height);
-    } }
+    } consoleLock.unlock(); }
 
     if (timerStart != 0) {
         std::time_t timerEnd; std::time(&timerEnd);

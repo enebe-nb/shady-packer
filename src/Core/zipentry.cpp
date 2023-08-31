@@ -14,13 +14,14 @@ namespace {
 	using zipArchives_t = std::set<ZipArchive>;
 	zipArchives_t zipArchives;
 	std::mutex zipArchivesMutex;
+	std::condition_variable zipArchivesNotify;
+	std::thread* zipArchivesThread = 0;
 
 	struct ZipArchive {
 		ShadyCore::Package* const key;
-		mutable std::condition_variable terminate;
-		mutable std::thread* thread = 0;
 		mutable zip_t* handle = 0;
 		mutable int count = 0;
+		mutable bool disposable = false;
 
 		inline ZipArchive(ShadyCore::Package* const key) : key(key) {}
 		ZipArchive(const ZipArchive&) = delete;
@@ -28,28 +29,37 @@ namespace {
 		ZipArchive& operator=(const ZipArchive&) = delete;
 		ZipArchive& operator=(ZipArchive&&) = delete;
 		inline bool operator<(const ZipArchive& o) const { return key < o.key; }
-
-		void run() const;
-		inline void start() const { if (!thread) thread = new std::thread(&ZipArchive::run, this); }
 	};
 	inline bool operator<(const ZipArchive& l, ShadyCore::Package* const& r) { return l.key < r; }
 	inline bool operator<(ShadyCore::Package* const& l, const ZipArchive& r) { return l < r.key; }
 
-	void ZipArchive::run() const {
+	void ZipArchivesRun() {
 		std::unique_lock lock(zipArchivesMutex);
-		std::cv_status result;
+		bool skipWait = true;
 		do {
-			result = terminate.wait_for(lock, std::chrono::minutes(10));
-		} while(count);
-		std::thread* oldThread = thread;
-		zip_t* oldHandle = handle;
-		thread = 0; handle = 0;
-		if (result == std::cv_status::no_timeout) {
-			zipArchives.erase(*this); // TODO test
-		}
+			if (skipWait) skipWait = false;
+			else zipArchivesNotify.wait_for(lock, std::chrono::seconds(10));
+
+			std::list<zip_t*> toClose;
+			for (auto iter = zipArchives.begin(); iter != zipArchives.end();) {
+				if (iter->count) { ++iter; continue; }
+				if (iter->handle) toClose.push_back(iter->handle);
+				iter->handle = 0;
+				if (iter->disposable) iter = zipArchives.erase(iter);
+				else ++iter;
+			}
+
+			if (!toClose.empty()) {
+				skipWait = true;
+				lock.unlock();
+				for (auto handle : toClose) zip_close(handle);
+				lock.lock();
+			}
+		} while(!zipArchives.empty());
+		std::thread* oldThread = zipArchivesThread;
+		zipArchivesThread = 0;
 		lock.unlock();
 
-		if (oldHandle) zip_close(oldHandle);
 		if (oldThread) {
 			oldThread->detach();
 			delete oldThread;
@@ -262,7 +272,6 @@ std::istream& ShadyCore::ZipPackageEntry::open() {
 	auto archive = zipArchives.find(parent);
 	if (archive == zipArchives.end()) throw std::exception("Zip Archive was not in the list");
 	++archive->count;
-	archive->start();
 	lock.unlock();
 
 	if (!archive->handle) {
@@ -289,16 +298,19 @@ void ShadyCore::ZipPackageEntry::close(std::istream& zipStream) {
 	if (archive->count > 0) --archive->count;
 	if (openCount > 0) --openCount;
 	if (disposable && !openCount) {
-		archive->terminate.notify_all();
+		zipArchivesNotify.notify_all();
 		delete this;
 	}
 }
 
 void ShadyCore::ZipPackageEntry::closeArchive(Package* package) {
 	std::unique_lock lock(zipArchivesMutex);
+	if (zipArchives.empty()) return;
 	auto archive = zipArchives.find(package);
-	if (archive != zipArchives.end())
-		archive->terminate.notify_all();
+	if (archive != zipArchives.end()) {
+		archive->disposable = true;
+		zipArchivesNotify.notify_all();
+	}
 }
 
 //-------------------------------------------------------------
@@ -318,7 +330,9 @@ void ShadyCore::Package::loadZip(const std::filesystem::path& path) {
 	}
 
 	zip_close(file);
-	{ std::unique_lock lock(zipArchivesMutex); zipArchives.emplace(this); }
+	{ std::unique_lock lock(zipArchivesMutex);
+	zipArchives.emplace(this);
+	if (!zipArchivesThread) zipArchivesThread = new std::thread(ZipArchivesRun); }
 }
 
 namespace {
