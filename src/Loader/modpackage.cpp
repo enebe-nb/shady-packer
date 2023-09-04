@@ -72,7 +72,6 @@ namespace {
 						ModPackage* p = i->first;
 						ModPackage::descMutex.lock();
 						std::filesystem::path filename(p->path);
-						ModPackage::descMutex.unlock();
 
 						filename += L".part";
 						if (std::filesystem::exists(filename)) {
@@ -82,19 +81,17 @@ namespace {
 							std::filesystem::remove(target, err);
 							if (!err) std::filesystem::rename(filename, target, err);
 							if (!err) {
-								ModPackage::descMutex.lock();
 								p->data["version"] = p->data.value("remoteVersion", "");
 								p->requireUpdate = false;
 								p->fileExists = true;
-								ModPackage::descMutex.unlock();
 							}
 
 							if (err) {
+								ModPackage::descMutex.unlock();
 								++i; continue;
 							}
 						}
 
-						ModPackage::descMutex.lock();
 						p->downloading = false;
 						ModPackage::descMutex.unlock();
 						SaveSettings();

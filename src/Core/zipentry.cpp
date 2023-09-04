@@ -10,13 +10,6 @@
 #include <set>
 
 namespace {
-	struct ZipArchive;
-	using zipArchives_t = std::set<ZipArchive>;
-	zipArchives_t zipArchives;
-	std::mutex zipArchivesMutex;
-	std::condition_variable zipArchivesNotify;
-	std::thread* zipArchivesThread = 0;
-
 	struct ZipArchive {
 		ShadyCore::Package* const key;
 		mutable zip_t* handle = 0;
@@ -32,6 +25,11 @@ namespace {
 	};
 	inline bool operator<(const ZipArchive& l, ShadyCore::Package* const& r) { return l.key < r; }
 	inline bool operator<(ShadyCore::Package* const& l, const ZipArchive& r) { return l < r.key; }
+
+	std::set<ZipArchive> zipArchives;
+	std::mutex zipArchivesMutex;
+	std::condition_variable zipArchivesNotify;
+	std::thread* zipArchivesThread = 0;
 
 	void ZipArchivesRun() {
 		std::unique_lock lock(zipArchivesMutex);
