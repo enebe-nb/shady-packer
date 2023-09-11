@@ -16,7 +16,10 @@ public:
 
 class ModMenu : public SokuLib::IMenu {
 private:
-    bool syncing = false;
+    bool viewDirty = true;
+    bool listDirty = true;
+    bool settingsDirty = false;
+    bool hasAction = false;
     SokuLib::CDesign design;
     ModList modList;
     SokuLib::MenuCursor modCursor;

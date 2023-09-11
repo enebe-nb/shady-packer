@@ -64,13 +64,12 @@ void ModList::updateList() {
 	auto cp = th123intl::GetTextCodePage();
 	this->names.clear();
 	this->types.clear();
-	ModPackage::descMutex.lock_shared();
 	for (auto package : ModPackage::descPackage) {
 		std::string name; th123intl::ConvertCodePage(CP_UTF8, package->name, cp, name);
 		this->names.emplace_back();
 		this->names.back().assign(name.c_str(), name.size());
 		this->types.push_back(package->isEnabled());
-	} ModPackage::descMutex.unlock_shared();
+	}
 	this->updateResources();
 }
 
@@ -86,7 +85,6 @@ static inline int _getPackageColor(ModPackage* package) {
 }
 
 int ModList::appendLine(SokuLib::String& out, void* unknown, SokuLib::Deque<SokuLib::String>& list, int index) {
-	std::shared_lock lock(ModPackage::descMutex);
 	ModPackage* package = ModPackage::descPackage[index];
 	int color = _getPackageColor(package);
 
@@ -103,13 +101,11 @@ ModMenu::ModMenu() {
 	ModPackage::LoadFromFilesystem();
 	(guide.*SokuLib::union_cast<void (SokuLib::Guide::*)(unsigned int)>(0x443160))(89); // Init
 	guide.active = true;
-	modList.updateList();
 
 	design.getById((SokuLib::CDesign::Sprite**)&modList.scrollBar, 101);
 	modList.scrollBar->active = true;
 	modList.scrollBar->gauge.set(&modList.scrollLen, 0, 286);
 	modCursor.set(&SokuLib::inputMgrs.input.verticalAxis, modList.names.size());
-	this->updateView(modCursor.pos);
 
 	ModPackage::LoadFromRemote();
 }
@@ -132,17 +128,27 @@ void ModMenu::_() {}
 
 int ModMenu::onProcess() {
 	(guide.*SokuLib::union_cast<void (SokuLib::Guide::*)()>(0x443220))(); // Update
-	if (ModPackage::Notify()) {
-		modList.updateList();
-		modCursor.set(&SokuLib::inputMgrs.input.verticalAxis, modList.names.size(), modCursor.pos);
-		this->updateView(modCursor.pos);
+	if (ModPackage::Notify()) viewDirty = listDirty = true;
+	if (ModPackage::descMutex.try_lock_shared()) {
+		if (listDirty) {
+			modList.updateList();
+			modCursor.set(&SokuLib::inputMgrs.input.verticalAxis, modList.names.size(), modCursor.pos);
+		}
+		if (viewDirty) this->updateView(modCursor.pos);
+		ModPackage::descMutex.unlock_shared();
+		viewDirty = listDirty = false;
 	}
 
-	// Cursor On List
+	if (settingsDirty) {
+		SaveSettings();
+		settingsDirty = false;
+	}
+
+	// // Cursor On List
 	if (this->state == 0) {
 		if (modCursor.update()) {
 			SokuLib::playSEWaveBuffer(0x27);
-			this->updateView(modCursor.pos);
+			viewDirty = true;
 		}
 
 		if (SokuLib::inputMgrs.input.c == 1) {
@@ -172,8 +178,9 @@ int ModMenu::onProcess() {
 				viewCursor.set(&SokuLib::inputMgrs.input.verticalAxis, this->optionCount);
 			}
 		}
+
 	// Cursor On View
-	} else if (this->state == 1) {
+	} else if (this->state == 1 && !hasAction) {
 		if (viewCursor.update()) {
 			SokuLib::playSEWaveBuffer(0x27);
 		}
@@ -184,15 +191,18 @@ int ModMenu::onProcess() {
 			return true;
 		}
 
-		bool shouldUpdate = false;
 		if (SokuLib::inputMgrs.input.a == 1) {
-			{ std::shared_lock lock(ModPackage::descMutex);
 			SokuLib::playSEWaveBuffer(0x28);
-			ModPackage* package = ModPackage::descPackage[modCursor.pos];
-			switch (options[viewCursor.pos]) {
+			hasAction = true;
+		}
+	}
+
+	if (hasAction && ModPackage::descMutex.try_lock_shared()) {
+		ModPackage* package = ModPackage::descPackage[modCursor.pos];
+		switch (options[viewCursor.pos]) {
 			case OPTION_ENABLE_DISABLE:
 				setPackageEnabled(package, !package->package);
-				shouldUpdate = true;
+				settingsDirty = listDirty = true;
 				break;
 			case OPTION_DOWNLOAD:
 				package->downloadFile();
@@ -219,14 +229,10 @@ int ModMenu::onProcess() {
 					MessageBox(0, translateExecuteError((int)result), errTitle, MB_OK);
 				}
 				break;
-			}}
-
-			if(shouldUpdate) {
-				SaveSettings();
-				modList.updateList();
-			}
-			this->updateView(modCursor.pos);
 		}
+
+		ModPackage::descMutex.unlock_shared();
+		viewDirty = true; hasAction = false;
 	}
 
 	return !SokuLib::checkKeyOneshot(0x1, false, false, false);
@@ -266,7 +272,6 @@ int ModMenu::onRender() {
 
 void ModMenu::updateView(int index) {
 	auto cp = th123intl::GetTextCodePage();
-	std::shared_lock lock(ModPackage::descMutex);
 	ModPackage* package = ModPackage::descPackage[index];
 	SokuLib::FontDescription fontDesc {
 		"",
@@ -359,7 +364,5 @@ void ModMenu::swap(int i, int j) {
 			enabled.push_back(ModPackage::descPackage[i]->package);
 	} if (enabled.size() > 1) ModPackage::basePackage->reorder(enabled.begin(), enabled.end());
 
-	modList.updateList();
-	this->updateView(modCursor.pos);
-	SaveSettings();
+	settingsDirty = listDirty = viewDirty = true;
 }
