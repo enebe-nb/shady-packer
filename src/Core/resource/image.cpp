@@ -290,16 +290,17 @@ void writerImageBmp(ShadyCore::Image& resource, std::ostream& output) {
 }
 
 void readerPaletteAct(ShadyCore::Palette& resource, std::istream& input) {
-	if (isTrueColorAvailable) for (int i = 0; i < 256; ++i) {
+	if (isTrueColorAvailable) for (int i = 255; i >= 0; --i) {
 		resource.initialize(32);
 		input.read((char*)&resource.data[i*4], 3);
 		resource.data[i*4+3] = i == 0 ? 0 : 0xff;
 	} else {
 		resource.initialize(16);
-		for (int i = 0; i < 256; ++i) {
+		for (int i = 255; i >= 0; --i) {
 			uint32_t color = 0;
 			uint16_t* data = (uint16_t*)resource.data;
 			input.read((char*)&color, 3);
+			color = ((color >> 16) & 0xFF) | (color & 0xFF00) | ((color & 0xFF) << 16);
 			data[i] = ShadyCore::Palette::packColor(color, i == 0);
 		}
 	}
