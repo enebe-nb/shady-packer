@@ -245,6 +245,16 @@ static void soku_PlaySFX(int id) {
     reinterpret_cast<void (*)(int id)>(0x0043E1E0)(id);
 }
 
+static int soku_CharacterName(lua_State* L) {
+    int id = luaL_checkinteger(L, 1);
+    auto name = reinterpret_cast<const char* (*)(int id)>(0x0043F3F0)(id);
+    if (name) {
+        lua_pushstring(L, name);
+    } else {
+        lua_pushnil(L);
+    } return 1;
+}
+
 static int soku_checkFKey(lua_State* L) {
     const int argc = lua_gettop(L);
     int key = luaL_checkinteger(L, 1);
@@ -346,6 +356,7 @@ void ShadyLua::LualibSoku(lua_State* L) {
             .addFunction("checkFKey", soku_checkFKey)
             .addFunction("playSE", soku_PlaySFX)
             .addFunction("playSFX", soku_PlaySFX)
+            .addFunction("characterName", soku_CharacterName)
 
             .addCFunction("SubscribePlayerInfo", soku_SubscribeEvent<Event::PLAYERINFO>)
             .addCFunction("SubscribeSceneChange", soku_SubscribeEvent<Event::SCENECHANGE>)
