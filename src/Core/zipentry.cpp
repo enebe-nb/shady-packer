@@ -265,12 +265,11 @@ static zip_int64_t zipOutputFunc(void* userdata, void* data, zip_uint64_t len, z
 //-------------------------------------------------------------
 
 std::istream& ShadyCore::ZipPackageEntry::open() {
-	++openCount;
 	std::unique_lock lock(zipArchivesMutex);
+	++openCount;
 	auto archive = zipArchives.find(parent);
 	if (archive == zipArchives.end()) throw std::exception("Zip Archive was not in the list");
 	++archive->count;
-	lock.unlock();
 
 	if (!archive->handle) {
 		auto file = CreateFileW(parent->getBasePath().c_str(), GENERIC_READ, FILE_SHARE_READ, 0, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
@@ -279,6 +278,7 @@ std::istream& ShadyCore::ZipPackageEntry::open() {
 #endif
 		archive->handle = zip_open_from_source(zip_source_win32handle_create(file, 0, 0, 0), ZIP_RDONLY, 0);
 	}
+	lock.unlock();
 
 	auto streamData = new StreamData();
 	streamData->zipBuffer.open(archive->handle, name);
