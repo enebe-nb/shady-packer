@@ -78,7 +78,7 @@ static void pngFlush(png_structp pngData) {
 
 static void pngError(png_structp pngData, png_const_charp message) {
 	printf("%s\n", message);
-	throw;
+	throw std::runtime_error(message);
 }
 
 static void pngWarning(png_structp pngData, png_const_charp message) {

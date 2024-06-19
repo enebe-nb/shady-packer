@@ -76,14 +76,6 @@ extern "C" __declspec(dllexport) bool Initialize(HMODULE hMyModule, HMODULE hPar
 	GetModulePath(hMyModule, ModPackage::basePath);
 	ModPackage::basePackage.reset(new ShadyCore::PackageEx(ModPackage::basePath));
 	LoadSettings();
-
-	if (iniUseLoadLock) {
-		LoadPackage();
-	} else {
-		std::thread t(LoadPackage);
-		t.detach();
-	}
-
 	HookLoader();
 	return TRUE;
 }

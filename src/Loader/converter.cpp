@@ -387,6 +387,9 @@ static int _HookLoader() {
     __titleOnRender  = SokuLib::TamperDword(&SokuLib::VTable_Title.onRender, titleOnRender);
     VirtualProtect((PVOID)RDATA_SECTION_OFFSET, RDATA_SECTION_SIZE, dwOldProtect, &dwOldProtect);
 
+    if (iniUseLoadLock) LoadPackage();
+    else { std::thread t(LoadPackage); t.detach(); }
+
     _initialized = true;
     // set EAX to restore hooked instruction
     return *(int*)0x008943b8;
