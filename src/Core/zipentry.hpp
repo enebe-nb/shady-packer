@@ -11,19 +11,17 @@ namespace ShadyCore {
 		void *pkgFile = 0;
 		void *innerFile = 0;
 		unsigned int index;
-		std::stack<int_type> pool;
 		std::streamoff pos = 0;
 		std::streamsize size;
 		int_type bufVal;
 		bool hasBufVal = false;
 
 	protected:
-		// DISALLOWED
-		int_type pbackfail(int_type) override { throw; }
-		void imbue(const std::locale&) override { throw; }
-		std::streambuf* setbuf(char_type*, std::streamsize) override { throw; }
-		std::streamsize xsputn(const char_type*, std::streamsize) override { throw; }
-		int_type overflow(int_type value) override { throw; }
+		int_type pbackfail(int_type) override { throw std::exception("Disallowed method."); }
+		void imbue(const std::locale&) override { throw std::exception("Disallowed method."); }
+		std::streambuf* setbuf(char_type*, std::streamsize) override { throw std::exception("Disallowed method."); }
+		std::streamsize xsputn(const char_type*, std::streamsize) override { throw std::exception("Disallowed method."); }
+		int_type overflow(int_type value) override { throw std::exception("Disallowed method."); }
 
 		pos_type seekoff(off_type, std::ios::seekdir, std::ios::openmode) override;
 		pos_type seekpos(pos_type, std::ios::openmode) override;
@@ -34,7 +32,7 @@ namespace ShadyCore {
 		int_type uflow() override;
 	public:
 		inline bool isOpen() const { return pkgFile; }
-		void open(void*, const std::string&);
+		void open(const std::filesystem::path&, const std::string&);
 		void close();
 	};
 
@@ -47,10 +45,8 @@ namespace ShadyCore {
 			: BasePackageEntry(parent, size), name(name) {}
 
 		inline StorageType getStorage() const override final { return TYPE_ZIP; }
-		//inline bool isOpen() const override final { return zipBuffer.size(); }
 		std::istream& open() override final;
 		void close(std::istream&) override final;
-		static void closeArchive(Package*);
 	};
 
 	ShadyCore::FileType GetZipPackageDefaultType(const ShadyCore::FileType& inputType, ShadyCore::BasePackageEntry* entry);

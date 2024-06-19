@@ -36,8 +36,6 @@ ShadyCore::Package::~Package() {
 		if (!entry.second->isOpen()) delete entry.second;
 		else entry.second->markAsDisposable();
 	}
-
-	ZipPackageEntry::closeArchive(this);
 }
 
 ShadyCore::Package::iterator ShadyCore::Package::insert(const std::string_view& name, BasePackageEntry* entry) {
