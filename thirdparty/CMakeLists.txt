@@ -42,7 +42,7 @@ add_library(rapidxml INTERFACE)
 target_include_directories(rapidxml INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/rapidxml)
 
 # zlib Library
-add_git_module(zlib https://github.com/madler/zlib v1.2.12)
+add_git_module(zlib https://github.com/madler/zlib v1.3.1)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/zlib EXCLUDE_FROM_ALL)
 if (MSVC)
     set(ZLIB_LIBRARY ${CMAKE_CURRENT_BINARY_DIR}/zlib/Release/zlibstatic.lib)
@@ -63,7 +63,7 @@ add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/libpng EXCLUDE_FROM_ALL)
 target_include_directories(png_static PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/libpng ${CMAKE_CURRENT_BINARY_DIR}/zlib ${CMAKE_CURRENT_BINARY_DIR}/libpng)
 
 # libzip Library
-add_git_module(libzip https://github.com/nih-at/libzip v1.9.2)
+add_git_module(libzip https://github.com/nih-at/libzip v1.10.1)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/libzip EXCLUDE_FROM_ALL)
 #target_compile_definitions(zip INTERFACE ZIP_STATIC)
 

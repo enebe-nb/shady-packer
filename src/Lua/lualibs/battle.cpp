@@ -29,7 +29,7 @@ namespace {
             fsave [esp];                        // save FPU to stack
             mov ecx, esi;
             call ObjectHook<T>::replUpdate;     // call our logic
-            cmp eax, 0;
+            cmp al, 0;
             jne skipUpdate;                     // if return is true, skip default logic
             mov eax, ObjectHook<T>::origUpdate; // return to default logic
             jmp retLogic;
