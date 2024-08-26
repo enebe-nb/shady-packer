@@ -332,7 +332,7 @@ static int battle_GameObjectBase_setDir(lua_State* L) {
     return 0;
 }
 
-static int battle_GameObjectBase_createEffect(SokuLib::v2::GameObjectBase* object, lua_State* L) {
+static ShadyLua::Renderer::Effect* battle_GameObjectBase_createEffect(SokuLib::v2::GameObjectBase* object, lua_State* L) {
     auto fxmanager = *reinterpret_cast<SokuLib::v2::EffectManager_Effect**>(0x8985f0);
     int actionId = luaL_checkinteger(L, 2);
     float x = luaL_checknumber(L, 3);
@@ -340,17 +340,15 @@ static int battle_GameObjectBase_createEffect(SokuLib::v2::GameObjectBase* objec
     char direction = luaL_optinteger(L, 5, object->direction);
     char layer = luaL_optinteger(L, 6, 1);
     auto fx = fxmanager->CreateEffect(actionId, x, y, (SokuLib::Direction)direction, layer, (int)object);
-    Stack<ShadyLua::Renderer::Effect*>::push(L, (ShadyLua::Renderer::Effect*)fx);
-    return 1;
+    return (ShadyLua::Renderer::Effect*)fx;
 }
 
-static int battle_GameObject_getCustomData(SokuLib::v2::GameObject* object, lua_State* L) {
+static std::string battle_GameObject_getCustomData(SokuLib::v2::GameObject* object, lua_State* L) {
     int size = luaL_checkinteger(L, 2);
-    lua_pushlstring(L, (char*)object->customData, size);
-    return 1;
+    return std::string((const char*)object->customData, size);
 }
 
-static int battle_Player_createObject(SokuLib::v2::Player* player, lua_State* L) {
+static SokuLib::v2::GameObject* battle_Player_createObject(SokuLib::v2::Player* player, lua_State* L) {
     int actionId = luaL_checkinteger(L, 2);
     float x = luaL_checknumber(L, 3);
     float y = luaL_checknumber(L, 4);
@@ -358,9 +356,7 @@ static int battle_Player_createObject(SokuLib::v2::Player* player, lua_State* L)
     char layer = luaL_optinteger(L, 6, 1);
     size_t dataSize = 0;
     const char* data = luaL_optlstring(L, 7, "", &dataSize);
-    auto object = player->objectList->CreateObject(0, player, (SokuLib::Action)actionId, x, y, (SokuLib::Direction)direction, layer, dataSize ? (void*)data : 0, dataSize);
-    push(L, object);
-    return 1;
+    return player->objectList->createObject(0, player, (SokuLib::Action)actionId, x, y, (SokuLib::Direction)direction, layer, dataSize ? (void*)data : 0, dataSize);
 }
 
 template <int id>
@@ -372,6 +368,13 @@ static int battle_Manager_getPlayer(lua_State* L) {
 
 static int battle_getManager(lua_State* L) {
     push (L, &SokuLib::getBattleMgr());
+    return 1;
+}
+
+static int battle_random(lua_State* L) {
+    auto i = luaL_optinteger(L, 1, -1);
+    unsigned int ret = i < 0 ? SokuLib::rand() : SokuLib::rand(i);
+    lua_pushinteger(L, ret);
     return 1;
 }
 
@@ -416,7 +419,8 @@ void ShadyLua::LualibBattle(lua_State* L) {
                 .addProperty("character", &SokuLib::v2::Player::characterIndex, false)
                 .addProperty("collisionType", &SokuLib::v2::Player::collisionType, false)
                 .addProperty("collisionLimit", &SokuLib::v2::Player::collisionLimit, true)
-                .addProperty("unknown4A6", &SokuLib::v2::Player::unknown4A6, true)
+                .addProperty("unknown4A6", &SokuLib::v2::Player::spellStopCounter, true)
+                .addProperty("spellStopCounter", &SokuLib::v2::Player::spellStopCounter, true)
                 .addProperty("groundDashCount", MEMBER_ADDRESS(unsigned char, SokuLib::v2::Player, groundDashCount), true)
                 .addProperty("airDashCount", MEMBER_ADDRESS(unsigned char, SokuLib::v2::Player, airDashCount), true)
 
@@ -467,7 +471,7 @@ void ShadyLua::LualibBattle(lua_State* L) {
 
             .addFunction("replaceCharacter", battle_replaceCharacter)
             .addFunction("replaceObjects", battle_replaceObjects)
-            .addFunction("random", SokuLib::Rand)
+            .addFunction("random", battle_random)
         .endNamespace()
     ;
 }
