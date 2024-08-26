@@ -286,7 +286,8 @@ void LoadPackage() {
 	}
 
 	for (auto& package : ModPackage::descPackage) {
-		if (GetPrivateProfileIntW(L"Packages", utf2ws(package->name).c_str(), false, spath.c_str())) {
+		std::string name = (package->name[0] == '[' ? "<" : "") + package->name;
+		if (GetPrivateProfileIntW(L"Packages", utf2ws(name).c_str(), false, spath.c_str())) {
 			EnablePackage(package);
 			package->watcher = ShadyUtil::FileWatcher::create(package->path);
 		}

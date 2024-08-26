@@ -122,6 +122,7 @@ void SaveSettings() {
 			std::wstring packageName;
 			th123intl::ConvertCodePage(CP_UTF8, package->name, packageName);
 			order << packageName.c_str() << ",";
+			if (packageName[0] == L'[') packageName.insert(packageName.begin(), L'<');
 			WritePrivateProfileStringW(L"Packages", packageName.c_str(), package->package ? L"1" : L"0", ipath.c_str());
 		}
 	} }
