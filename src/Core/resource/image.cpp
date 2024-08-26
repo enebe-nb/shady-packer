@@ -140,11 +140,11 @@ void readerImageCv(ShadyCore::Image& resource, std::istream& input) {
 
 void readerImageBmp(ShadyCore::Image& resource, std::istream& input) {
 	uint16_t magicNumber; input.read((char*)&magicNumber, 2);
-	if (magicNumber != 0x4d42) return;
+	if (magicNumber != 0x4d42) throw std::runtime_error("Not a BMP file.");
 	input.ignore(8);
 	uint32_t dataOffset; input.read((char*)&dataOffset, 4);
 	uint32_t headerSize; input.read((char*)&headerSize, 4);
-	if (headerSize < 16) return;
+	if (headerSize < 16) throw std::runtime_error("Unsupported Bitmap header.");
 
 	uint16_t bitsPerPixel;
 	input.read((char*)&resource.width, 8); // , height
@@ -167,7 +167,7 @@ void readerImageBmp(ShadyCore::Image& resource, std::istream& input) {
 	if (bitsPerPixel <= 8) {
 		resource.bitsPerPixel = 8;
 		resource.initialize();
-		if (compressionMethod) throw std::runtime_error("Compressed Bitmap is not implemented"); // TODO
+		if (compressionMethod) throw std::runtime_error("Compressed Bitmap is not implemented.");
 	} else if (bitsPerPixel >= 24) {
 		resource.bitsPerPixel = 32;
 		resource.initialize();

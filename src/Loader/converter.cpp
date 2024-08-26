@@ -172,7 +172,7 @@ static bool __fastcall textureCreateReader(void** output, int unused, const char
 
 static bool __fastcall imageReader(ShadyCore::Image* output, const char* filename, char* tempbuffer, size_t bufferSize) {
     ModPackage::CheckUpdates();
-    { std::shared_lock lock(*ModPackage::basePackage);
+    try { std::shared_lock lock(*ModPackage::basePackage);
         auto iter = ModPackage::basePackage->find(filename, ShadyCore::FileType::TYPE_IMAGE);
         if (iter != ModPackage::basePackage->end()) {
             auto filetype = iter.fileType();
@@ -181,6 +181,8 @@ static bool __fastcall imageReader(ShadyCore::Image* output, const char* filenam
             iter.close(input);
             return true;
         }
+    } catch (std::runtime_error err) {
+        Logger::Error("Error loading image ", filename, ": ", err.what());
     }
 
     bufferSize -= 4;
