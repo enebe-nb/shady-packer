@@ -133,7 +133,7 @@ void ShadyCore::ZipStream::open(const std::filesystem::path& file, const std::st
 	zip_stat_init(&stat);
 	zip_stat((zip_t*)pkgFile, name.c_str(), 0, &stat);
 	const auto requiredStats = ZIP_STAT_INDEX|ZIP_STAT_SIZE;
-	if (stat.valid & requiredStats != requiredStats) throw std::exception("invalid stats");
+	if (stat.valid & requiredStats != requiredStats) throw std::runtime_error("Zip Read Error: invalid stats");
 	index = stat.index;
 	size = stat.size;
 	pos = 0;
