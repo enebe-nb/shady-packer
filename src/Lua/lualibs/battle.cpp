@@ -416,7 +416,7 @@ void ShadyLua::LualibBattle(lua_State* L) {
             .endClass()
 
             .deriveClass<SokuLib::v2::Player, SokuLib::v2::GameObjectBase>("Player")
-                .addProperty("character", &SokuLib::v2::Player::characterIndex, false)
+                .addProperty("character", (int SokuLib::v2::Player::*)&SokuLib::v2::Player::characterIndex, false)
                 .addProperty("collisionType", &SokuLib::v2::Player::collisionType, false)
                 .addProperty("collisionLimit", &SokuLib::v2::Player::collisionLimit, true)
                 .addProperty("unknown4A6", &SokuLib::v2::Player::spellStopCounter, true)
