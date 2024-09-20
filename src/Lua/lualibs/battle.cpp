@@ -313,6 +313,18 @@ static int battle_GameObjectBase_getPtr(lua_State* L) {
     return 1;
 }
 
+static int battle_GameObjectBase_getOwner(lua_State* L) {
+    auto o = Stack<SokuLib::v2::GameObjectBase*>::get(L, 1);
+    push(L, (SokuLib::v2::Player*)o->gameData.owner);
+    return 1;
+}
+
+static int battle_GameObjectBase_getAlly(lua_State* L) {
+    auto o = Stack<SokuLib::v2::GameObjectBase*>::get(L, 1);
+    push(L, (SokuLib::v2::Player*)o->gameData.ally);
+    return 1;
+}
+
 static int battle_GameObjectBase_getOpponent(lua_State* L) {
     auto o = Stack<SokuLib::v2::GameObjectBase*>::get(L, 1);
     push(L, (SokuLib::v2::Player*)o->gameData.opponent);
@@ -392,6 +404,8 @@ void ShadyLua::LualibBattle(lua_State* L) {
                 .addProperty("poseId", MEMBER_ADDRESS(unsigned short, SokuLib::v2::GameObjectBase, frameState.poseId), false)
                 .addProperty("poseFrame", MEMBER_ADDRESS(unsigned short, SokuLib::v2::GameObjectBase, frameState.poseFrame), false)
                 .addProperty("currentFrame", MEMBER_ADDRESS(unsigned int, SokuLib::v2::GameObjectBase, frameState.currentFrame), false)
+                .addProperty("owner", battle_GameObjectBase_getOwner, 0)
+                .addProperty("ally", battle_GameObjectBase_getAlly, 0)
                 .addProperty("opponent", battle_GameObjectBase_getOpponent, 0)
                 .addProperty("hp", &SokuLib::v2::GameObjectBase::HP, true)
                 .addProperty("maxHp", &SokuLib::v2::GameObjectBase::MaxHP, true)
@@ -417,7 +431,7 @@ void ShadyLua::LualibBattle(lua_State* L) {
 
             .deriveClass<SokuLib::v2::Player, SokuLib::v2::GameObjectBase>("Player")
                 .addProperty("character", (int SokuLib::v2::Player::*)&SokuLib::v2::Player::characterIndex, false)
-                .addProperty("collisionType", &SokuLib::v2::Player::collisionType, false)
+                .addProperty("collisionType", (int SokuLib::v2::Player::*)&SokuLib::v2::Player::collisionType, false)
                 .addProperty("collisionLimit", &SokuLib::v2::Player::collisionLimit, true)
                 .addProperty("unknown4A6", &SokuLib::v2::Player::spellStopCounter, true)
                 .addProperty("spellStopCounter", &SokuLib::v2::Player::spellStopCounter, true)

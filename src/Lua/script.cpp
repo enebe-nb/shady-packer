@@ -62,6 +62,7 @@ ShadyLua::LuaScript::~LuaScript() {
 int ShadyLua::LuaScript::load(const char* filename, const char* mode) {
     Reader reader;
     reader.file = this->openFile(filename);
+    if (!reader.file) { lua_pushstring(L, "Cannot open file."); return LUA_ERRRUN; }
     int result = lua_load(L, (lua_Reader)Reader::read, &reader, filename, mode);
     this->closeFile(reader.file);
     if (result != LUA_OK) Logger::Error(lua_tostring(L, 1));

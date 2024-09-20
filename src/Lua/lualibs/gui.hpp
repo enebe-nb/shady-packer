@@ -1,6 +1,7 @@
 #include "../lualibs.hpp"
 #include <LuaBridge/LuaBridge.h>
 #include <SokuLib.hpp>
+#include <deque>
 #include <set>
 
 namespace ShadyLua {

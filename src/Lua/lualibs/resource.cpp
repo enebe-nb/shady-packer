@@ -110,7 +110,7 @@ static int resource_createfromfile(lua_State* L) {
     ShadyLua::LuaScript* script = ShadyLua::ScriptMap.at(L);
 
     auto file = script->openFile(filename);
-    if (!file) luaL_error(L, "Cannot open file.");
+    if (!file) return luaL_error(L, "Cannot open file.");
     auto ft = getTypeAndFormat(filename);
     ShadyLua::ResourceProxy* proxy = new ShadyLua::ResourceProxy(ShadyCore::createResource(ft.type), ft.type, true);
     ShadyCore::getResourceReader(ShadyCore::FileType(ft.type, ft.format))(proxy->resource, file->input);
