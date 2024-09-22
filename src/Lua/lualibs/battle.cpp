@@ -435,8 +435,8 @@ void ShadyLua::LualibBattle(lua_State* L) {
 
                 .addProperty("hp", &SokuLib::v2::GameObjectBase::HP, true)
                 .addProperty("maxHp", &SokuLib::v2::GameObjectBase::MaxHP, true)
-                .addProperty("collisionType", (int SokuLib::v2::GameObjectBase::*)&SokuLib::v2::GameObjectBase::collisionType, false)
-                .addProperty<char>("collisionLimit", &SokuLib::v2::GameObjectBase::collisionLimit, true)
+                .addProperty("collisionType", MEMBER_ADDRESS(int, SokuLib::v2::GameObjectBase, collisionType), false)
+                .addProperty("collisionLimit", MEMBER_ADDRESS(unsigned char, SokuLib::v2::GameObjectBase, collisionLimit), true)
                 .addProperty("hitStop", &SokuLib::v2::GameObjectBase::hitStop, true)
 
                 .addProperty<float, float>("groundHeight", &SokuLib::v2::GameObjectBase::getGroundHeight, 0)
@@ -462,7 +462,7 @@ void ShadyLua::LualibBattle(lua_State* L) {
             .endClass()
 
             .deriveClass<SokuLib::v2::Player, SokuLib::v2::GameObjectBase>("Player")
-                .addProperty("character", (int SokuLib::v2::Player::*)&SokuLib::v2::Player::characterIndex, false)
+                .addProperty("character", MEMBER_ADDRESS(int, SokuLib::v2::Player, characterIndex), false)
                 .addProperty("unknown4A6", &SokuLib::v2::Player::spellStopCounter, true)
                 .addProperty("spellStopCounter", &SokuLib::v2::Player::spellStopCounter, true)
                 .addProperty("groundDashCount", MEMBER_ADDRESS(unsigned char, SokuLib::v2::Player, groundDashCount), true)
@@ -525,7 +525,7 @@ void ShadyLua::LualibBattle(lua_State* L) {
             .endClass()
 
             .beginClass<SokuLib::PlayerInfo>("PlayerInfo")
-                .addProperty("character", (int SokuLib::PlayerInfo::*)&SokuLib::PlayerInfo::character, false)
+                .addProperty("character", MEMBER_ADDRESS(int, SokuLib::PlayerInfo, character), false)
                 .addProperty("isRight", &SokuLib::PlayerInfo::isRight, false)
                 .addProperty("teamId", &SokuLib::PlayerInfo::isRight, false)
                 .addProperty("palette", &SokuLib::PlayerInfo::palette, false)

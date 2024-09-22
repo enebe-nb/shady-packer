@@ -270,7 +270,7 @@ void ShadyLua::LualibResource(lua_State* L) {
             .deriveClass<_ResourceProxy<ShadyCore::LabelResource>, ResourceProxy>("Label")
                 .addConstructor<void(*)(), RefCountedObjectPtr<_ResourceProxy<ShadyCore::LabelResource>>>()
                 .addProperty("begin", resource_Label_getBegin, resource_Label_setBegin)
-                .addProperty("end", resource_Label_getEnd, resource_Label_setEnd)
+                .addProperty("finish", resource_Label_getEnd, resource_Label_setEnd)
             .endClass()
             .deriveClass<_ResourceProxy<ShadyCore::Palette>, ResourceProxy>("Palette")
                 .addConstructor<void(*)(), RefCountedObjectPtr<_ResourceProxy<ShadyCore::Palette>>>()
