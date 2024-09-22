@@ -371,6 +371,20 @@ static SokuLib::v2::GameObject* battle_Player_createObject(SokuLib::v2::Player* 
     return player->objectList->createObject(0, player, (SokuLib::Action)actionId, x, y, (SokuLib::Direction)direction, layer, dataSize ? (void*)data : 0, dataSize);
 }
 
+static int battle_Player_handGetId(SokuLib::v2::Player* player, lua_State* L) {
+    unsigned int index = luaL_checkinteger(L, 2);
+    if (index >= player->handInfo.hand.size()) return luaL_error(L, "index outside range.");
+    auto& card = player->handInfo.hand.at(index);
+    return card.id;
+}
+
+static int battle_Player_handGetCost(SokuLib::v2::Player* player, lua_State* L) {
+    unsigned int index = luaL_checkinteger(L, 2);
+    if (index >= player->handInfo.hand.size()) return luaL_error(L, "index outside range.");
+    auto& card = player->handInfo.hand.at(index);
+    return card.cost;
+}
+
 template <int id>
 static int battle_Manager_getPlayer(lua_State* L) {
     auto manager = Stack<SokuLib::BattleManager*>::get(L, 1);
@@ -393,12 +407,23 @@ static int battle_random(lua_State* L) {
 void ShadyLua::LualibBattle(lua_State* L) {
     getGlobalNamespace(L)
         .beginNamespace("battle")
+            .beginClass<SokuLib::RenderInfo>("RenderInfo")
+                .addConstructor<void (*)()>()
+                .addData<unsigned int>("color", &SokuLib::RenderInfo::color, true)
+                .addData<int>("shaderType", &SokuLib::RenderInfo::shaderType, true)
+                .addData<unsigned int>("shaderColor", &SokuLib::RenderInfo::shaderColor, true)
+                .addProperty("scale", &SokuLib::RenderInfo::scale, true)
+                .addData("xRotation", &SokuLib::RenderInfo::xRotation, true)
+                .addData("yRotation", &SokuLib::RenderInfo::yRotation, true)
+                .addData("zRotation", &SokuLib::RenderInfo::zRotation, true)
+            .endClass()
             .beginClass<SokuLib::v2::GameObjectBase>("ObjectBase")
                 .addProperty("ptr", battle_GameObjectBase_getPtr, 0)
                 .addProperty("position", &SokuLib::v2::GameObjectBase::position, true)
                 .addProperty("speed", &SokuLib::v2::GameObjectBase::speed, true)
                 .addProperty("gravity", &SokuLib::v2::GameObjectBase::gravity, true)
                 .addProperty("direction", battle_GameObjectBase_getDir, battle_GameObjectBase_setDir)
+                .addProperty("renderInfo", &SokuLib::v2::GameObjectBase::renderInfos, true)
                 .addProperty("actionId", MEMBER_ADDRESS(unsigned short, SokuLib::v2::GameObjectBase, frameState.actionId), false)
                 .addProperty("sequenceId", MEMBER_ADDRESS(unsigned short, SokuLib::v2::GameObjectBase, frameState.sequenceId), false)
                 .addProperty("poseId", MEMBER_ADDRESS(unsigned short, SokuLib::v2::GameObjectBase, frameState.poseId), false)
@@ -407,8 +432,12 @@ void ShadyLua::LualibBattle(lua_State* L) {
                 .addProperty("owner", battle_GameObjectBase_getOwner, 0)
                 .addProperty("ally", battle_GameObjectBase_getAlly, 0)
                 .addProperty("opponent", battle_GameObjectBase_getOpponent, 0)
+
                 .addProperty("hp", &SokuLib::v2::GameObjectBase::HP, true)
                 .addProperty("maxHp", &SokuLib::v2::GameObjectBase::MaxHP, true)
+                .addProperty("collisionType", (int SokuLib::v2::GameObjectBase::*)&SokuLib::v2::GameObjectBase::collisionType, false)
+                .addProperty<char>("collisionLimit", &SokuLib::v2::GameObjectBase::collisionLimit, true)
+                .addProperty("hitStop", &SokuLib::v2::GameObjectBase::hitStop, true)
 
                 .addProperty<float, float>("groundHeight", &SokuLib::v2::GameObjectBase::getGroundHeight, 0)
 
@@ -427,20 +456,60 @@ void ShadyLua::LualibBattle(lua_State* L) {
 
                 .addFunction("setTail", &SokuLib::v2::GameObject::setTail)
                 .addFunction("getCustomData", battle_GameObject_getCustomData)
+                .addFunction("checkGrazed", &SokuLib::v2::GameObject::checkGrazed)
+                .addFunction("checkProjectileHit", &SokuLib::v2::GameObject::checkProjectileHit)
+                .addFunction("checkTurnIntoCrystals", &SokuLib::v2::GameObject::checkTurnIntoCrystals)
             .endClass()
 
             .deriveClass<SokuLib::v2::Player, SokuLib::v2::GameObjectBase>("Player")
                 .addProperty("character", (int SokuLib::v2::Player::*)&SokuLib::v2::Player::characterIndex, false)
-                .addProperty("collisionType", (int SokuLib::v2::Player::*)&SokuLib::v2::Player::collisionType, false)
-                .addProperty("collisionLimit", &SokuLib::v2::Player::collisionLimit, true)
                 .addProperty("unknown4A6", &SokuLib::v2::Player::spellStopCounter, true)
                 .addProperty("spellStopCounter", &SokuLib::v2::Player::spellStopCounter, true)
                 .addProperty("groundDashCount", MEMBER_ADDRESS(unsigned char, SokuLib::v2::Player, groundDashCount), true)
                 .addProperty("airDashCount", MEMBER_ADDRESS(unsigned char, SokuLib::v2::Player, airDashCount), true)
+                .addProperty("currentSpirit", &SokuLib::v2::Player::currentSpirit, false)
+                .addProperty("timeStop", &SokuLib::v2::Player::timeStop, false)
+
+                .addProperty("comboRate", &SokuLib::v2::Player::comboRate, false)
+                .addProperty("comboCount", &SokuLib::v2::Player::comboCount, false)
+                .addProperty("comboDamage", &SokuLib::v2::Player::comboDamage, false)
+                .addProperty("comboLimit", &SokuLib::v2::Player::comboLimit, false)
+                .addProperty("untech", &SokuLib::v2::Player::untech, false)
+                .addProperty("skillCancelCount", &SokuLib::v2::Player::skillCancelCount, false)
+
+                .addProperty("meleeInvulTimer", &SokuLib::v2::Player::meleeInvulTimer, false)
+                .addProperty("grabInvulTimer", &SokuLib::v2::Player::grabInvulTimer, false)
+                .addProperty("projectileInvulTimer", &SokuLib::v2::Player::projectileInvulTimer, false)
+                .addProperty("grazeTimer", &SokuLib::v2::Player::grazeTimer, false)
+                .addProperty("confusionDebuffTimer", &SokuLib::v2::Player::confusionDebuffTimer, false)
+                .addProperty("SORDebuffTimer", &SokuLib::v2::Player::SORDebuffTimer, false)
+                .addProperty("healCharmTimer", &SokuLib::v2::Player::healCharmTimer, false)
+
+                .addProperty("handCount", MEMBER_ADDRESS(unsigned char, SokuLib::v2::Player, handInfo.cardCount), false)
+                .addFunction("handGetId", battle_Player_handGetId)
+                .addFunction("handGetCost", battle_Player_handGetCost)
 
                 .addFunction("createObject", battle_Player_createObject)
                 .addFunction("updateGroundMovement", &SokuLib::v2::Player::updateGroundMovement)
                 .addFunction("updateAirMovement", &SokuLib::v2::Player::updateAirMovement)
+                .addFunction("handleCardSwitch", &SokuLib::v2::Player::handleCardSwitch)
+                .addFunction("useSystemCard", &SokuLib::v2::Player::useSystemCard)
+                .addFunction("canSpendSpirit", &SokuLib::v2::Player::canSpendSpirit)
+                .addFunction("getMoveLock", &SokuLib::v2::Player::getMoveLock)
+                .addFunction("canActivateCard", &SokuLib::v2::Player::canActivateCard)
+                .addFunction("isGrounded", &SokuLib::v2::Player::isGrounded)
+
+                .addFunction("handleHJ", &SokuLib::v2::Player::handleHJ)
+                .addFunction("handleHJInput", &SokuLib::v2::Player::handleHJInput)
+                .addFunction("handleGroundDash", &SokuLib::v2::Player::handleGroundDash)
+                .addFunction("handleGroundBE", &SokuLib::v2::Player::handleGroundBE)
+                .addFunction("handleAirBE", &SokuLib::v2::Player::handleAirBE)
+                .addFunction("handleFwdAirDash", &SokuLib::v2::Player::handleFwdAirDash)
+                .addFunction("handleBackAirDash", &SokuLib::v2::Player::handleBackAirDash)
+                .addFunction("handleNormalFlight", &SokuLib::v2::Player::handleNormalFlight)
+
+                .addFunction("useSpellCard", &SokuLib::v2::Player::useSpellCard)
+                .addFunction("useSkill", &SokuLib::v2::Player::useSkill)
                 .addFunction("addCardMeter", &SokuLib::v2::Player::addCardMeter)
                 .addFunction("applyGroundMechanics", &SokuLib::v2::Player::applyGroundMechanics)
                 .addFunction("applyAirMechanics", &SokuLib::v2::Player::applyAirMechanics)
@@ -452,6 +521,7 @@ void ShadyLua::LualibBattle(lua_State* L) {
                 .addFunction("eventSkillUse", &SokuLib::v2::Player::eventSkillUse)
                 .addFunction("eventSpellUse", &SokuLib::v2::Player::eventSpellUse)
                 .addFunction("eventWeatherCycle", &SokuLib::v2::Player::eventWeatherCycle)
+                .addFunction("unknown46d950", &SokuLib::v2::Player::FUN_0046d950)
             .endClass()
 
             .beginClass<SokuLib::PlayerInfo>("PlayerInfo")
