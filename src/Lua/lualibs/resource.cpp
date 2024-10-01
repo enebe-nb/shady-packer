@@ -167,7 +167,7 @@ static int resource_Palette_setData(lua_State* L) { // TODO better control and t
     return 0;
 }
 
-static int resource_Palette_getColor(_ResourceProxy<ShadyCore::Palette>* pal, lua_State* L) {
+static int __fastcall resource_Palette_getColor(_ResourceProxy<ShadyCore::Palette>* pal, int unused, lua_State* L) {
     int i = luaL_checkinteger(L, 2) - 1;
     uint16_t color = pal->get().bitsPerPixel > 16 ? pal->get().packColor(((uint32_t*)pal->get().data)[i]) : ((uint16_t*)pal->get().data)[i];
     lua_pushboolean(L, (color >> 15) & 0x01);
@@ -177,7 +177,7 @@ static int resource_Palette_getColor(_ResourceProxy<ShadyCore::Palette>* pal, lu
     return 4;
 }
 
-static int resource_Palette_setColor(_ResourceProxy<ShadyCore::Palette>* pal, lua_State* L) {
+static int __fastcall resource_Palette_setColor(_ResourceProxy<ShadyCore::Palette>* pal, int unused, lua_State* L) {
     const int i = luaL_checkinteger(L, 2) - 1;
     const bool hadBool = lua_isboolean(L, 3);
     const bool a = hadBool ? lua_toboolean(L, 3) : true;
@@ -275,8 +275,8 @@ void ShadyLua::LualibResource(lua_State* L) {
             .deriveClass<_ResourceProxy<ShadyCore::Palette>, ResourceProxy>("Palette")
                 .addConstructor<void(*)(), RefCountedObjectPtr<_ResourceProxy<ShadyCore::Palette>>>()
                 .addProperty("data", resource_Palette_getData, resource_Palette_setData)
-                .addFunction("getColor", resource_Palette_getColor)
-                .addFunction("setColor", resource_Palette_setColor)
+                .addCFunction("getColor", SokuLib::union_cast<int (_ResourceProxy<ShadyCore::Palette>::*)(lua_State*)>(resource_Palette_getColor))
+                .addCFunction("setColor", SokuLib::union_cast<int (_ResourceProxy<ShadyCore::Palette>::*)(lua_State*)>(resource_Palette_setColor))
             .endClass()
             .deriveClass<_ResourceProxy<ShadyCore::Image>, ResourceProxy>("Image")
                 .addConstructor<void(*)(), RefCountedObjectPtr<_ResourceProxy<ShadyCore::Image>>>()

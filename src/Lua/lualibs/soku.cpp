@@ -364,7 +364,7 @@ void ShadyLua::LualibSoku(lua_State* L) {
             .addProperty("isReady", (bool*)(0x89ff90 + 0x4c), false)
             .addVariable("P1", &SokuLib::leftPlayerInfo)
             .addVariable("P2", &SokuLib::rightPlayerInfo)
-            .addVariable("sceneId", &SokuLib::sceneId, false)
+            .addVariable<unsigned char>("sceneId", (unsigned char *)&SokuLib::sceneId, false)
             .addFunction("checkFKey", soku_checkFKey)
             .addFunction("playSE", soku_PlaySFX)
             .addFunction("playSFX", soku_PlaySFX)
