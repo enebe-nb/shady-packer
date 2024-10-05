@@ -247,6 +247,7 @@ ShadyUtil::FileWatcher::~FileWatcher() {
 ShadyUtil::FileWatcher* ShadyUtil::FileWatcher::getNextChange() {
 	std::unique_lock lock(delegateMutex, std::try_to_lock);
 	if (!lock.owns_lock()) return 0;
+
 	if (changes.empty() && handles.size()) {
 		DWORD result = WaitForMultipleObjects(handles.size(), handles.data(), false, 0);
 		if (result == WAIT_FAILED) throw std::runtime_error("FileWatcher wait failed: " + std::to_string(GetLastError())); // TODO

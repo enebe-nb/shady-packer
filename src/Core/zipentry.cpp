@@ -289,13 +289,13 @@ void ShadyCore::ZipPackageEntry::close(std::istream& zipStream) {
 
 void ShadyCore::Package::loadZip(const std::filesystem::path& path) {
 #ifdef _WIN32
-    auto handle = CreateFileW(path.wstring().c_str(), GENERIC_READ, FILE_SHARE_READ, 0, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
+	auto handle = CreateFileW(path.wstring().c_str(), GENERIC_READ, FILE_SHARE_READ, 0, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
 	if (handle == INVALID_HANDLE_VALUE) return;
 	auto file = zip_open_from_source(zip_source_win32handle_create(handle, 0, 0, 0), ZIP_RDONLY, 0);
 #else
-    FILE *filep = fopen(path.c_str(), "rb");
-    if (!filep) return;
-    auto file = zip_open_from_source(zip_source_filep_create(filep, 0, 0, 0), ZIP_RDONLY, 0);
+	FILE *filep = fopen(path.c_str(), "rb");
+	if (!filep) return;
+	auto file = zip_open_from_source(zip_source_filep_create(filep, 0, 0, 0), ZIP_RDONLY, 0);
 #endif
 
 	zip_int64_t count = zip_get_num_entries(file, 0);
