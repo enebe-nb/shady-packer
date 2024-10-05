@@ -159,7 +159,7 @@ TEST_F(DataEntrySuite, PackageRead) {
 		std::ifstream expected(filename, std::ios::binary);
 		EXPECT_TRUE(testing::isSameData(input, expected)) << "filename: " << data;
 
-		package.find(data)->second->close();
+		package.find(data)->second->close(input);
 		expected.close();
 	}
 }
@@ -190,8 +190,8 @@ TEST_F(DataEntrySuite, PackageWrite) {
 			std::istream& inputS = i->second->open();
 			std::istream& expectedS = file.second->open();
 			EXPECT_TRUE(testing::isSameData(inputS, expectedS)) << "filename: " << filename << ", package: " << packageName;
-			file.second->close();
-			i->second->close();
+			file.second->close(expectedS);
+			i->second->close(inputS);
 		}
 
 		delete input;

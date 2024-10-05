@@ -14,7 +14,7 @@ namespace ShadyCore {
 		char* data = 0;
 		uint32_t length;
 
-		inline void destroy() { if (data) Deallocate(data); }
+		inline void destroy() { if (data) Deallocate(data); data = 0; }
 		inline void initialize(uint32_t s) { this->destroy(); data = (char*)Allocate((length = s) + 1); data[length] = '\0'; }
 	};
 
@@ -34,7 +34,7 @@ namespace ShadyCore {
 		// align 0x3
 		uint8_t* data = 0;
 
-		inline void destroy() { if (data) Deallocate(data); }
+		inline void destroy() { if (data) Deallocate(data); data = 0; }
 		inline void initialize(uint8_t b) { bitsPerPixel = b; this->destroy(); data = (uint8_t*)Allocate(getDataSize()); }
 		inline uint32_t getDataSize() const { return 256 * (bitsPerPixel <= 16 ? 2 : 4); }
 		//inline uint32_t getColor(int index) const { index *= 3; return (index == 0 ? 0x00 : 0xff << 24) + ((uint32_t)data[index] << 16) + ((uint32_t)data[index + 1] << 8) + ((uint32_t)data[index + 2]); }
@@ -58,7 +58,7 @@ namespace ShadyCore {
 		uint8_t* palette = 0;
 		uint8_t* raw = 0;
 
-		inline void destroy() { if (raw) Deallocate(raw); }
+		inline void destroy() { if (raw) Deallocate(raw); raw = 0; }
 		inline void initialize() { this->destroy(); raw = (uint8_t*)Allocate(getRawSize()); }
 		inline void initialize(uint8_t b, uint32_t w, uint32_t h, uint32_t p, uint32_t a = 0) {
 			bitsPerPixel = b; width = w; height = h; paddedWidth = p; altSize = a;
@@ -81,7 +81,7 @@ namespace ShadyCore {
 		uint8_t* data = 0;
 		uint32_t size;
 
-		inline void destroy() { if (data) Deallocate(data); }
+		inline void destroy() { if (data) Deallocate(data); data = 0; }
 		inline void initialize(uint32_t s) { this->destroy(); data = (uint8_t*)Allocate(size = s); infoSize = 0; }
 	};
 
@@ -93,6 +93,7 @@ namespace ShadyCore {
 			int32_t x, y, w, h;
 
 			inline Image(const char* name) : name(name) {}
+			inline Image(const Image& o) = delete;
 			inline Image(Image&& o) : name(o.name), x(o.x), y(o.y), w(o.w), h(o.h) { (const char*&)o.name = 0; }
 			virtual ~Image();
 		};
@@ -204,6 +205,8 @@ namespace ShadyCore {
 			inline Sequence(uint32_t id, bool isAnimation) : Object(id, isAnimation ? 8 : 9) {}
 			virtual ~Sequence();
 		};
+
+		uint32_t getOrCreateImage(const std::string_view& name);
 
 		// --- DATA ---
 		std::vector<Image> images;

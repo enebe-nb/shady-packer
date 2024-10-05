@@ -5,6 +5,7 @@
 #include "../../Core/dataentry.hpp"
 #include "../../Core/fileentry.hpp"
 #include "../../Core/util/tempfiles.hpp"
+#include "../../Core/reader.hpp"
 #include <LuaBridge/LuaBridge.h>
 #include <LuaBridge/RefCountedPtr.h>
 #include <unordered_map>
@@ -22,24 +23,44 @@ namespace {
 	};
 }
 
-// TODO check if is better to receive a string_view or a string
-void ShadyLua::EmitSokuEventFileLoader2(const char* filename, std::istream** input, int* size) {
-	std::shared_lock guard(packageMapLock);
+// ---- LoaderHook ---
+static void* __stdcall LoaderHook_replFn(const char* filename, unsigned int* _size, unsigned int* _offset);
+using LoaderHook = ShadyLua::CallHook<0x0040d227, LoaderHook_replFn>;
+LoaderHook::typeFn LoaderHook::origFn = reinterpret_cast<LoaderHook::typeFn>(0x0041c080);
+static void* __stdcall LoaderHook_replFn(const char* filename, unsigned int* _size, unsigned int* _offset) {
+	int esi_value;
+	__asm mov esi_value, esi
 
-	for (auto& pair : packageMap) {
-		auto& package = pair.second;
-		auto iter = package->find(filename);
-		if (iter == package->end()) continue;
-		auto inputType = iter.fileType();
-		auto outputType = ShadyCore::GetDataPackageDefaultType(inputType, iter->second);
-		// TODO reduce copying after change the reader hook
-		auto stream = new std::stringstream(std::ios::in|std::ios::out|std::ios::binary);
-		ShadyCore::convertResource(inputType.type,
-						inputType.format, iter.open(),
-						outputType.format, *stream);
-		*size = iter->second->getSize();
-		*input = stream;
+	{ std::shared_lock guard(packageMapLock);
+		for (auto& pair : packageMap) {
+			auto& package = pair.second;
+			auto iter = package->find(filename);
+			if (iter == package->end()) continue;
+			auto inputType = iter.fileType();
+			auto outputType = ShadyCore::GetDataPackageDefaultType(inputType, iter->second);
+			// TODO reduce copying
+			auto stream = new std::stringstream(std::ios::in|std::ios::out|std::ios::binary);
+			auto& input = iter.open();
+			ShadyCore::convertResource(inputType.type,
+							inputType.format, input,
+							outputType.format, *stream);
+			iter.close(input);
+			*_size = iter->second->getSize();
+			*_offset = 0x40000000; // just to hold a value
+			*(int*)esi_value = ShadyCore::stream_reader_vtbl;
+			return stream;
+		}
 	}
+
+	// return __readerCreate(filename, _size, _offset);
+	__asm {
+		push _offset;
+		push _size;
+		push filename;
+		mov esi, esi_value;
+		call LoaderHook::origFn;
+		mov esi_value, eax;
+	} return (void*)esi_value;
 }
 
 void ShadyLua::RemoveLoaderEvents(LuaScript* script) {
@@ -114,18 +135,11 @@ static bool loader_removePackage(int childId, lua_State* L) {
 
 void ShadyLua::LualibLoader(lua_State* L, ShadyCore::PackageEx* package) {
 	packageMap[ShadyLua::ScriptMap[L]] = package;
-	// TODO check lua require() behavior
-	// auto package = luabridge::getGlobal(L, "package");
-	// package["cpath"] = package["cpath"].tostring()
-	//     + ";" + basePath.string() + "\\?.dll";
-	// package["path"] = package["path"].tostring()
-	//     + ";" + basePath.string() + "\\?.lua"
-	//     + ";" + basePath.string() + "\\?\\init.lua"
-	//     + ";" + basePath.string() + "\\lua\\?.lua"
-	//     + ";" + basePath.string() + "\\lua\\?\\init.lua";
+	initHook<LoaderHook>();
 
 	getGlobalNamespace(L)
 		.beginNamespace("loader")
+			.addConstant("basePath", package->getBasePath().string())
 			.addCFunction("addData", loader_addData)
 			.addFunction("addResource", loader_addResource)
 			.addFunction("addAlias", loader_addAlias)

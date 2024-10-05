@@ -1,6 +1,7 @@
 #include "modpackage.hpp"
 #include "main.hpp"
 #include "../Core/package.hpp"
+#include "th123intl.hpp"
 #include <fstream>
 #include <mutex>
 #include <cctype>
@@ -70,8 +71,8 @@ namespace {
 					if (i->second->isDone()) {
 						ModPackage* p = i->first;
 						ModPackage::descMutex.lock();
-
 						std::filesystem::path filename(p->path);
+
 						filename += L".part";
 						if (std::filesystem::exists(filename)) {
 							std::filesystem::path target(filename);
@@ -109,7 +110,8 @@ namespace {
 						if (!i->second->hasError) {
 							p->previewName = "shady_preview_" + p->name + ".png";
 							ModPackage::basePackage->insert(p->previewName, i->second->data);
-						} p->downloadingPreview = false;
+							p->downloadingPreview = false;
+						}
 
  						delete i->second;
 						i = imageTasks.erase(i);
@@ -162,7 +164,7 @@ namespace {
 			try {
 				std::filesystem::remove(filename);
 			} catch (std::filesystem::filesystem_error err) {return;}
-			FetchFile* task = new FetchFile(package->driveId(), filename);
+			FetchFile* task = new FetchFile(package->hasFile() ? package->file() : package->driveId(), filename);
 			fileTasks.emplace_back(package, task);
 			task->start();
 
@@ -189,8 +191,18 @@ namespace {
 	} downloadController;
 }
 
+static inline std::string ws2utf(const std::wstring_view& wstr) {
+    std::string ret; th123intl::ConvertCodePage(wstr, CP_UTF8, ret);
+    return ret;
+}
+
+static inline std::wstring utf2ws(const std::string_view& str) {
+    std::wstring ret; th123intl::ConvertCodePage(CP_UTF8, str, ret);
+    return ret;
+}
+
 ModPackage::ModPackage(const std::string& name, const nlohmann::json::value_type& data)
-	: name(name), path(basePath / (name + ".zip")), data(data), fileExists(std::filesystem::exists(path)) {
+	: name(name), path(basePath / (utf2ws(name) + L".zip")), data(data), fileExists(std::filesystem::exists(path)) {
 
 	if (data.count("tags") && data["tags"].is_array()) for (auto& tag : data["tags"]) {
 		tags.push_back(tag.get<std::string>());
@@ -198,13 +210,14 @@ ModPackage::ModPackage(const std::string& name, const nlohmann::json::value_type
 }
 
 ModPackage::ModPackage(const std::filesystem::path& filename) 
-    : name(filename.stem().string()), path(filename), data({}), fileExists(std::filesystem::exists(filename)) {}
+    : name(ws2utf(filename.stem().c_str())), path(filename), data({}), fileExists(std::filesystem::exists(filename)) {}
 
 void ModPackage::downloadFile() { downloadController.downloadFile(this); }
 void ModPackage::downloadPreview() { downloadController.downloadImage(this); }
 
 void ModPackage::merge(const nlohmann::json::value_type& remote) {
 	data["id"] = remote.value("id", "");
+	data["file"] = remote.value("file", "");
 	data["creator"] = remote.value("creator", "");
 	data["description"] = remote.value("description", "");
 	data["preview"] = remote.value("preview", "");
@@ -228,7 +241,7 @@ void ModPackage::LoadFromLocalData() {
 
 		std::unique_lock lock(descMutex);
 		for (auto& entry : localConfig.items()) {
-			std::filesystem::path filename(basePath / (entry.key() + ".zip"));
+			std::filesystem::path filename(basePath / (utf2ws(entry.key()) + L".zip"));
 			if (std::filesystem::exists(filename))
 				descPackage.push_back(new ModPackage(entry.key(), entry.value()));
 		}
@@ -242,7 +255,7 @@ void ModPackage::LoadFromFilesystem() {
 		if (isDir || ext == ".zip" || ext == ".dat") {
 			if (iter->path().stem() == "shady-loader") continue;
 			std::unique_lock lock(descMutex);
-			if (!findPackage(iter->path().stem().string())) descPackage.push_back(new ModPackage(iter->path()));
+			if (!findPackage(ws2utf(iter->path().stem().c_str()))) descPackage.push_back(new ModPackage(iter->path()));
 		}
 	}
 }
@@ -253,13 +266,13 @@ bool ModPackage::Notify() { return downloadController.notify(); }
 void LoadPackage() {
 	ModPackage::LoadFromLocalData();
 	ModPackage::LoadFromFilesystem();
-	const std::string spath = (ModPackage::basePath / L"shady-loader.ini").string();
+	const std::filesystem::path spath = ModPackage::basePath / L"shady-loader.ini";
 	std::shared_lock lock(ModPackage::descMutex);
 
-	{ char buffer[4096], *context = 0; int i = 0;
-		GetPrivateProfileStringA("Options", "order", "", buffer, 4096, spath.c_str());
-		for(char* token = strtok_s(buffer, ",", &context); token; token = strtok_s(0, ",", &context)) {
-			std::string_view name(token);
+	{ wchar_t buffer[4096], *context = 0; int i = 0;
+		GetPrivateProfileStringW(L"Options", L"order", L"", buffer, 4096, spath.c_str());
+		for(wchar_t* token = wcstok_s(buffer, L",", &context); token; token = wcstok_s(0, L",", &context)) {
+			std::string name; th123intl::ConvertCodePage(token, CP_UTF8, name);
 			if (i >= ModPackage::descPackage.size()) break;
 			if (ModPackage::descPackage[i]->name == name) {++i; continue;}
 			for (int j = i + 1; j < ModPackage::descPackage.size(); ++j)
@@ -273,7 +286,8 @@ void LoadPackage() {
 	}
 
 	for (auto& package : ModPackage::descPackage) {
-		if (GetPrivateProfileIntA("Packages", package->name.c_str(), false, spath.c_str())) {
+		std::string name = (package->name[0] == '[' ? "<" : "") + package->name;
+		if (GetPrivateProfileIntW(L"Packages", utf2ws(name).c_str(), false, spath.c_str())) {
 			EnablePackage(package);
 			package->watcher = ShadyUtil::FileWatcher::create(package->path);
 		}
@@ -292,7 +306,7 @@ void UnloadPackage() {
 	std::unique_lock lock(ModPackage::descMutex);
 	for (auto& package : ModPackage::descPackage) {
 		if (package->isEnabled()) {
-			DisablePackage(package);
+			//DisablePackage(package);
 			if (package->watcher) {
 				delete package->watcher;
 				package->watcher = 0;

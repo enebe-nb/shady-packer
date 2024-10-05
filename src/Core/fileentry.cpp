@@ -29,7 +29,24 @@ inline std::string sjis2ws(const std::string_view& str) {
 
 #endif
 
+//-------------------------------------------------------------
+
 ShadyCore::FilePackageEntry::~FilePackageEntry() { if (deleteOnDestroy) std::filesystem::remove(filename); }
+
+std::istream& ShadyCore::FilePackageEntry::open() {
+	++openCount;
+#ifdef _MSC_VER
+	return *new std::ifstream(parent->getBasePath() / filename, std::ios::binary, _SH_DENYWR);
+#else
+	return *new std::ifstream(parent->getBasePath() / filename, std::ios::binary);
+#endif
+}
+
+void ShadyCore::FilePackageEntry::close(std::istream& stream) {
+	delete &stream;
+	if (openCount > 0) --openCount;
+	if (disposable) delete this; // TODO && openCount?
+}
 
 //-------------------------------------------------------------
 
@@ -85,7 +102,7 @@ void ShadyCore::Package::saveDir(const std::filesystem::path& directory) {
 
 		ShadyCore::convertResource(targetType.type, inputType.format, input, targetType.format, output);
 
-		i.close();
+		i.close(input);
 		output.close();
 
 #ifdef _WIN32

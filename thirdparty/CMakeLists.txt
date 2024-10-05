@@ -42,7 +42,7 @@ add_library(rapidxml INTERFACE)
 target_include_directories(rapidxml INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/rapidxml)
 
 # zlib Library
-add_git_module(zlib https://github.com/madler/zlib.git v1.2.11)
+add_git_module(zlib https://github.com/madler/zlib v1.3.1)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/zlib EXCLUDE_FROM_ALL)
 if (MSVC)
     set(ZLIB_LIBRARY ${CMAKE_CURRENT_BINARY_DIR}/zlib/Release/zlibstatic.lib)
@@ -55,7 +55,7 @@ set(ZLIB_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/zlib)
 file(READ ${CMAKE_CURRENT_SOURCE_DIR}/zlib/zlib.h _zlib_h_contents)
 string(REGEX REPLACE ".*#define[ \t]+ZLIB_VERSION[ \t]+\"([-0-9A-Za-z.]+)\".*" "\\1" ZLIB_VERSION_STRING ${_zlib_h_contents})
 find_package(ZLIB REQUIRED)
-set_target_properties(ZLIB::ZLIB PROPERTIES INTERFACE_INCLUDE_DIRECTORIES "${ZLIB_INCLUDE_DIRS};${CMAKE_CURRENT_BINARY_DIR}/zlib")
+target_include_directories(ZLIB::ZLIB INTERFACE ${CMAKE_CURRENT_BINARY_DIR}/zlib)
 add_dependencies(ZLIB::ZLIB zlibstatic)
 
 # libpng Library
@@ -68,7 +68,7 @@ add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/libpng EXCLUDE_FROM_ALL)
 target_include_directories(png_static PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/libpng ${CMAKE_CURRENT_BINARY_DIR}/zlib ${CMAKE_CURRENT_BINARY_DIR}/libpng)
 
 # libzip Library
-add_git_module(libzip https://github.com/nih-at/libzip v1.8.0)
+add_git_module(libzip https://github.com/nih-at/libzip v1.10.1)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/libzip EXCLUDE_FROM_ALL)
 #target_compile_definitions(zip INTERFACE ZIP_STATIC)
 
@@ -79,13 +79,13 @@ target_include_directories(cxxopts INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/cxxopts
 
 if(SHADY_ENABLE_MODULE)
     # libcurl Library
-    add_download_module(curl "-7.78.0" https://curl.haxx.se/download/curl-7.78.0.zip)
-    set(CMAKE_USE_SCHANNEL ON)
-    set(CMAKE_USE_LIBSSH2 OFF)
+    add_download_module(curl "-7.85.0" https://curl.haxx.se/download/curl-7.85.0.zip)
+    set(CURL_USE_SCHANNEL ON)
+    set(CURL_USE_LIBSSH2 OFF)
     add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/curl EXCLUDE_FROM_ALL)
 
     # nlohmann JSON Library
-    add_git_module(json https://github.com/nlohmann/json v3.10.2)
+    add_git_module(json https://github.com/nlohmann/json v3.11.2)
     add_library(json INTERFACE)
     target_include_directories(json INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/json/include)
 
@@ -96,10 +96,11 @@ if(SHADY_ENABLE_MODULE)
     set(LUABRIDGE_TESTING OFF)
     add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/LuaBridge EXCLUDE_FROM_ALL)
 
-    # termcolor Library
-#    add_git_module(termcolor https://github.com/ikalnytskyi/termcolor v2.0.0)
-#    add_library(termcolor INTERFACE)
-#    target_include_directories(termcolor INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/termcolor/include)
+    # Lua Extra Libraries
+    add_git_module(luafilesystem https://github.com/lunarmodules/luafilesystem v1_8_0)
+    add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/luafilesystem EXCLUDE_FROM_ALL)
+    add_git_module(luasocket https://github.com/lunarmodules/luasocket v3.1.0)
+    add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/luasocket EXCLUDE_FROM_ALL)
 
     # SokuLib Library
     add_git_module(SokuLib https://github.com/enebe-nb/SokuLib dev)

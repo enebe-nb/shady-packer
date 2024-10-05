@@ -22,15 +22,15 @@ namespace {
 		};
 
 		static constexpr size_t fnv1a(const char* s, std::size_t count) {
-		#if defined(_WIN64) || defined(__x86_64__)
+		#if INTPTR_MAX == INT64_MAX
 			static_assert(sizeof(size_t) == 8, "This code is for 64-bit size_t.");
 			const size_t fnv_offset_basis = 14695981039346656037ULL;
 			const size_t fnv_prime = 1099511628211ULL;
-		#else /* defined(_WIN64) */
+		#else /* 64bits */
 			static_assert(sizeof(size_t) == 4, "This code is for 32-bit size_t.");
 			const size_t fnv_offset_basis = 2166136261U;
 			const size_t fnv_prime = 16777619U;
-		#endif /* defined(_WIN64) */
+		#endif /* 64bits */
 			size_t val = fnv_offset_basis;
 			for (size_t i = 0; i < count; ++i) {
 				val ^= static_cast<size_t>(s[i]);
@@ -248,6 +248,18 @@ namespace {
 		{"right",       {(setter_t)setter<int32_t>,     offsetof(ShadyCore::Schema::Sequence::BBox, right)}},
 		{"down",        {(setter_t)setter<int32_t>,     offsetof(ShadyCore::Schema::Sequence::BBox, down)}},
 	};
+}
+
+uint32_t ShadyCore::Schema::getOrCreateImage(const std::string_view& name) {
+	for (int i = 0; i < this->images.size(); ++i) {
+		if (strncmp(this->images[i].name, name.data(), name.size()) == 0
+			&& this->images[i].name[name.size()] == '\0') return i;
+	}
+
+	char* tmp = new char[name.size() + 1];
+	memcpy(tmp, name.data(), name.size()); tmp[name.size()] = '\0';
+	this->images.emplace_back(tmp);
+	return this->images.size() - 1;
 }
 
 // TODO hashing?

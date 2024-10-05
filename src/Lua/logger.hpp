@@ -8,7 +8,7 @@ namespace Logger {
     constexpr int LOG_INFO =    1 << 2;
     constexpr int LOG_WARNING = 1 << 3;
     constexpr int LOG_ALL =     0x0f;
-    void Initialize(int flags = LOG_ERROR);
+    void Initialize(int flags = LOG_ERROR, const std::string_view& filename = "");
     void Finalize();
     void Render();
     void Clear();

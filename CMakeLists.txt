@@ -5,7 +5,7 @@ cmake_policy(SET CMP0091 NEW)
 string(TIMESTAMP SHADY_VER_DAY "%m%d" UTC)
 string(TIMESTAMP SHADY_VER_YEAR "%Y" UTC)
 project(shady-packer
-	VERSION 2.2.${SHADY_VER_YEAR}.${SHADY_VER_DAY}
+	VERSION 2.7.${SHADY_VER_YEAR}.${SHADY_VER_DAY}
 	DESCRIPTION "Tools for a specific fighting game.")
 set(SHADY_VERSION ${PROJECT_VERSION})
 string(REPLACE . , SHADY_VERSION_COMMA ${SHADY_VERSION})
@@ -18,6 +18,10 @@ add_compile_options("$<$<CXX_COMPILER_ID:MSVC>:/utf-8>")
 
 set(SHADY_ENABLE_TEST FALSE CACHE BOOL "Enable test building")
 set(SHADY_ENABLE_MODULE TRUE CACHE BOOL "Enable module building")
+if(SHADY_ENABLE_MODULE AND (NOT WIN32 OR NOT CMAKE_SIZEOF_VOID_P EQUAL 4))
+	set(SHADY_ENABLE_MODULE FALSE)
+	message(WARNING "Skipping Shady Modules: Can only build on Windows 32bits")
+endif()
 
 # Dependencies
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/thirdparty)

@@ -9,8 +9,9 @@
 #include <cstring>
 #include <list>
 
-#ifdef min
-#undef min
+#ifndef _MSC_VER
+	using std::min;
+	using std::max;
 #endif
 
 std::streamsize ShadyCore::StreamFilter::xsgetn(char_type* buffer, std::streamsize count) {
@@ -169,27 +170,35 @@ void ShadyCore::DataFileFilter::seek(off_type spos, std::ios::seekdir sdir) {
 }
 
 //-------------------------------------------------------------
-
-std::istream& ShadyCore::DataPackageEntry::open() {
-	fileStream.clear();
-	std::filebuf* base = (std::filebuf*) fileFilter.getBaseBuffer();
-	if (!base) base = new std::filebuf();
-	else base->close();
-
-	base->open(parent->getBasePath(), std::ios::in | std::ios::binary);
-	base->pubseekoff(packageOffset, std::ios::beg);
-	fileFilter.setBaseBuffer(base);
-
-	return fileStream;
+namespace {
+	struct StreamData {
+		std::istream fileStream; // must be first
+		std::filebuf baseBuffer;
+		ShadyCore::DataFileFilter fileFilter;
+		inline StreamData(unsigned int offset, unsigned int size)
+			: fileStream(&fileFilter), fileFilter(&baseBuffer, offset, size) {}
+	};
 }
 
-void ShadyCore::DataPackageEntry::close() {
-	const std::streambuf* base = fileFilter.getBaseBuffer();
-	if (base) {
-		delete base;
-		fileFilter.setBaseBuffer(0);
-	}
-	if (disposable) delete this;
+
+std::istream& ShadyCore::DataPackageEntry::open() {
+	++openCount;
+	auto streamData = new StreamData(packageOffset, packageSize);
+
+#ifdef _MSC_VER
+	streamData->baseBuffer.open(parent->getBasePath(), std::ios::in | std::ios::binary);
+#else
+	streamData->baseBuffer.open(parent->getBasePath(), std::ios::in | std::ios::binary);
+#endif
+	streamData->baseBuffer.pubseekoff(packageOffset, std::ios::beg);
+
+	return streamData->fileStream;
+}
+
+void ShadyCore::DataPackageEntry::close(std::istream& fileStream) {
+	delete (StreamData*)&fileStream;
+	if (openCount > 0) --openCount;
+	if (disposable && !openCount) delete this;
 }
 
 //-------------------------------------------------------------
@@ -249,7 +258,7 @@ ShadyCore::FileType ShadyCore::GetDataPackageDefaultType(const FT& inputType, Sh
 				if (strcmp(buffer, "layout") == 0) { format = FT::SCHEMA_GAME_GUI; break; }
 				if (!strchr("?", buffer[0])) break;
 			}
-			entry->close();
+			entry->close(input);
 		} else format = inputType.format;
 		return FT(FT::TYPE_SCHEMA, format, format == FT::SCHEMA_GAME_GUI ? FT::getExtValue(".dat") : FT::getExtValue(".pat"));
 	} else return outputTypes[inputType.type];
@@ -285,7 +294,7 @@ void ShadyCore::Package::saveData(const std::filesystem::path& filename) {
 
 		ShadyCore::convertResource(inputType.type, inputType.format, input, targetType.format, output);
 
-		entry->close();
+		entry->close(input);
 		Package::underlineToSlash(tempFiles.back().first);
 		targetType.appendExtValue(tempFiles.back().first);
 		listSize += 9 + tempFiles.back().first.size();

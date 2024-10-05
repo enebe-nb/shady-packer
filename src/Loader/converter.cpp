@@ -19,10 +19,14 @@ namespace {
     auto __tableReader = reinterpret_cast<bool (__fastcall *)(int output, const char* filename)>(0x00408ab0);
     auto __labelReader = reinterpret_cast<bool (__fastcall *)(const char* filename, int unused, int output)>(0x00418eb0);
     auto __sfxReader = reinterpret_cast<bool (__fastcall *)(int output, const char* filename)>(0x00408b40);
-    auto __paletteReader = reinterpret_cast<bool (__fastcall *)(int a, int unused, const char* filename, int output, int b)>(0x00408be0);
+    auto __paletteReaderA = reinterpret_cast<bool (__fastcall *)(int a, int unused, const char* filename, int output, int b)>(0x00408be0);
+    auto __paletteReaderB = reinterpret_cast<bool (__fastcall *)(int a, int unused, const char* filename, int output, int b)>(0x00408be0);
     auto __bgmCreateReader = reinterpret_cast<bool (__fastcall *)(void** output, int unused, const char* filename)>(0x0040d1e0);
     auto __textureCreateReader = reinterpret_cast<bool (__fastcall *)(void** output, int unused, const char* filename)>(0x0040d1e0);
-    auto __schemaCreateReader = reinterpret_cast<bool (__fastcall *)(void** output, int unused, const char* filename)>(0x0040d1e0);
+    auto __schemaCreateReaderA = reinterpret_cast<bool (__fastcall *)(void** output, int unused, const char* filename)>(0x0040d1e0);
+    auto __schemaCreateReaderB = reinterpret_cast<bool (__fastcall *)(void** output, int unused, const char* filename)>(0x0040d1e0);
+    auto __schemaCreateReaderC = reinterpret_cast<bool (__fastcall *)(void** output, int unused, const char* filename)>(0x0040d1e0);
+    auto __sokuCleanup = reinterpret_cast<void (__fastcall *)(void* ecx)>(0x00407b50);
 
     // avail code [0x408e30:0x408ea5] 
     // keep ebx state, return to 0x408ea5
@@ -67,8 +71,9 @@ static bool __fastcall textReader(int output, const char* filename) {
         auto iter = ModPackage::basePackage->find(filename, ShadyCore::FileType::TYPE_TEXT);
         if (iter != ModPackage::basePackage->end()) {
             auto filetype = iter.fileType();
-            ShadyCore::getResourceReader(filetype)((ShadyCore::Resource*)output, iter.open());
-            iter.close();
+            auto& input = iter.open();
+            ShadyCore::getResourceReader(filetype)((ShadyCore::Resource*)output, input);
+            iter.close(input);
             return true;
         }
     } return __textReader(output, filename);
@@ -80,8 +85,9 @@ static bool __fastcall tableReader(int output, const char* filename) {
         auto iter = ModPackage::basePackage->find(filename, ShadyCore::FileType::TYPE_TABLE);
         if (iter != ModPackage::basePackage->end()) {
             auto filetype = iter.fileType();
-            ShadyCore::getResourceReader(filetype)((ShadyCore::Resource*)output, iter.open());
-            iter.close();
+            auto& input = iter.open();
+            ShadyCore::getResourceReader(filetype)((ShadyCore::Resource*)output, input);
+            iter.close(input);
             return true;
         }
     } return __tableReader(output, filename);
@@ -93,8 +99,9 @@ static bool __fastcall labelReader(const char* filename, int unused, int output)
         auto iter = ModPackage::basePackage->find(filename, ShadyCore::FileType::TYPE_LABEL);
         if (iter != ModPackage::basePackage->end()) {
             auto filetype = iter.fileType();
-            ShadyCore::getResourceReader(filetype)((ShadyCore::Resource*)(output + 0x12e8), iter.open());
-            iter.close();
+            auto& input = iter.open();
+            ShadyCore::getResourceReader(filetype)((ShadyCore::Resource*)(output + 0x12e8), input);
+            iter.close(input);
             return true;
         }
     } return __labelReader(filename, unused, output);
@@ -106,24 +113,27 @@ static bool __fastcall sfxReader(int output, const char* filename) {
         auto iter = ModPackage::basePackage->find(filename, ShadyCore::FileType::TYPE_SFX);
         if (iter != ModPackage::basePackage->end()) {
             auto filetype = iter.fileType();
-            ShadyCore::getResourceReader(filetype)((ShadyCore::Resource*)output, iter.open());
-            iter.close();
+            auto& input = iter.open();
+            ShadyCore::getResourceReader(filetype)((ShadyCore::Resource*)output, input);
+            iter.close(input);
             return true;
         }
     } return __sfxReader(output, filename);
 }
 
+template <bool (__fastcall*& super)(int, int, const char*, int, int)>
 static bool __fastcall paletteReader(int a, int unused, const char* filename, int output, int b) {
     ModPackage::CheckUpdates();
     { std::shared_lock lock(*ModPackage::basePackage);
         auto iter = ModPackage::basePackage->find(filename, ShadyCore::FileType::TYPE_PALETTE);
         if (iter != ModPackage::basePackage->end()) {
             auto filetype = iter.fileType();
-            ShadyCore::getResourceReader(filetype)((ShadyCore::Resource*)output, iter.open());
-            iter.close();
+            auto& input = iter.open();
+            ShadyCore::getResourceReader(filetype)((ShadyCore::Resource*)output, input);
+            iter.close(input);
             return true;
         }
-    } return __paletteReader(a, unused, filename, output, b);
+    } return super(a, unused, filename, output, b);
 }
 
 static bool __fastcall bgmCreateReader(void** output, int unused, const char* filename) {
@@ -162,14 +172,17 @@ static bool __fastcall textureCreateReader(void** output, int unused, const char
 
 static bool __fastcall imageReader(ShadyCore::Image* output, const char* filename, char* tempbuffer, size_t bufferSize) {
     ModPackage::CheckUpdates();
-    { std::shared_lock lock(*ModPackage::basePackage);
+    try { std::shared_lock lock(*ModPackage::basePackage);
         auto iter = ModPackage::basePackage->find(filename, ShadyCore::FileType::TYPE_IMAGE);
         if (iter != ModPackage::basePackage->end()) {
             auto filetype = iter.fileType();
-            ShadyCore::getResourceReader(filetype)((ShadyCore::Resource*)output, iter.open());
-            iter.close();
+            auto& input = iter.open();
+            ShadyCore::getResourceReader(filetype)((ShadyCore::Resource*)output, input);
+            iter.close(input);
             return true;
         }
+    } catch (std::runtime_error err) {
+        Logger::Error("Error loading image ", filename, ": ", err.what());
     }
 
     bufferSize -= 4;
@@ -265,7 +278,7 @@ static bool __fastcall guiReader(SokuLib::CDesign* output, int unused, const cha
 }
 */
 
-template <ShadyCore::FileType::Format targetFormat>
+template <bool (__fastcall*& super)(void**, int, const char*), ShadyCore::FileType::Format targetFormat>
 static bool __fastcall schemaCreateReader(void** output, int unused, const char* filename) {
     ModPackage::CheckUpdates();
     { std::shared_lock lock(*ModPackage::basePackage);
@@ -283,7 +296,7 @@ static bool __fastcall schemaCreateReader(void** output, int unused, const char*
                 std::istream& input = iter.open();
                 std::stringstream* buffer = new std::stringstream(std::ios::in|std::ios::out|std::ios::binary);
                 ShadyCore::convertResource(type.type, type.format, input, targetFormat, *buffer);
-                iter.close();
+                iter.close(input);
 
                 reader[0] = ShadyCore::stream_reader_vtbl;
                 reader[1] = (int)buffer;
@@ -291,7 +304,7 @@ static bool __fastcall schemaCreateReader(void** output, int unused, const char*
                 reader[2] = reader[4] = reader[5] = 0;
             } return true;
         }
-    } return __schemaCreateReader(output, unused, filename);
+    } return super(output, unused, filename);
 }
 
 static int __fastcall titleOnProcess(SokuLib::Title* t) {
@@ -335,6 +348,11 @@ static int __fastcall titleOnRender(SokuLib::Title* t) {
     return ret;
 }
 
+static void __fastcall sokuCleanup(void* ecx) {
+    __sokuCleanup(ecx);
+    ModPackage::basePackage->clear();
+}
+
 template<int N> static inline void TamperCode(int addr, uint8_t(&code)[N]) {
     for (int i = 0; i < N; ++i) {
         uint8_t swap = *(uint8_t*)(addr+i);
@@ -354,15 +372,16 @@ static int _HookLoader() {
     __tableReader = SokuLib::TamperNearJmpOpr(0x0040f3b3, tableReader);
     __labelReader = SokuLib::TamperNearJmpOpr(0x00418cc5, labelReader);
     __sfxReader = SokuLib::TamperNearJmpOpr(0x0041869f, sfxReader);
-    __paletteReader = SokuLib::TamperNearJmpOpr(0x00467b7d, paletteReader); // patternLoad
-            SokuLib::TamperNearJmpOpr(0x0041ffb7, paletteReader); // charSelect
+    __paletteReaderA = SokuLib::TamperNearJmpOpr(0x00467b7d, paletteReader<__paletteReaderA>); // patternLoad
+    __paletteReaderB = SokuLib::TamperNearJmpOpr(0x0041ffb7, paletteReader<__paletteReaderB>); // charSelect
     __bgmCreateReader = SokuLib::TamperNearJmpOpr(0x00418be1, bgmCreateReader);
     __textureCreateReader = SokuLib::TamperNearJmpOpr(0x00409196, textureCreateReader);
     TamperCode(0x00408e30, __imageReader);
             SokuLib::TamperNearJmpOpr(0x00408e49, imageReader);
-    __schemaCreateReader = SokuLib::TamperNearJmpOpr(0x0040b36b, schemaCreateReader<ShadyCore::FileType::SCHEMA_GAME_GUI>);
-            SokuLib::TamperNearJmpOpr(0x0043b4bf, schemaCreateReader<ShadyCore::FileType::SCHEMA_GAME_ANIM>);
-            SokuLib::TamperNearJmpOpr(0x00467a80, schemaCreateReader<ShadyCore::FileType::SCHEMA_GAME_PATTERN>);
+    __schemaCreateReaderA = SokuLib::TamperNearJmpOpr(0x0040b36b, schemaCreateReader<__schemaCreateReaderA, ShadyCore::FileType::SCHEMA_GAME_GUI>);
+    __schemaCreateReaderB = SokuLib::TamperNearJmpOpr(0x0043b4bf, schemaCreateReader<__schemaCreateReaderB, ShadyCore::FileType::SCHEMA_GAME_ANIM>);
+    __schemaCreateReaderC = SokuLib::TamperNearJmpOpr(0x00467a80, schemaCreateReader<__schemaCreateReaderC, ShadyCore::FileType::SCHEMA_GAME_PATTERN>);
+    __sokuCleanup = SokuLib::TamperNearJmpOpr(0x007fb8a1, sokuCleanup);
     VirtualProtect((PVOID)TEXT_SECTION_OFFSET, TEXT_SECTION_SIZE, dwOldProtect, &dwOldProtect);
 
     VirtualProtect((PVOID)RDATA_SECTION_OFFSET, RDATA_SECTION_SIZE, PAGE_EXECUTE_WRITECOPY, &dwOldProtect);
@@ -370,14 +389,15 @@ static int _HookLoader() {
     __titleOnRender  = SokuLib::TamperDword(&SokuLib::VTable_Title.onRender, titleOnRender);
     VirtualProtect((PVOID)RDATA_SECTION_OFFSET, RDATA_SECTION_SIZE, dwOldProtect, &dwOldProtect);
 
+    if (iniUseLoadLock) LoadPackage();
+    else { std::thread t(LoadPackage); t.detach(); }
+
     _initialized = true;
     // set EAX to restore hooked instruction
     return *(int*)0x008943b8;
 }
 
 void HookLoader() {
-    if (iniEnableLua) ShadyLua::LoadTamper();
-
     DWORD dwOldProtect;
     ::VirtualProtect(reinterpret_cast<LPVOID>(0x007fb596), 5, PAGE_EXECUTE_WRITECOPY, &dwOldProtect);
     bool hasCall = 0xE8 == *(unsigned char*)0x007fb596;
@@ -387,8 +407,6 @@ void HookLoader() {
 }
 
 void UnhookLoader() {
-    ShadyLua::UnloadTamper();
-
     if (!_initialized) return;
     DWORD dwOldProtect;
     VirtualProtect((PVOID)TEXT_SECTION_OFFSET, TEXT_SECTION_SIZE, PAGE_EXECUTE_WRITECOPY, &dwOldProtect);
@@ -396,14 +414,15 @@ void UnhookLoader() {
     SokuLib::TamperNearJmpOpr(0x0040f3b3, __tableReader);
     SokuLib::TamperNearJmpOpr(0x00418cc5, __labelReader);
     SokuLib::TamperNearJmpOpr(0x0041869f, __sfxReader);
-    SokuLib::TamperNearJmpOpr(0x00467b7d, __paletteReader); // patternLoad
-        SokuLib::TamperNearJmpOpr(0x0041ffb7, __paletteReader); // charSelect
+    SokuLib::TamperNearJmpOpr(0x00467b7d, __paletteReaderA); // patternLoad
+    SokuLib::TamperNearJmpOpr(0x0041ffb7, __paletteReaderB); // charSelect
     SokuLib::TamperNearJmpOpr(0x00418be1, __bgmCreateReader);
     SokuLib::TamperNearJmpOpr(0x00409196, __textureCreateReader);
     TamperCode(0x00408e30, __imageReader);
-    SokuLib::TamperNearJmpOpr(0x0040b36b, __schemaCreateReader); // gui
-        SokuLib::TamperNearJmpOpr(0x0043b4bf, __schemaCreateReader); // effect
-        SokuLib::TamperNearJmpOpr(0x00467a80, __schemaCreateReader); // pattern
+    SokuLib::TamperNearJmpOpr(0x0040b36b, __schemaCreateReaderA); // gui
+    SokuLib::TamperNearJmpOpr(0x0043b4bf, __schemaCreateReaderB); // effect
+    SokuLib::TamperNearJmpOpr(0x00467a80, __schemaCreateReaderC); // pattern
+    SokuLib::TamperNearJmpOpr(0x007fb8a1, __sokuCleanup);
     VirtualProtect((PVOID)TEXT_SECTION_OFFSET, TEXT_SECTION_SIZE, dwOldProtect, &dwOldProtect);
 
     VirtualProtect((PVOID)RDATA_SECTION_OFFSET, RDATA_SECTION_SIZE, PAGE_EXECUTE_WRITECOPY, &dwOldProtect);

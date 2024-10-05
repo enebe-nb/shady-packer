@@ -4,9 +4,23 @@
 
 #include <cstring>
 #include <zip.h>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <set>
+
+namespace {
+	struct StreamData {
+		std::istream zipStream; // must be first
+		ShadyCore::ZipStream zipBuffer;
+		inline StreamData() : zipStream(&zipBuffer) {}
+	};
+#ifdef _DEBUG
+	std::mutex streamLock;
+	std::unordered_map<ShadyCore::ZipPackageEntry*, std::list<StreamData>> streamList;
+#endif
+}
 
 std::streambuf::int_type ShadyCore::ZipStream::underflow() {
 	if (hasBufVal) return bufVal;
@@ -16,22 +30,22 @@ std::streambuf::int_type ShadyCore::ZipStream::underflow() {
 	if (read > 0) {
 		hasBufVal = true;
 		return bufVal = traits_type::to_int_type(value);
-	} else if (read < 0) throw std::runtime_error("You probably did open this file twice!");
+	} else if (read < 0) throw std::runtime_error("Zip Read Error: underflow");
 	return traits_type::eof();
 }
 
 std::streamsize ShadyCore::ZipStream::xsgetn(char_type* buffer, std::streamsize size) {
-	int buffered = 0;
-	while (hasBufVal && size) {
-		--size;
-		buffer[buffered++] = bufVal;
-		hasBufVal = false;
+	bool noBufVal = true;
+	if (hasBufVal && size > 0) {
+		*buffer++ = bufVal;
+		--size; ++pos;
+		noBufVal = hasBufVal = false;
 	}
-	pos += buffered;
 
-	size = zip_fread((zip_file_t*)innerFile, buffer + buffered, size);
+	size = zip_fread((zip_file_t*)innerFile, buffer, size);
+	if (size < 0) throw std::runtime_error("Zip Read Error: xsgetn");
 	pos += size;
-	return size + buffered;
+	return size + (noBufVal ? 0 : 1);
 }
 
 std::streambuf::int_type ShadyCore::ZipStream::uflow() {
@@ -46,11 +60,35 @@ std::streambuf::int_type ShadyCore::ZipStream::uflow() {
 	if (read > 0) {
 		++pos;
 		return traits_type::to_int_type(value);
-	} else if (read < 0) throw std::runtime_error("You probably did open this file twice!");
+	} else if (read < 0) throw std::runtime_error("Zip Read Error: uflow");
 	return traits_type::eof();
 }
 
 std::streambuf::pos_type ShadyCore::ZipStream::seekoff(off_type spos, std::ios::seekdir sdir, std::ios::openmode mode) {
+	if (mode != std::ios::in) return pos_type(off_type(-1)); // readonly stream;
+
+	if (zip_file_is_seekable((zip_file_t*)innerFile)) {
+		if (hasBufVal) {
+			++pos; hasBufVal = false;
+			if (sdir == std::ios::cur) --spos;
+		}
+
+		switch(sdir) {
+		case std::ios::cur:
+			if (0 == zip_fseek((zip_file_t*)innerFile, spos, SEEK_CUR))
+				return pos += spos;
+			else break;
+		case std::ios::end:
+			if (0 == zip_fseek((zip_file_t*)innerFile, spos, SEEK_END))
+				return pos = size+spos;
+			else break;
+		case std::ios::beg:
+			if (0 == zip_fseek((zip_file_t*)innerFile, spos, SEEK_SET))
+				return pos = spos;
+			else break;
+		}
+	}
+
 	if (sdir == std::ios::cur) {
 		if (spos >= 0) {
 			while (spos--) uflow();
@@ -76,8 +114,9 @@ std::streambuf::pos_type ShadyCore::ZipStream::seekoff(off_type spos, std::ios::
 	zip_fclose((zip_file_t*)innerFile);
 	innerFile = zip_fopen_index((zip_t*)pkgFile, index, 0);
 	char* ignoreBuf = new char[pos];
-	zip_fread((zip_file_t*)innerFile, ignoreBuf, pos);
+	auto ret = zip_fread((zip_file_t*)innerFile, ignoreBuf, pos);
 	delete[] ignoreBuf;
+	if (ret < 0) throw std::runtime_error("Zip Read Error: seekoff");
 
 	return pos;
 }
@@ -86,9 +125,9 @@ std::streambuf::pos_type ShadyCore::ZipStream::seekpos(pos_type spos, std::ios::
 	return seekoff(spos, std::ios::beg, mode);
 }
 
-void ShadyCore::ZipStream::open(const std::filesystem::path& packageFile, const std::string& name) {
+void ShadyCore::ZipStream::open(const std::filesystem::path& file, const std::string& name) {
 #ifdef _WIN32
-	auto handle = CreateFileW(packageFile.c_str(), GENERIC_READ, FILE_SHARE_READ, 0, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
+	auto handle = CreateFileW(file.wstring().c_str(), GENERIC_READ, FILE_SHARE_READ, 0, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
 	if (handle == INVALID_HANDLE_VALUE) return;
 	pkgFile = zip_open_from_source(zip_source_win32handle_create(handle, 0, 0, 0), ZIP_RDONLY, 0);
 #else
@@ -100,11 +139,14 @@ void ShadyCore::ZipStream::open(const std::filesystem::path& packageFile, const 
 	zip_stat_t stat;
 	zip_stat_init(&stat);
 	zip_stat((zip_t*)pkgFile, name.c_str(), 0, &stat);
+	const auto requiredStats = ZIP_STAT_INDEX|ZIP_STAT_SIZE;
+	if (stat.valid & requiredStats != requiredStats) throw std::runtime_error("Zip Read Error: invalid stats");
 	index = stat.index;
 	size = stat.size;
 	pos = 0;
 
 	innerFile = zip_fopen_index((zip_t*)pkgFile, index, 0);
+	if (!innerFile) throw std::runtime_error("Zip Read Error: open (zip_file)");
 }
 
 void ShadyCore::ZipStream::close() {
@@ -135,7 +177,7 @@ static zip_int64_t zipInputFunc(void* userdata, void* data, zip_uint64_t len, zi
 	case ZIP_SOURCE_READ:
 		return zipData->stream->read((char*)data, len).gcount();
 	case ZIP_SOURCE_CLOSE:
-		zipData->entry->close();
+		zipData->entry->close(*zipData->stream);
 		zipData->stream = 0;
 		return 0;
 	case ZIP_SOURCE_STAT:
@@ -211,9 +253,43 @@ static zip_int64_t zipOutputFunc(void* userdata, void* data, zip_uint64_t len, z
 
 //-------------------------------------------------------------
 
+std::istream& ShadyCore::ZipPackageEntry::open() {
+	++openCount;
+#ifdef _DEBUG
+	auto& streamData = streamList[this].emplace_back();
+#else
+	auto& streamData = *(new StreamData());
+#endif
+	streamData.zipBuffer.open(parent->getBasePath(), name);
+	return streamData.zipStream;
+}
+
+void ShadyCore::ZipPackageEntry::close(std::istream& zipStream) {
+#ifdef _DEBUG
+	auto& list = streamList[this];
+	{ std::lock_guard lock(streamLock);
+	for (auto iter = list.begin(); iter != list.end(); ++iter) {
+		if (&zipStream == &iter->zipStream) {
+			--openCount;
+			iter->zipBuffer.close();
+			list.erase(iter);
+			break;
+		}
+	} }
+#else
+	--openCount;
+	((StreamData*)&zipStream)->zipBuffer.close();
+	delete ((StreamData*)&zipStream);
+#endif
+
+	if (disposable && openCount == 0) delete this;
+}
+
+//-------------------------------------------------------------
+
 void ShadyCore::Package::loadZip(const std::filesystem::path& path) {
 #ifdef _WIN32
-    auto handle = CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ, 0, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
+    auto handle = CreateFileW(path.wstring().c_str(), GENERIC_READ, FILE_SHARE_READ, 0, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
 	if (handle == INVALID_HANDLE_VALUE) return;
 	auto file = zip_open_from_source(zip_source_win32handle_create(handle, 0, 0, 0), ZIP_RDONLY, 0);
 #else
@@ -228,6 +304,8 @@ void ShadyCore::Package::loadZip(const std::filesystem::path& path) {
 		zip_stat_t fileStat;
 		zip_stat_index(file, i, 0, &fileStat);
 
+		std::string_view name(fileStat.name);
+		if (name.ends_with('/')) continue;
 		this->insert(fileStat.name, new ZipPackageEntry(this, fileStat.name, fileStat.size));
 	}
 
@@ -265,7 +343,7 @@ ShadyCore::FileType ShadyCore::GetZipPackageDefaultType(const FT& inputType, Sha
 				if (strcmp(buffer, "layout") == 0) { format = FT::SCHEMA_GAME_GUI; break; }
 				if (!strchr("?", buffer[0])) break;
 			}
-			entry->close();
+			entry->close(input);
 		} else format = inputType.format;
 		return FT(FT::TYPE_SCHEMA, format, format == FT::SCHEMA_GAME_GUI ? FT::getExtValue(".dat") : FT::getExtValue(".pat"));
 	} return outputTypes[inputType.type];
@@ -296,7 +374,7 @@ void ShadyCore::Package::saveZip(const std::filesystem::path& filename) {
 			output.close();
 
 			inputSource = zip_source_file_create(convertedFiles.back().string().c_str(), 0, 0, 0);
-			entry->close();
+			entry->close(input);
 		}
 
 		std::string filename(i->first.name);

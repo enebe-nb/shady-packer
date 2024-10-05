@@ -37,9 +37,9 @@ static inline void toPngPalette(uint8_t* output, ShadyCore::Palette* palette) {
     if (palette->bitsPerPixel <= 16) {
         for (int i = 0; i < 256; ++i) {
             uint32_t color = ShadyCore::Palette::unpackColor(((uint16_t*)palette->data)[i]);
-            output[i*3  ] = color;
+            output[i*3+2] = color;
             output[i*3+1] = color >> 8;
-            output[i*3+2] = color >> 16;
+            output[i*3  ] = color >> 16;
         }
     } else {
         for (int i = 0; i < 256; ++i) {

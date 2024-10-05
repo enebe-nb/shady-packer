@@ -36,6 +36,7 @@ static int _readfile(lua_State* L) {
     ShadyLua::LuaScript* script = ShadyLua::ScriptMap.at(L);
     const char *filename = luaL_checkstring(L, 1);
     auto file = script->openFile(filename);
+    if (!file) return luaL_error(L, "Cannot open file.");
 
     luaL_Buffer buffer; luaL_buffinit(L, &buffer);
     do {
