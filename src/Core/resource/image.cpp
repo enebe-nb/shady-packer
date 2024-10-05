@@ -2,7 +2,6 @@
 #include <png.h>
 #include <math.h>
 #include <cstring>
-#include <cstring>
 
 namespace {
 	bool isTrueColorAvailable = false;
