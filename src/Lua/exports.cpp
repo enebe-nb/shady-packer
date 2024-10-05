@@ -4,18 +4,16 @@
 #include "logger.hpp"
 #include "lualibs/soku.hpp"
 #include "lualibs.hpp"
+#include "../Core/util/filewatcher.hpp"
+#include <LuaBridge/LuaBridge.h>
 
-namespace ShadyCore {
-    void* Allocate(size_t s) { return new uint8_t[s]; }
-    void Deallocate(void* p) { delete p; }
-}
+void* ShadyCore::Allocate(size_t s) { return SokuLib::NewFct(s); }
+void ShadyCore::Deallocate(void* p) { SokuLib::DeleteFct(p); }
 
-extern const BYTE TARGET_HASH[16];
 const BYTE TARGET_HASH[16] = { 0xdf, 0x35, 0xd1, 0xfb, 0xc7, 0xb5, 0x83, 0x31, 0x7a, 0xda, 0xbe, 0x8c, 0xd9, 0xf5, 0x3b, 0x2e };
 std::filesystem::path modulePath;
 namespace {
-    bool iniShowConsole;
-    ShadyLua::LuaScript* consoleScript = 0;
+    std::unordered_map<ShadyUtil::FileWatcher*, std::pair<ShadyLua::LuaScript*, std::filesystem::path>> watchers;
 }
 
 static bool GetModulePath(HMODULE handle, std::filesystem::path& result) {
@@ -31,10 +29,23 @@ static bool GetModulePath(HMODULE handle, std::filesystem::path& result) {
 	return len;
 }
 
-static void LoadSettings() {
-	iniShowConsole = GetPrivateProfileIntW(L"Options", L"showConsole",
-		false, (modulePath / L"shady-lua.ini").c_str());
+static inline ShadyLua::LuaScript* startScript(const std::filesystem::path& scriptPath) {
+    const auto basePath = scriptPath.parent_path();
+    auto script = new ShadyLua::LuaScriptFS(basePath);
+    auto package = luabridge::getGlobal(script->L, "package");
+    package["cpath"] = package["cpath"].tostring()
+        + ";" + modulePath.string() + "\\libs\\?.dll"
+        + ";" + basePath.string() + "\\?.dll";
+    package["path"] = package["path"].tostring()
+        + ";" + modulePath.string() + "\\libs\\?.lua"
+        + ";" + modulePath.string() + "\\libs\\?\\init.lua"
+        + ";" + basePath.string() + "\\?.lua"
+        + ";" + basePath.string() + "\\?\\init.lua";
+    if (script->load((const char*)scriptPath.filename().u8string().c_str()) == LUA_OK) script->run();
+    return script;
+}
 
+static void LoadSettings() {
     wchar_t buffer[32767];
     int len = GetPrivateProfileSectionW(L"Scripts", buffer, 32767, (modulePath / L"shady-lua.ini").c_str());
     if (!len) return;
@@ -43,63 +54,47 @@ static void LoadSettings() {
     while(len = wcslen(line)) {
         std::filesystem::path scriptPath(wcschr(line, L'=') + 1);
         scriptPath = modulePath / scriptPath;
-        auto script = new ShadyLua::LuaScriptFS(scriptPath.parent_path());
-        if (script->load((const char*)scriptPath.filename().u8string().c_str()) == LUA_OK) script->run();
+        auto script = startScript(scriptPath);
+        watchers[ShadyUtil::FileWatcher::create(scriptPath)] = std::make_pair(script, scriptPath);
         line += len + 1;
     }
 }
 
+static void __fastcall onProcessHook_replFn(void* sceneManager);
+using onProcessHook = ShadyLua::AddressHook<0x00861ae8, onProcessHook_replFn>;
+onProcessHook::typeFn onProcessHook::origFn = reinterpret_cast<onProcessHook::typeFn>(0x0041e240);
+static void __fastcall onProcessHook_replFn(void* sceneManager) {
+    onProcessHook::origFn(sceneManager);
 
-/* TODO redo console
-static void RenderConsole() {
-    static bool showConsole = iniShowConsole;
-    static std::string input;
-    bool didEnter = false;
+    ShadyUtil::FileWatcher* current;
+    while(current = ShadyUtil::FileWatcher::getNextChange()) {
+        auto& script = watchers[current];
 
-    if (showConsole) { if (ImGui::Begin("Console", &showConsole, ImGuiWindowFlags_NoFocusOnAppearing)) {
-        ImVec2 content = ImGui::GetContentRegionAvail();
-        ImVec2 inputSize = ImGui::CalcTextSize(input.data(), input.data() + input.size(), false, content.x - 16);
-        if (ImGui::BeginChild("Log", ImVec2(content.x, content.y - inputSize.y - 16))) {
-            Logger::Render();
-        } ImGui::EndChild();
-        if (ImGui::BeginChild("Input", ImVec2(content.x, inputSize.y + 8))) {
-            didEnter = ImGui::InputTextMultiline("", &input, ImGui::GetContentRegionAvail(),
-                ImGuiInputTextFlags_AllowTabInput | 
-                ImGuiInputTextFlags_CtrlEnterForNewLine |
-                ImGuiInputTextFlags_EnterReturnsTrue |
-                ImGuiInputTextFlags_AutoSelectAll);
-            if (didEnter) ImGui::SetKeyboardFocusHere(-1);
-        } ImGui::EndChild();
-    } ImGui::End(); }
-
-    if (didEnter) {
-        lua_State* L = consoleScript->L;
-        std::lock_guard guard(consoleScript->mutex);
-        if(luaL_dostring(L, input.c_str())) {
-            Logger::Error(lua_tostring(L, -1));
-		    lua_pop(L, 1);
-        } else {
-            input.clear();
-            int top = lua_gettop(L);
-            for(int i = 1; i <= top; ++i) {
-                Logger::Debug("  Ret: ", luaL_tolstring(L, i, 0));
-            }
-            lua_pop(L, lua_gettop(L));
+        switch (current->action) {
+        case ShadyUtil::FileWatcher::CREATED:
+        case ShadyUtil::FileWatcher::MODIFIED:
+            if (script.first) delete script.first;
+            script.first = startScript(script.second);
+            break;
+        case ShadyUtil::FileWatcher::REMOVED:
+            if (script.first) delete script.first;
+            script.first = nullptr;
+            break;
+        case ShadyUtil::FileWatcher::RENAMED:
+            // do nothing, the watcher changes to the new filename
+            break;
         }
     }
-
-    ShadyLua::EmitSokuEventRender();
 }
 
-static void ResetConsole() {
-    if (consoleScript) delete consoleScript;
-    consoleScript = new ShadyLua::LuaScriptFS(modulePath);
-    ShadyLua::LualibBase(consoleScript->L, modulePath);
-    ShadyLua::LualibMemory(consoleScript->L);
-    ShadyLua::LualibResource(consoleScript->L);
-    ShadyLua::LualibSoku(consoleScript->L);
+static bool __fastcall onRenderHook_replFn(void* renderer);
+using onRenderHook = ShadyLua::CallHook<0x0043dda6, onRenderHook_replFn>;
+onRenderHook::typeFn onRenderHook::origFn = reinterpret_cast<onRenderHook::typeFn>(0x00444790);
+static bool __fastcall onRenderHook_replFn(void* renderer) {
+    bool ret = onRenderHook::origFn(renderer);
+    Logger::Render();
+    return ret;
 }
-*/
 
 extern "C" __declspec(dllexport) bool CheckVersion(const BYTE hash[16]) {
 	return ::memcmp(TARGET_HASH, hash, sizeof TARGET_HASH) == 0;
@@ -107,9 +102,14 @@ extern "C" __declspec(dllexport) bool CheckVersion(const BYTE hash[16]) {
 
 extern "C" __declspec(dllexport) bool Initialize(HMODULE hMyModule, HMODULE hParentModule) {
 	GetModulePath(hMyModule, modulePath);
-    Logger::Initialize(Logger::LOG_DEBUG | Logger::LOG_ERROR);
+#ifdef _DEBUG
+    Logger::Initialize(Logger::LOG_ALL, "shady-lua.log");
+#else
+    Logger::Initialize(Logger::LOG_ALL);
+#endif
+    ShadyLua::initHook<onProcessHook>();
+    ShadyLua::initHook<onRenderHook>();
 
-    ShadyLua::LoadTamper();
     LoadSettings();
 
 	return TRUE;

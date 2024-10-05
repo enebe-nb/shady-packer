@@ -52,5 +52,6 @@ bool ShadyCli::PackCommand::run(const cxxopts::ParseResult& options) {
     package.save(output.c_str(), mode);
     printf("\n");
 
+    package.clear();
     return true;
 }

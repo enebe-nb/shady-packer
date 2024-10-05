@@ -10,7 +10,8 @@ json/
 libpng/
 libzip/
 lua/
-Lua-cURLv3/
+luafilesystem/
+luasocket/
 LuaBridge/
 rapidxml/
 rtaudio/

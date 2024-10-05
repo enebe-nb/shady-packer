@@ -3,6 +3,7 @@
 #include "baseentry.hpp"
 #include "package.hpp"
 #include <stack>
+#include <deque>
 
 namespace ShadyCore {
 	class ZipStream : public std::streambuf {
@@ -10,19 +11,17 @@ namespace ShadyCore {
 		void *pkgFile = 0;
 		void *innerFile = 0;
 		unsigned int index;
-		std::stack<int_type> pool;
 		std::streamoff pos = 0;
 		std::streamsize size;
 		int_type bufVal;
 		bool hasBufVal = false;
 
 	protected:
-		// DISALLOWED
-		int_type pbackfail(int_type) override { throw; }
-		void imbue(const std::locale&) override { throw; }
-		std::streambuf* setbuf(char_type*, std::streamsize) override { throw; }
-		std::streamsize xsputn(const char_type*, std::streamsize) override { throw; }
-		int_type overflow(int_type value) override { throw; }
+		int_type pbackfail(int_type) override { throw std::runtime_error("Disallowed method."); }
+		void imbue(const std::locale&) override { throw std::runtime_error("Disallowed method."); }
+		std::streambuf* setbuf(char_type*, std::streamsize) override { throw std::runtime_error("Disallowed method."); }
+		std::streamsize xsputn(const char_type*, std::streamsize) override { throw std::runtime_error("Disallowed method."); }
+		int_type overflow(int_type value) override { throw std::runtime_error("Disallowed method."); }
 
 		pos_type seekoff(off_type, std::ios::seekdir, std::ios::openmode) override;
 		pos_type seekpos(pos_type, std::ios::openmode) override;
@@ -41,16 +40,13 @@ namespace ShadyCore {
 	private:
 		const std::string name;
 
-		ZipStream zipBuffer;
-		std::istream zipStream;
 	public:
 		inline ZipPackageEntry(Package* parent, const std::string& name, unsigned int size)
-			: BasePackageEntry(parent, size), name(name), zipStream(&zipBuffer) {}
+			: BasePackageEntry(parent, size), name(name) {}
 
 		inline StorageType getStorage() const override final { return TYPE_ZIP; }
-		inline bool isOpen() const override final { return zipBuffer.isOpen(); }
-		inline std::istream& open() override final { zipStream.clear(); zipBuffer.open(parent->getBasePath(), name); return zipStream; }
-		inline void close() override final { zipBuffer.close(); if (disposable) delete this; }
+		std::istream& open() override final;
+		void close(std::istream&) override final;
 	};
 
 	ShadyCore::FileType GetZipPackageDefaultType(const ShadyCore::FileType& inputType, ShadyCore::BasePackageEntry* entry);

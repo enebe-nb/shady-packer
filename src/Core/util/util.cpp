@@ -1,9 +1,8 @@
 #include "riffdocument.hpp"
 #include "xmlprinter.hpp"
-#include "filewatcher.hpp"
 #include <list>
+#include <stack>
 #include <vector>
-#include <algorithm>
 
 ShadyUtil::RiffDocument::RiffDocument(std::istream& input) : input(input) {
     typedef struct{ char type[4]; uint32_t left; } ListInfo;
@@ -110,22 +109,9 @@ void ShadyUtil::XmlPrinter::closeNode() {
 }
 
 #ifdef _WIN32
+
+#include "filewatcher.hpp"
 #include <windows.h>
-#else
-#define HANDLE void*
-typedef struct OVERLAPPED {
-    unsigned long *Internal;
-    unsigned long *InternalHigh;
-    union {
-        struct {
-            unsigned Offset;
-            unsigned OffsetHigh;
-        } DUMMYSTRUCTNAME;
-        void *Pointer;
-    } DUMMYUNIONNAME;
-    HANDLE    hEvent;
-} *LPOVERLAPPED;
-#endif
 #include <mutex>
 
 namespace {
@@ -217,7 +203,7 @@ namespace {
 		};
 
 		inline bool empty() { return files.empty(); };
-		inline bool contains(ShadyUtil::FileWatcher* f) { return std::find(files.begin(), files.end(), f) != files.end(); };
+		inline bool contains(ShadyUtil::FileWatcher* f) { for (auto p : files) if (p == f) return true; return false; };
 		inline void add(ShadyUtil::FileWatcher* f) { files.push_back(f); };
 		inline void remove(ShadyUtil::FileWatcher* f) { files.remove(f); };
 		inline bool isFolder(const std::filesystem::path& path) { return std::filesystem::equivalent(folder, path); };
@@ -266,7 +252,8 @@ ShadyUtil::FileWatcher::~FileWatcher() {
 }
 
 ShadyUtil::FileWatcher* ShadyUtil::FileWatcher::getNextChange() {
-	std::lock_guard lock(delegateMutex);
+	std::unique_lock lock(delegateMutex, std::try_to_lock);
+	if (!lock.owns_lock()) return 0;
 #ifdef _WIN32
 	if (changes.empty() && handles.size()) {
 		DWORD result = WaitForMultipleObjects(handles.size(), handles.data(), false, 0);
@@ -283,3 +270,5 @@ ShadyUtil::FileWatcher* ShadyUtil::FileWatcher::getNextChange() {
 #endif
     return nullptr;
 }
+
+#endif /* _WIN32 */
