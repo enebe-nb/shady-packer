@@ -128,6 +128,9 @@ void ShadyCore::Package::save(const std::filesystem::path& filename, Mode mode) 
 	try {
 		std::filesystem::rename(tempFile, target);
 	} catch (std::filesystem::__cxx11::filesystem_error &) {
+		try {
+			std::filesystem::remove(target);
+		} catch (std::filesystem::__cxx11::filesystem_error &) {}
 		std::filesystem::copy(tempFile, target);
 		std::filesystem::remove(tempFile);
 	}
