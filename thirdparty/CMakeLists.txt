@@ -61,7 +61,6 @@ add_dependencies(ZLIB::ZLIB zlibstatic)
 # libpng Library
 add_git_module(libpng git://git.code.sf.net/p/libpng/code libpng16)
 set(PNG_TESTS OFF)
-set(PNG_BUILD_ZLIB ${CMAKE_CURRENT_SOURCE_DIR}/zlib)
 list(APPEND ZLIB_INCLUDE_DIRS "${CMAKE_CURRENT_SOURCE_DIR}/zlib")
 list(APPEND ZLIB_INCLUDE_DIRS "${CMAKE_CURRENT_BINARY_DIR}/zlib")
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/libpng EXCLUDE_FROM_ALL)

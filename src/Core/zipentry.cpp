@@ -131,9 +131,9 @@ void ShadyCore::ZipStream::open(const std::filesystem::path& file, const std::st
 	if (handle == INVALID_HANDLE_VALUE) return;
 	pkgFile = zip_open_from_source(zip_source_win32handle_create(handle, 0, 0, 0), ZIP_RDONLY, 0);
 #else
-    FILE *file = fopen(packageFile.c_str(), "rb");
-    if (!file) return;
-    pkgFile = zip_open_from_source(zip_source_filep_create(file, 0, 0, 0), ZIP_RDONLY, 0);
+	FILE *handle = fopen(file.string().c_str(), "rb");
+	if (!handle) return;
+	pkgFile = zip_open_from_source(zip_source_filep_create(handle, 0, 0, 0), ZIP_RDONLY, 0);
 #endif
 
 	zip_stat_t stat;
