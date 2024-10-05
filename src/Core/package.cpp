@@ -125,7 +125,12 @@ void ShadyCore::Package::save(const std::filesystem::path& filename, Mode mode) 
 	std::filesystem::path tempFile = ShadyUtil::TempFile();
 	if (mode == DATA_MODE) saveData(tempFile);
 	if (mode == ZIP_MODE) saveZip(tempFile);
-	std::filesystem::rename(tempFile, target);
+	try {
+		std::filesystem::rename(tempFile, target);
+	} catch (std::filesystem::__cxx11::filesystem_error &) {
+		std::filesystem::copy(tempFile, target);
+		std::filesystem::remove(tempFile);
+	}
 }
 
 ShadyCore::FileType ShadyCore::Package::iterator::fileType() const {
