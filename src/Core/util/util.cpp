@@ -135,7 +135,6 @@ namespace {
 		}
 
 		static inline Delegate* create(const std::filesystem::path& folder) {
-#ifdef _WIN32
 			HANDLE handle = CreateFileW(folder.c_str(), FILE_LIST_DIRECTORY,
 				FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
 				nullptr, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OVERLAPPED, nullptr);
@@ -151,22 +150,17 @@ namespace {
 			delegate->folder = folder;
 
 			return delegate;
-#endif
-            return nullptr;
 		}
 
 		inline ~Delegate() { // TODO better cancel
-#ifdef _WIN32
 			DWORD bytes;
 			CancelIoEx(handle, &overlapped);
 			GetOverlappedResult(handle, &overlapped, &bytes, true);
 			CloseHandle(overlapped.hEvent);
 			CloseHandle(handle);
-#endif
 		}
 
 		void doHandle() {
-#ifdef _WIN32
 			DWORD bytes;
 			if (GetOverlappedResult(handle, &overlapped, &bytes, true)) {
 				FILE_NOTIFY_INFORMATION* info = reinterpret_cast<FILE_NOTIFY_INFORMATION*>(buffer);
@@ -199,7 +193,6 @@ namespace {
 			if (!ReadDirectoryChangesW(handle, buffer, bufferSize, false,
 				FILE_NOTIFY_CHANGE_FILE_NAME | FILE_NOTIFY_CHANGE_DIR_NAME | FILE_NOTIFY_CHANGE_LAST_WRITE,
 				nullptr, &overlapped, nullptr)) throw std::runtime_error("Fail to read directory (loop) " + std::to_string(GetLastError())); // TODO
-#endif
 		};
 
 		inline bool empty() { return files.empty(); };
@@ -254,7 +247,6 @@ ShadyUtil::FileWatcher::~FileWatcher() {
 ShadyUtil::FileWatcher* ShadyUtil::FileWatcher::getNextChange() {
 	std::unique_lock lock(delegateMutex, std::try_to_lock);
 	if (!lock.owns_lock()) return 0;
-#ifdef _WIN32
 	if (changes.empty() && handles.size()) {
 		DWORD result = WaitForMultipleObjects(handles.size(), handles.data(), false, 0);
 		if (result == WAIT_FAILED) throw std::runtime_error("FileWatcher wait failed: " + std::to_string(GetLastError())); // TODO
@@ -267,8 +259,6 @@ ShadyUtil::FileWatcher* ShadyUtil::FileWatcher::getNextChange() {
 	watcher->action = changes.front().action;
 	changes.pop_front();
 	return watcher;
-#endif
-    return nullptr;
 }
 
 #endif /* _WIN32 */
