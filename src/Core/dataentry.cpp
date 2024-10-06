@@ -278,13 +278,27 @@ ShadyCore::FileType ShadyCore::GetDataPackageDefaultType(const FT::Type& inputTy
 	} else return outputTypes[inputType];
 }
 
-static inline std::string_view removeExt(const std::string_view &s)
+static inline std::string removeExt(const std::string &s)
 {
 	size_t pos = s.find_last_of('.');
 
 	if (pos == std::string_view::npos)
 		return s;
 	return s.substr(0, pos);
+}
+
+static inline std::string convertSlash(const std::string &s)
+{
+#ifdef _WIN32
+	std::string r{s.data(), s.size()};
+
+	for (char &i : r)
+		if (i == '\\')
+			i = '/';
+	return r;
+#else
+	return s;
+#endif
 }
 
 void ShadyCore::Package::saveData(const std::filesystem::path& filename) {
@@ -297,7 +311,7 @@ void ShadyCore::Package::saveData(const std::filesystem::path& filename) {
 		FileType inputType = i.fileType();
 		FileType targetType = GetDataPackageDefaultType(inputType, entry);
 
-		tempFiles.emplace_back(removeExt(i->first.actualName), ShadyUtil::TempFile());
+		tempFiles.emplace_back(convertSlash(removeExt(i->first.actualName)), ShadyUtil::TempFile());
 
 		std::ofstream output(tempFiles.back().second, std::ios::binary);
 		std::istream& input = entry->open();
