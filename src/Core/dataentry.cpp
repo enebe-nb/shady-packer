@@ -186,7 +186,7 @@ std::istream& ShadyCore::DataPackageEntry::open() {
 	auto streamData = new StreamData(packageOffset, packageSize);
 
 #ifdef _MSC_VER
-	streamData->baseBuffer.open(parent->getBasePath(), std::ios::in | std::ios::binary);
+	streamData->baseBuffer.open(parent->getBasePath(), std::ios::in | std::ios::binary, _SH_DENYWR);
 #else
 	streamData->baseBuffer.open(parent->getBasePath(), std::ios::in | std::ios::binary);
 #endif
