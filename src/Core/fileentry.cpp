@@ -74,6 +74,15 @@ ShadyCore::FileType ShadyCore::GetFilePackageDefaultType(const FT& inputType, Sh
 	return outputTypes[inputType.type];
 }
 
+static inline std::string_view removeExt(const std::string_view &s)
+{
+	size_t pos = s.find_last_of('.');
+
+	if (pos == std::string_view::npos)
+		return s;
+	return s.substr(0, pos);
+}
+
 void ShadyCore::Package::saveDir(const std::filesystem::path& directory, bool recreateStructure) {
 	std::shared_lock lock(*this);
 	if (!std::filesystem::exists(directory)) std::filesystem::create_directories(directory);
@@ -94,7 +103,7 @@ void ShadyCore::Package::saveDir(const std::filesystem::path& directory, bool re
 		output.close();
 
 		// Use auto because on Windows sjis2ws returns a std::wstring and on Unix it returns a std::string
-		auto filename = recreateStructure ? sjis2ws(i->first.actualName) : sjis2ws(i->first.name);
+		auto filename = recreateStructure ? sjis2ws(removeExt(i->first.actualName)) : sjis2ws(i->first.name);
 		std::filesystem::path final = target / targetType.appendExtValue(filename);
 
 		std::filesystem::create_directories(final.parent_path());
