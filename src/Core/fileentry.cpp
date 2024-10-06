@@ -86,7 +86,7 @@ ShadyCore::FileType ShadyCore::GetFilePackageDefaultType(const FT& inputType, Sh
 	return outputTypes[inputType.type];
 }
 
-void ShadyCore::Package::saveDir(const std::filesystem::path& directory) {
+void ShadyCore::Package::saveDir(const std::filesystem::path& directory, bool recreateStructure) {
 	std::shared_lock lock(*this);
 	if (!std::filesystem::exists(directory)) std::filesystem::create_directories(directory);
 	else if (!std::filesystem::is_directory(directory)) return;
@@ -105,18 +105,18 @@ void ShadyCore::Package::saveDir(const std::filesystem::path& directory) {
 		i.close(input);
 		output.close();
 
-#ifdef _WIN32
-		std::wstring filename = sjis2ws(i->first.name);
-#else
-		std::string filename = sjis2ws(i->first.name);
-#endif
+		// Use auto because on Windows sjis2ws returns a std::wstring and on Unix it returns a std::string
+		auto filename = recreateStructure ? sjis2ws(i->first.actualName) : sjis2ws(i->first.name);
+		std::filesystem::path final = target / targetType.appendExtValue(filename);
+
+		std::filesystem::create_directories(final.parent_path());
 		try {
-			std::filesystem::rename(tempFile, target / targetType.appendExtValue(filename));
+			std::filesystem::rename(tempFile, final);
 		} catch (std::filesystem::__cxx11::filesystem_error &) {
 			try {
-				std::filesystem::remove(target / targetType.appendExtValue(filename));
+				std::filesystem::remove(final);
 			} catch (std::filesystem::__cxx11::filesystem_error &) {}
-			std::filesystem::copy(tempFile, target / targetType.appendExtValue(filename));
+			std::filesystem::copy(tempFile, final);
 			std::filesystem::remove(tempFile);
 		}
 	}

@@ -26,10 +26,10 @@ static inline std::string_view createNormalizedName(const std::string_view& str)
 }
 
 ShadyCore::Package::Key::Key(const std::string_view& str)
-	: name(createNormalizedName(str)), fileType(FileType::get(FileType::getExtValue(name.data() + name.size()))) {}
+	: actualName(str), name(createNormalizedName(str)), fileType(FileType::get(FileType::getExtValue(name.data() + name.size()))) {}
 
 ShadyCore::Package::Key::Key(const std::string_view& str, FileType::Type type)
-	: name(createNormalizedName(str)), fileType(type, FileType::FORMAT_UNKNOWN) {}
+	: actualName(str), name(createNormalizedName(str)), fileType(type, FileType::FORMAT_UNKNOWN) {}
 
 ShadyCore::Package::~Package() {
 	for (auto& entry : entries) {
@@ -116,7 +116,8 @@ ShadyCore::Package::iterator ShadyCore::Package::alias(const std::string_view& n
 }
 
 void ShadyCore::Package::save(const std::filesystem::path& filename, Mode mode) {
-	if (mode == DIR_MODE) return saveDir(filename);
+	if (mode == DIR_MODE) return saveDir(filename, false);
+	if (mode == FULL_DIR_MODE) return saveDir(filename, true);
 
 	std::filesystem::path target = std::filesystem::absolute(filename);
 	if (!std::filesystem::exists(target.parent_path()))
@@ -200,9 +201,9 @@ ShadyCore::PackageEx::~PackageEx() {
 
 ShadyCore::Package* ShadyCore::PackageEx::merge(Package* child) {
 	std::scoped_lock lock(*this, *child);
+
 	groups.push_back(child);
 	entries.merge(child->entries);
-
 	return child;
 }
 

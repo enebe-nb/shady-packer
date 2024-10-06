@@ -304,9 +304,10 @@ void ShadyCore::Package::loadZip(const std::filesystem::path& path) {
 		zip_stat_t fileStat;
 		zip_stat_index(file, i, 0, &fileStat);
 
-		std::string_view name(fileStat.name);
+		std::string name(fileStat.name);
 		if (name.ends_with('/')) continue;
-		this->insert(fileStat.name, new ZipPackageEntry(this, fileStat.name, fileStat.size));
+		Package::underlineToSlash(name);
+		this->insert(name, new ZipPackageEntry(this, fileStat.name, fileStat.size));
 	}
 
 	zip_close(file);

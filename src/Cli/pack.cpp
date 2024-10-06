@@ -12,6 +12,7 @@ void ShadyCli::PackCommand::buildOptions() {
     options.add_options()
         ("o,output", "Target output file or directory.", cxxopts::value<std::string>())
         ("m,mode", "Output type to save: `data`, `dir` or `zip`. Saving to a directory will extract all files.", cxxopts::value<std::string>()->default_value("dir"))
+        ("r,recreate-structure", "When saving in `dir` mode, recreate the folder structure, instead of generating files with the folders in the name separated with a `_`.")
         ("files", "Source directories or data packages", cxxopts::value<std::vector<std::string> >())
         ;
 
@@ -22,6 +23,7 @@ void ShadyCli::PackCommand::buildOptions() {
 bool ShadyCli::PackCommand::run(const cxxopts::ParseResult& options) {
     ShadyCore::PackageEx package;
     ShadyCore::Package::Mode mode = getMode(options["mode"].as<std::string>());
+    bool structure = options["recreate-structure"].as<bool>();
     std::string output = options["output"].as<std::string>();
     auto& files = options["files"].as<std::vector<std::string> >();
 
@@ -34,6 +36,9 @@ bool ShadyCli::PackCommand::run(const cxxopts::ParseResult& options) {
         printf("Unknown mode \"%s\".\n", options["mode"].as<std::string>().c_str());
         return false;
     }
+
+    if (mode == ShadyCore::Package::DIR_MODE && structure)
+	    mode = ShadyCore::Package::FULL_DIR_MODE;
 
     size_t i = files.size();
     while (i--) {
