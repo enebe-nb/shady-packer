@@ -52,4 +52,11 @@ namespace ShadyCli {
         void buildOptions() override;
         bool run(const cxxopts::ParseResult&) override;
     };
+
+    class ListCommand : public Command {
+    public:
+        inline ListCommand() : Command("list", "List files in a package file.") {}
+        void buildOptions() override;
+        bool run(const cxxopts::ParseResult&) override;
+    };
 }

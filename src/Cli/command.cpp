@@ -9,7 +9,10 @@ static inline ShadyCli::Command* getCommand(const char* arg) {
         return new ShadyCli::MergeCommand;
     } else if (strcmp(arg, "scale") == 0) {
         return new ShadyCli::ScaleCommand;
-    } return 0;
+    } else if (strcmp(arg, "list") == 0) {
+        return new ShadyCli::ListCommand;
+    }
+    return nullptr;
 }
 
 void ShadyCli::Command::printHelp(const char* bin, Command* command) {
@@ -21,6 +24,7 @@ void ShadyCli::Command::printHelp(const char* bin, Command* command) {
             "  %s <command> [COMMAND_OPTIONS]\n\n"
             "List of commands:\n"
             "  help     Prints help for commands.\n"
+	    "  list     List files inside package files.\n"
             "  convert  Converts game files into their encrypted/decrypted\n"
             "           counterpart.\n"
             "  merge    Merge many kind of files.\n"

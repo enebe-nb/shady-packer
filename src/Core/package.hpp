@@ -14,6 +14,7 @@ namespace ShadyCore {
 	protected:
 		class Key {
 		public:
+			const std::string actualName;
 			const std::string_view name;
 			const FileType fileType;
 
@@ -45,7 +46,7 @@ namespace ShadyCore {
 		void loadDir(const std::filesystem::path&);
 		void loadZip(const std::filesystem::path&);
 		void saveData(const std::filesystem::path&);
-		void saveDir(const std::filesystem::path&);
+		void saveDir(const std::filesystem::path&, bool recreateStructure);
 		void saveZip(const std::filesystem::path&);
 
 	public:
@@ -76,7 +77,7 @@ namespace ShadyCore {
 		//iterator rename(iterator i, const std::string_view& name);
 		iterator alias(const std::string_view& name, BasePackageEntry& entry);
 
-		enum Mode { DATA_MODE, ZIP_MODE, DIR_MODE };
+		enum Mode { DATA_MODE, ZIP_MODE, DIR_MODE, FULL_DIR_MODE };
 		void save(const std::filesystem::path&, Mode);
 		static void underlineToSlash(std::string&);
 	};
