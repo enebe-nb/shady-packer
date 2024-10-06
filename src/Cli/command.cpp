@@ -9,7 +9,10 @@ static inline ShadyCli::Command* getCommand(const char* arg) {
         return new ShadyCli::MergeCommand;
     } else if (strcmp(arg, "scale") == 0) {
         return new ShadyCli::ScaleCommand;
-    } return 0;
+    } else if (strcmp(arg, "list") == 0) {
+        return new ShadyCli::ListCommand;
+    }
+    return nullptr;
 }
 
 void ShadyCli::Command::printHelp(const char* bin, Command* command) {

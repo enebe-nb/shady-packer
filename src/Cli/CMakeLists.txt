@@ -6,6 +6,7 @@ set(SRC_CLI
 	merge-palette.cpp
 	pack.cpp
 	scale.cpp
+	list.cpp
 )
 
 if(WIN32)
@@ -19,5 +20,9 @@ endif()
 
 source_group("Source Files" FILES ${SRC_CLI})
 add_executable(shady-cli ${SRC_CLI})
+if (WIN32)
 target_link_libraries(shady-cli -static shady-core cxxopts)
+else()
+target_link_libraries(shady-cli  shady-core cxxopts)
+endif()
 install(TARGETS shady-cli RUNTIME DESTINATION bin)
