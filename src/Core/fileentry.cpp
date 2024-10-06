@@ -94,7 +94,14 @@ void ShadyCore::Package::saveDir(const std::filesystem::path& directory) {
 		output.close();
 
 		std::wstring filename = sjis2ws(i->first.name);
-		std::filesystem::rename(tempFile, target / targetType.appendExtValue(filename));
+		std::error_code err;
+
+		std::filesystem::rename(tempFile, target / targetType.appendExtValue(filename), err);
+		if (!err)
+			continue;
+		std::filesystem::remove(target / targetType.appendExtValue(filename), err);
+		std::filesystem::copy(tempFile, target / targetType.appendExtValue(filename));
+		std::filesystem::remove(tempFile);
 	}
 }
 
