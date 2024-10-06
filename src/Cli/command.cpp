@@ -24,6 +24,7 @@ void ShadyCli::Command::printHelp(const char* bin, Command* command) {
             "  %s <command> [COMMAND_OPTIONS]\n\n"
             "List of commands:\n"
             "  help     Prints help for commands.\n"
+	    "  list     List files inside package files.\n"
             "  convert  Converts game files into their encrypted/decrypted\n"
             "           counterpart.\n"
             "  merge    Merge many kind of files.\n"
