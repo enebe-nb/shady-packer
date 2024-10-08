@@ -6,6 +6,7 @@ set(SRC_CLI
 	merge-palette.cpp
 	pack.cpp
 	scale.cpp
+	list.cpp
 )
 
 if(WIN32)
