@@ -28,10 +28,12 @@ add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/thirdparty)
 
 # Shady *Core*
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/src/Core)
-# Shady *Cli*
-add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/src/Cli)
-# Shady *Dnd*
-add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/src/Dnd)
+if(SHADY_ENABLE_EXES)
+	# Shady *Cli*
+	add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/src/Cli)
+	# Shady *Dnd*
+	add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/src/Dnd)
+endif()
 
 # Shady *Loader*
 if(SHADY_ENABLE_MODULE)

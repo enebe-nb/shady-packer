@@ -17,11 +17,11 @@ namespace ShadyCore {
 		bool hasBufVal = false;
 
 	protected:
-		int_type pbackfail(int_type) override { throw std::exception("Disallowed method."); }
-		void imbue(const std::locale&) override { throw std::exception("Disallowed method."); }
-		std::streambuf* setbuf(char_type*, std::streamsize) override { throw std::exception("Disallowed method."); }
-		std::streamsize xsputn(const char_type*, std::streamsize) override { throw std::exception("Disallowed method."); }
-		int_type overflow(int_type value) override { throw std::exception("Disallowed method."); }
+		int_type pbackfail(int_type) override { throw std::runtime_error("Disallowed method."); }
+		void imbue(const std::locale&) override { throw std::runtime_error("Disallowed method."); }
+		std::streambuf* setbuf(char_type*, std::streamsize) override { throw std::runtime_error("Disallowed method."); }
+		std::streamsize xsputn(const char_type*, std::streamsize) override { throw std::runtime_error("Disallowed method."); }
+		int_type overflow(int_type value) override { throw std::runtime_error("Disallowed method."); }
 
 		pos_type seekoff(off_type, std::ios::seekdir, std::ios::openmode) override;
 		pos_type seekpos(pos_type, std::ios::openmode) override;

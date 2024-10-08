@@ -65,7 +65,7 @@ namespace ShadyCore {
 			this->initialize();
 		}
 
-		inline const uint32_t getRawSize() const { return altSize ? altSize : paddedWidth * height * (bitsPerPixel == 24 ? 4 : bitsPerPixel/8); }
+		inline uint32_t getRawSize() const { return altSize ? altSize : paddedWidth * height * (bitsPerPixel == 24 ? 4 : bitsPerPixel/8); }
 	};
 
 	class Sfx : public Resource {

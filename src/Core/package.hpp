@@ -38,7 +38,7 @@ namespace ShadyCore {
 		MapType entries;
 		const std::filesystem::path basePath;
 
-		static inline struct default_constructor_t { explicit default_constructor_t() = default; } default_constructor;
+		static inline struct default_constructor_t { default_constructor_t() = default; } default_constructor;
 		inline Package(default_constructor_t, const std::filesystem::path& basePath) : basePath(basePath) {}
 
 		void loadData(const std::filesystem::path&);

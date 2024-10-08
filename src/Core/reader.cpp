@@ -1,6 +1,11 @@
 #include "reader.hpp"
 #include <fstream>
 
+#ifdef __GNUC__
+#define __fastcall
+#define __cdecl
+#endif
+
 namespace {
     typedef struct {
         int vtable;
@@ -112,5 +117,5 @@ namespace {
     };
 }
 
-const int ShadyCore::entry_reader_vtbl = (ptrdiff_t)&entry_reader_table;
-const int ShadyCore::stream_reader_vtbl = (ptrdiff_t)&stream_reader_table;
+const ptrdiff_t ShadyCore::entry_reader_vtbl = (ptrdiff_t)&entry_reader_table;
+const ptrdiff_t ShadyCore::stream_reader_vtbl = (ptrdiff_t)&stream_reader_table;

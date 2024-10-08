@@ -23,7 +23,7 @@ std::streamsize ShadyCore::StreamFilter::xsgetn(char_type* buffer, std::streamsi
 	}
 	pos += buffered;
 
-	count = base->sgetn(buffer + buffered, min(count, (std::streamsize)(size - pos)));
+	count = base->sgetn(buffer + buffered, std::min(count, (std::streamsize)(size - pos)));
 	for (int i = buffered; i < count + buffered; ++i) {
 		buffer[i] = filter(buffer[i]);
 	}

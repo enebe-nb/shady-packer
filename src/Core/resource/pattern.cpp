@@ -2,7 +2,7 @@
 #include "../util/iohelper.hpp"
 #include <cstring>
 
-ShadyCore::Schema::Image::~Image() { if (name) delete[] name; }
+ShadyCore::Schema::Image::~Image() { delete[] name; }
 ShadyCore::Schema::Sequence::~Sequence() { for (auto frame : frames) delete frame; }
 
 static void readerSchemaGame(ShadyCore::Schema& resource, std::istream& input, ShadyCore::Schema::Object* (*fnReadObject)(uint32_t, uint32_t, std::istream&)) {

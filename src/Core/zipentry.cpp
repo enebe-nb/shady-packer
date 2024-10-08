@@ -2,6 +2,7 @@
 #include "package.hpp"
 #include "util/tempfiles.hpp"
 
+#include <cstring>
 #include <zip.h>
 #include <cstring>
 #include <filesystem>
@@ -125,9 +126,15 @@ std::streambuf::pos_type ShadyCore::ZipStream::seekpos(pos_type spos, std::ios::
 }
 
 void ShadyCore::ZipStream::open(const std::filesystem::path& file, const std::string& name) {
+#ifdef _WIN32
 	auto handle = CreateFileW(file.wstring().c_str(), GENERIC_READ, FILE_SHARE_READ, 0, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
 	if (handle == INVALID_HANDLE_VALUE) return;
 	pkgFile = zip_open_from_source(zip_source_win32handle_create(handle, 0, 0, 0), ZIP_RDONLY, 0);
+#else
+	FILE *handle = fopen(file.string().c_str(), "rb");
+	if (!handle) return;
+	pkgFile = zip_open_from_source(zip_source_filep_create(handle, 0, 0, 0), ZIP_RDONLY, 0);
+#endif
 
 	zip_stat_t stat;
 	zip_stat_init(&stat);
@@ -281,9 +288,15 @@ void ShadyCore::ZipPackageEntry::close(std::istream& zipStream) {
 //-------------------------------------------------------------
 
 void ShadyCore::Package::loadZip(const std::filesystem::path& path) {
+#ifdef _WIN32
 	auto handle = CreateFileW(path.wstring().c_str(), GENERIC_READ, FILE_SHARE_READ, 0, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
 	if (handle == INVALID_HANDLE_VALUE) return;
 	auto file = zip_open_from_source(zip_source_win32handle_create(handle, 0, 0, 0), ZIP_RDONLY, 0);
+#else
+	FILE *filep = fopen(path.c_str(), "rb");
+	if (!filep) return;
+	auto file = zip_open_from_source(zip_source_filep_create(filep, 0, 0, 0), ZIP_RDONLY, 0);
+#endif
 
 	zip_int64_t count = zip_get_num_entries(file, 0);
 	entries.reserve(entries.size() + count);
