@@ -16,6 +16,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 add_compile_options("$<$<C_COMPILER_ID:MSVC>:/utf-8>")
 add_compile_options("$<$<CXX_COMPILER_ID:MSVC>:/utf-8>")
 
+set(SHADY_ENABLE_EXECUTABLE TRUE CACHE BOOL "Enable executable building")
 set(SHADY_ENABLE_TEST FALSE CACHE BOOL "Enable test building")
 set(SHADY_ENABLE_MODULE TRUE CACHE BOOL "Enable module building")
 if(SHADY_ENABLE_MODULE AND (NOT WIN32 OR NOT CMAKE_SIZEOF_VOID_P EQUAL 4))
@@ -28,7 +29,7 @@ add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/thirdparty)
 
 # Shady *Core*
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/src/Core)
-if(SHADY_ENABLE_EXES)
+if(SHADY_ENABLE_EXECUTABLE)
 	# Shady *Cli*
 	add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/src/Cli)
 	# Shady *Dnd*

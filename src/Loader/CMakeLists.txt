@@ -19,14 +19,16 @@ target_link_libraries(shady-loader -static shady-core shady-lualib libcurl json)
 set_target_properties(shady-loader PROPERTIES PREFIX "")
 install(TARGETS shady-loader LIBRARY DESTINATION modules/shady-loader)
 
-file(GLOB SRC_LOADER_Pack ${CMAKE_CURRENT_SOURCE_DIR}/data/*)
-add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/shady-loader.dat"
-	COMMAND $<TARGET_FILE:shady-cli> pack -m data
-		-o "${CMAKE_CURRENT_BINARY_DIR}/shady-loader.dat"
-		"${CMAKE_CURRENT_SOURCE_DIR}/data"
-	DEPENDS ${SRC_LOADER_Pack}
-	VERBATIM
-)
-add_custom_target(shady-loader-pack DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/shady-loader.dat" shady-cli)
-add_dependencies(shady-loader shady-loader-pack)
-install(FILES "${CMAKE_CURRENT_BINARY_DIR}/shady-loader.dat" DESTINATION modules/shady-loader)
+if(SHADY_ENABLE_EXECUTABLE)
+	file(GLOB SRC_LOADER_Pack ${CMAKE_CURRENT_SOURCE_DIR}/data/*)
+	add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/shady-loader.dat"
+		COMMAND $<TARGET_FILE:shady-cli> pack -m data
+			-o "${CMAKE_CURRENT_BINARY_DIR}/shady-loader.dat"
+			"${CMAKE_CURRENT_SOURCE_DIR}/data"
+		DEPENDS ${SRC_LOADER_Pack}
+		VERBATIM
+	)
+	add_custom_target(shady-loader-pack DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/shady-loader.dat" shady-cli)
+	add_dependencies(shady-loader shady-loader-pack)
+	install(FILES "${CMAKE_CURRENT_BINARY_DIR}/shady-loader.dat" DESTINATION modules/shady-loader)
+endif()
