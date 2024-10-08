@@ -1,7 +1,115 @@
 #include "package.hpp"
 #include <cstring>
+#include <vector>
+
+struct Matcher {
+	std::string_view name;
+	const std::vector<Matcher> children;
+
+	Matcher(const std::string_view& name, std::initializer_list<Matcher> c = {})
+		: name(name), children(c) {}
+
+	Matcher(std::initializer_list<Matcher> c = {})
+		: name(), children(c) {}
+
+	size_t match(const std::string_view& value) const {
+		if (name.empty()) return value.find_first_of('_');
+		else if (value.starts_with(name)) return name.size() - 1;
+		return std::string_view::npos;
+	}
+};
 
 namespace {
+	const std::vector<Matcher> dirTree = {
+		{"data_", {
+			{"weather_", {
+				{"effect_"},
+			}},
+			{"stand_", {
+				{"cutin_"},
+			}},
+			{"se_", {
+				{},
+			}},
+			{"scene_", {
+				{"title_"},
+				{"staffroll_", {
+					{"moji_"},
+				}},
+				{"select_", {
+					{"scenario_"},
+					{"character_", {
+						{"09b_character_"},
+						{"08b_circle_"},
+						{"05a_selcha_"},
+						{"01b_name_"},
+						{},
+					}},
+					{"bg_"},
+				}},
+				{"opening_", {
+					{"yuki_"},
+					{"ame_"},
+				}},
+				{"logo_"},
+			}},
+			{"scenario_", {
+				{
+					{"effect_"},
+				},
+			}},
+			{"profile_", {
+				{"keyconfig_"},
+				{"deck2_", {
+					{"name_"},
+				}},
+				{"deck1_"},
+			}},
+			{"number_"},
+			{"menu_", {
+				{"select_"},
+				{"result_"},
+				{"replay_"},
+				{"practice_"},
+				{"musicroom_"},
+				{"gear_"},
+				{"continue_"},
+				{"connect_"},
+				{"config_"},
+				{"battle_"},
+			}},
+			{"infoeffect_", {
+				{"result_"},
+			}},
+			{"guide_"},
+			{"effect_"},
+			{"csv_", {
+				{},
+			}},
+			{"character_", {
+				{
+					{"stand_"},
+					{"face_"},
+					{"back_"},
+				},
+			}},
+			{"card_", {
+				{},
+			}},
+			{"bgm_"},
+			{"battle_"},
+			{"background_", {
+				{
+					{"object_"},
+					{"right_"},
+					{"left_"},
+					{"center_"},
+				},
+			}},
+		}},
+	};
+
+/* Kept for reference
 	const char* dirTable[][2] = {
 		{ "data_weather_effect_", "data/weather/effect/" },
 		{ "data_weather_", "data/weather/" },
@@ -314,17 +422,20 @@ namespace {
 		{ "data_background_bg00_", "data/background/bg00/" },
 		{ "data_background_", "data/background/" },
 		{ "data_", "data/" },
-	}; // TODO Tree search
+	};
+*/
 }
 
 void ShadyCore::Package::underlineToSlash(std::string& name) {
-	char newName[256];
+	const std::vector<Matcher>* curFolder = &dirTree;
+	ptrdiff_t j = 0;
 
-	for (auto dir : dirTable) {
-		size_t len = strlen(dir[0]);
-		if (strncmp(name.data(), dir[0], len) == 0) {
-			std::copy(dir[1], dir[1] + strlen(dir[1]), name.data());
-			return;
-		}
+	size_t i = 0; while (i < curFolder->size()) {
+		auto result = curFolder->at(i).match(std::string_view(name.begin()+j, name.end()));
+		if (result != std::string_view::npos) {
+			name[j+=result] = '/'; ++j;
+			curFolder = &curFolder->at(i).children;
+			i = 0;
+		} else ++i;
 	}
 }
