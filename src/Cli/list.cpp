@@ -130,7 +130,9 @@ bool ShadyCli::ListCommand::run(const cxxopts::ParseResult& options) {
 
     if (sort == "unsorted") {
         for (std::filesystem::path file : files) {
-            readInnerFiles(file, [](std::string_view str) { std::cout << str << std::endl; });
+            readInnerFiles(file, [](const std::string& str) {
+                std::cout << typeToString(ShadyCore::FileType::get(str.c_str())) << str << std::endl;
+            });
         }
     } else if (sort == "type") {
         std::multimap<ShadyCore::FileType, std::string, fileTypeCompare> output;
@@ -147,7 +149,7 @@ bool ShadyCli::ListCommand::run(const cxxopts::ParseResult& options) {
             output.emplace(str);
         });
 
-        for (auto& name : output) std::cout << name << std::endl;
+        for (auto& name : output) std::cout << typeToString(ShadyCore::FileType::get(name.c_str())) << name << std::endl;
     } else {
         std::cout << "Invalid sort." << std::endl;
         return false;
