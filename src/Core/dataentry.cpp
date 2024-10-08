@@ -9,11 +9,6 @@
 #include <cstring>
 #include <list>
 
-#ifndef _MSC_VER
-	using std::min;
-	using std::max;
-#endif
-
 std::streamsize ShadyCore::StreamFilter::xsgetn(char_type* buffer, std::streamsize count) {
 	int buffered = 0;
 	if (hasBufVal && count) {
@@ -23,7 +18,7 @@ std::streamsize ShadyCore::StreamFilter::xsgetn(char_type* buffer, std::streamsi
 	}
 	pos += buffered;
 
-	count = base->sgetn(buffer + buffered, std::min(count, (std::streamsize)(size - pos)));
+	count = base->sgetn(buffer + buffered, count < (std::streamsize)(size - pos) ? count : (size - pos));
 	for (int i = buffered; i < count + buffered; ++i) {
 		buffer[i] = filter(buffer[i]);
 	}
