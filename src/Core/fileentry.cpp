@@ -50,17 +50,18 @@ void ShadyCore::FilePackageEntry::close(std::istream& stream) {
 
 //-------------------------------------------------------------
 
-void ShadyCore::Package::loadDir(const std::filesystem::path& path) {
+void ShadyCore::Package::loadDir(const std::filesystem::path& path, const std::filesystem::path& root) {
 	for (std::filesystem::recursive_directory_iterator iter(path), end; iter != end; ++iter) {
 		if (std::filesystem::is_regular_file(iter->path())) {
-			std::filesystem::path relPath = std::filesystem::relative(iter->path(), path);
+			std::filesystem::path resName = std::filesystem::relative(iter->path(), root).lexically_normal();
+			std::filesystem::path filename = std::filesystem::relative(iter->path(), path).lexically_normal();
 			this->insert(
 #ifdef _WIN32
-				ws2sjis(relPath.wstring()),
+				ws2sjis(resName.wstring()),
 #else
-				relPath.string(),
+				resName.string(),
 #endif
-				new FilePackageEntry(this, relPath)
+				new FilePackageEntry(this, filename)
 			);
 		}
 	}

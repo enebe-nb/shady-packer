@@ -41,9 +41,9 @@ namespace ShadyCore {
 		static inline struct default_constructor_t { default_constructor_t() = default; } default_constructor;
 		inline Package(default_constructor_t, const std::filesystem::path& basePath) : basePath(basePath) {}
 
-		void loadData(const std::filesystem::path&);
-		void loadDir(const std::filesystem::path&);
-		void loadZip(const std::filesystem::path&);
+		void loadData(const std::filesystem::path&, const std::filesystem::path&);
+		void loadDir(const std::filesystem::path&, const std::filesystem::path&);
+		void loadZip(const std::filesystem::path&, const std::filesystem::path&);
 		void saveData(const std::filesystem::path&);
 		void saveDir(const std::filesystem::path&);
 		void saveZip(const std::filesystem::path&);
@@ -60,7 +60,8 @@ namespace ShadyCore {
 			inline void close(std::istream& s) const { return operator*().second->close(s); }
 		};
 
-		Package(const std::filesystem::path& basePath);
+		Package(const std::filesystem::path& basePath, const std::filesystem::path& root);
+		inline Package(const std::filesystem::path& basePath) : Package(basePath, basePath) {}
 		virtual ~Package();
 
 		inline iterator begin() { return entries.begin(); }
@@ -84,16 +85,17 @@ namespace ShadyCore {
 	class PackageEx : public Package {
 	protected:
 		std::vector<Package*> groups;
+		bool useBasePathAsRoot;
 
 	public:
-		inline PackageEx(const std::filesystem::path& basePath = std::filesystem::current_path()) : Package(default_constructor, basePath) {}
+		inline PackageEx(const std::filesystem::path& basePath = std::filesystem::current_path(), bool useBasePathAsRoot = false)
+			: Package(default_constructor, basePath), useBasePathAsRoot(useBasePathAsRoot) {}
 		virtual ~PackageEx();
 
 		Package* merge(Package* package);
 		Package* demerge(Package* package);
 		void erase(Package* package);
-		inline Package* merge(const std::filesystem::path& filename)
-			{ return merge(new Package(filename.is_relative() ? basePath / filename : filename)); }
+		Package* merge(const std::filesystem::path& filename);
 
 		using Package::insert;
 		iterator insert(const std::filesystem::path& filename);

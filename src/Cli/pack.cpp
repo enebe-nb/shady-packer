@@ -10,8 +10,10 @@ static inline ShadyCore::Package::Mode getMode(std::string mode) {
 
 void ShadyCli::PackCommand::buildOptions() {
     options.add_options()
+        ("a,append", "Add or Replace files in the output preserving other files inside it.")
         ("o,output", "Target output file or directory.", cxxopts::value<std::string>())
         ("m,mode", "Output type to save: `data`, `dir` or `zip`. Saving to a directory will extract all files.", cxxopts::value<std::string>()->default_value("dir"))
+        ("r,root", "When adding files from filesystem, this folder will be used as root.", cxxopts::value<std::string>()->default_value(""))
         ("files", "Source directories or data packages", cxxopts::value<std::vector<std::string> >())
         ;
 
@@ -20,7 +22,8 @@ void ShadyCli::PackCommand::buildOptions() {
 }
 
 bool ShadyCli::PackCommand::run(const cxxopts::ParseResult& options) {
-    ShadyCore::PackageEx package;
+    std::filesystem::path root = options["root"].as<std::string>();
+    ShadyCore::PackageEx package(root.is_relative() ? std::filesystem::current_path() / root : root, !root.empty());
     ShadyCore::Package::Mode mode = getMode(options["mode"].as<std::string>());
     std::string output = options["output"].as<std::string>();
     auto& files = options["files"].as<std::vector<std::string> >();
@@ -41,6 +44,10 @@ bool ShadyCli::PackCommand::run(const cxxopts::ParseResult& options) {
         if (std::filesystem::exists(path)) {
             package.merge(path);
         }
+    }
+
+    if (options["append"].as<bool>() && std::filesystem::is_regular_file(output)) {
+        package.merge(new ShadyCore::Package(output));
     }
 
     if (package.empty()) {

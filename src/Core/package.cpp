@@ -47,8 +47,8 @@ ShadyCore::Package::iterator ShadyCore::Package::insert(const std::string_view& 
 	return end();
 }
 
-ShadyCore::Package::Package(const std::filesystem::path& basePath) : basePath(basePath) {
-	if (std::filesystem::is_directory(basePath)) { loadDir(basePath); return; }
+ShadyCore::Package::Package(const std::filesystem::path& basePath, const std::filesystem::path& root) : basePath(basePath) {
+	if (std::filesystem::is_directory(basePath)) { loadDir(basePath, root); return; }
 	if (!std::filesystem::is_regular_file(basePath))
 		throw std::runtime_error("'" + basePath.string() + "' isn't a file or directory.");
 
@@ -59,9 +59,9 @@ ShadyCore::Package::Package(const std::filesystem::path& basePath) : basePath(ba
 	input.close();
 
 	if (strncmp(magicWord, "PK\x03\x04", 4) == 0 || strncmp(magicWord, "PK\x05\x06", 4) == 0 ) {
-		loadZip(basePath);
+		loadZip(basePath, std::filesystem::is_regular_file(root) ? root.parent_path() : root);
 	} else {
-		loadData(basePath);
+		loadData(basePath, std::filesystem::is_regular_file(root) ? root.parent_path() : root);
 	}
 }
 
@@ -203,6 +203,17 @@ ShadyCore::Package* ShadyCore::PackageEx::merge(Package* child) {
 	entries.merge(child->entries);
 
 	return child;
+}
+
+ShadyCore::Package* ShadyCore::PackageEx::merge(const std::filesystem::path& filename) {
+	if (useBasePathAsRoot) {
+		std::filesystem::path relPath = filename.is_relative() ? filename
+			: filename.lexically_relative(basePath.is_relative() ? std::filesystem::current_path() / basePath : basePath);
+		if (relPath.string().starts_with("..") || !relPath.is_relative()) return nullptr;
+		return merge(new Package(basePath / relPath, basePath));
+	} else {
+		return merge(new Package(filename.is_relative() ? basePath / filename : filename));
+	}
 }
 
 ShadyCore::Package* ShadyCore::PackageEx::demerge(Package* child) {
