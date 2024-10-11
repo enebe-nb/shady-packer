@@ -3,10 +3,12 @@
 #include "menu.hpp"
 #include "../Core/util/filewatcher.hpp"
 #include "th123intl.hpp"
+#include <mbstring.h>
 
 namespace {
 	ModPackage* selectedPackage = 0;
 	std::list<ModPackage*> downloads;
+	_locale_t intlLocale;
 
 	enum :int { OPTION_ENABLE_DISABLE, OPTION_DOWNLOAD, OPTION_SHOW };
 }
@@ -61,11 +63,16 @@ void ModList::renderScroll(float x, float y, int offset, int size, int view) {
 }
 
 void ModList::updateList() {
+	auto locale = th123intl::GetLocale<intlLocale>();
 	auto cp = th123intl::GetTextCodePage();
 	this->names.clear();
 	this->types.clear();
 	for (auto package : ModPackage::descPackage) {
 		std::string name; th123intl::ConvertCodePage(CP_UTF8, package->name, cp, name);
+		if (this->maxLength) {
+			auto charCount = _mbsnccnt_l((uint8_t*)name.c_str(), this->maxLength-2, locale);
+			name.resize(_mbsnbcnt_l((uint8_t*)name.c_str(), charCount, locale));
+		}
 		this->names.emplace_back();
 		this->names.back().assign(name.c_str(), name.size());
 		this->types.push_back(package->isEnabled());
