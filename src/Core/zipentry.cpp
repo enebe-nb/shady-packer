@@ -287,7 +287,7 @@ void ShadyCore::ZipPackageEntry::close(std::istream& zipStream) {
 
 //-------------------------------------------------------------
 
-void ShadyCore::Package::loadZip(const std::filesystem::path& path, const std::filesystem::path& root) {
+void ShadyCore::Package::loadZip(const std::filesystem::path& path, const std::string& prepend) {
 #ifdef _WIN32
 	auto handle = CreateFileW(path.wstring().c_str(), GENERIC_READ, FILE_SHARE_READ, 0, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
 	if (handle == INVALID_HANDLE_VALUE) return;
@@ -298,16 +298,15 @@ void ShadyCore::Package::loadZip(const std::filesystem::path& path, const std::f
 	auto file = zip_open_from_source(zip_source_filep_create(filep, 0, 0, 0), ZIP_RDONLY, 0);
 #endif
 
-	std::filesystem::path relPath = std::filesystem::relative(path.parent_path(), root);
 	zip_int64_t count = zip_get_num_entries(file, 0);
 	entries.reserve(entries.size() + count);
 	for (zip_int64_t i = 0; i < count; ++i) {
 		zip_stat_t fileStat;
 		zip_stat_index(file, i, 0, &fileStat);
 
-		std::string_view name(fileStat.name);
+		std::string name(fileStat.name);
 		if (name.ends_with('/')) continue;
-		this->insert((relPath / name).lexically_normal().string(), new ZipPackageEntry(this, fileStat.name, fileStat.size));
+		this->insert(prepend + name, new ZipPackageEntry(this, fileStat.name, fileStat.size));
 	}
 
 	zip_close(file);

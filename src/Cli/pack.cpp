@@ -46,13 +46,13 @@ bool ShadyCli::PackCommand::run(const cxxopts::ParseResult& options) {
         }
     }
 
-    if (options["append"].as<bool>() && std::filesystem::is_regular_file(output)) {
-        package.merge(new ShadyCore::Package(output));
-    }
-
     if (package.empty()) {
         printf("Nothing to save.\n");
         return false;
+    }
+
+    if (options["append"].as<bool>() && std::filesystem::is_regular_file(output)) {
+        package.merge(new ShadyCore::Package(output));
     }
 
     printf("\r\x1B[KSaving to disk.\n");

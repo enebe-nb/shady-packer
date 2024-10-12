@@ -41,9 +41,9 @@ namespace ShadyCore {
 		static inline struct default_constructor_t { default_constructor_t() = default; } default_constructor;
 		inline Package(default_constructor_t, const std::filesystem::path& basePath) : basePath(basePath) {}
 
-		void loadData(const std::filesystem::path&, const std::filesystem::path&);
+		void loadData(const std::filesystem::path&, const std::string& = "");
 		void loadDir(const std::filesystem::path&, const std::filesystem::path&);
-		void loadZip(const std::filesystem::path&, const std::filesystem::path&);
+		void loadZip(const std::filesystem::path&, const std::string& = "");
 		void saveData(const std::filesystem::path&);
 		void saveDir(const std::filesystem::path&);
 		void saveZip(const std::filesystem::path&);

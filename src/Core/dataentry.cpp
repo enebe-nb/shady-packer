@@ -198,7 +198,7 @@ void ShadyCore::DataPackageEntry::close(std::istream& fileStream) {
 
 //-------------------------------------------------------------
 
-void ShadyCore::Package::loadData(const std::filesystem::path& path, const std::filesystem::path& root) {
+void ShadyCore::Package::loadData(const std::filesystem::path& path, const std::string& prepend) {
 	std::ifstream input(path, std::ios::binary);
 
 	unsigned short fileCount; input.read((char*)&fileCount, 2);
@@ -206,7 +206,6 @@ void ShadyCore::Package::loadData(const std::filesystem::path& path, const std::
 	DataListFilter inputFilter(input.rdbuf(), listSize + 6, listSize);
 	std::istream filteredInput(&inputFilter);
 
-	std::filesystem::path relPath = std::filesystem::relative(path.parent_path(), root);
 	entries.reserve(entries.size() + fileCount);
 	for (int i = 0; i < fileCount; ++i) {
 		unsigned int offset, size;
@@ -218,7 +217,7 @@ void ShadyCore::Package::loadData(const std::filesystem::path& path, const std::
 		std::string name; name.resize(nameSize);
 		filteredInput.read(name.data(), nameSize);
 
-		this->insert((relPath / name).lexically_normal().string(), new DataPackageEntry(this, offset, size));
+		this->insert(prepend + name, new DataPackageEntry(this, offset, size));
 	}
 }
 

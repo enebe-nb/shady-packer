@@ -58,10 +58,14 @@ ShadyCore::Package::Package(const std::filesystem::path& basePath, const std::fi
 	input.read(magicWord, 6);
 	input.close();
 
+	auto prepend = std::filesystem::relative(basePath.parent_path(), std::filesystem::is_regular_file(root) ? root.parent_path() : root).lexically_normal().string();
+	if (prepend == ".") prepend = "";
+	else if (!prepend.empty()) prepend.append("/");
+
 	if (strncmp(magicWord, "PK\x03\x04", 4) == 0 || strncmp(magicWord, "PK\x05\x06", 4) == 0 ) {
-		loadZip(basePath, std::filesystem::is_regular_file(root) ? root.parent_path() : root);
+		loadZip(basePath, prepend);
 	} else {
-		loadData(basePath, std::filesystem::is_regular_file(root) ? root.parent_path() : root);
+		loadData(basePath, prepend);
 	}
 }
 
