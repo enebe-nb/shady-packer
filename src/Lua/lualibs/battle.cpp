@@ -355,9 +355,69 @@ static ShadyLua::Renderer::Effect* battle_GameObjectBase_createEffect(SokuLib::v
     return (ShadyLua::Renderer::Effect*)fx;
 }
 
+static void battle_GameObjectBase_setHitBoxData(SokuLib::v2::GameObjectBase* object, lua_State* L) {
+    if (lua_gettop(L) <= 1) {
+        if (object->customHitBox) SokuLib::Delete(object->customHitBox);
+        object->customHitBox = 0;
+        return;
+    }
+
+    int left      = luaL_optinteger(L, 2, 0);
+    int top       = luaL_optinteger(L, 3, 0);
+    int right     = luaL_optinteger(L, 4, 0);
+    int bottom    = luaL_optinteger(L, 5, 0);
+    short angle   = luaL_optinteger(L, 6, 0);
+    short anchorX = luaL_optinteger(L, 7, 0);
+    short anchorY = luaL_optinteger(L, 8, 0);
+
+    object->setHitBoxData(left, top, right, bottom, angle, anchorX, anchorY);
+}
+
+static int __fastcall battle_GameObjectBase_getHitBoxData(SokuLib::v2::GameObjectBase* object, int unused, lua_State* L) {
+    if (!object->customHitBox) return 0;
+    luabridge::push(L, object->customHitBox->box.left);
+    luabridge::push(L, object->customHitBox->box.top);
+    luabridge::push(L, object->customHitBox->box.right);
+    luabridge::push(L, object->customHitBox->box.bottom);
+    luabridge::push(L, object->customHitBox->rotation);
+    luabridge::push(L, object->customHitBox->rotationAnchor.x);
+    luabridge::push(L, object->customHitBox->rotationAnchor.y);
+    return 7;
+}
+
 static std::string battle_GameObject_getCustomData(SokuLib::v2::GameObject* object, lua_State* L) {
     int size = luaL_checkinteger(L, 2);
     return std::string((const char*)object->customData, size);
+}
+
+static SokuLib::v2::GameObject* battle_GameObject_createObject(SokuLib::v2::GameObject* object, lua_State* L) {
+    int actionId = luaL_checkinteger(L, 2);
+    float x = luaL_checknumber(L, 3);
+    float y = luaL_checknumber(L, 4);
+    char direction = luaL_optinteger(L, 5, object->direction);
+    char layer = luaL_optinteger(L, 6, 1);
+    size_t dataSize = 0;
+    const char* data = luaL_optlstring(L, 7, "", &dataSize);
+    return object->createObject(actionId, x, y, (SokuLib::Direction)direction, layer, dataSize? (float*)data : 0, dataSize);
+}
+
+static SokuLib::v2::GameObject* battle_GameObject_createChild(SokuLib::v2::GameObject* object, lua_State* L) {
+    int actionId = luaL_checkinteger(L, 2);
+    float x = luaL_checknumber(L, 3);
+    float y = luaL_checknumber(L, 4);
+    char direction = luaL_optinteger(L, 5, object->direction);
+    char layer = luaL_optinteger(L, 6, 1);
+    size_t dataSize = 0;
+    const char* data = luaL_optlstring(L, 7, "", &dataSize);
+    return object->createChild(actionId, x, y, (SokuLib::Direction)direction, layer, dataSize? (float*)data : 0, dataSize);
+}
+
+static LuaRef battle_GameObject_getChildren(SokuLib::v2::GameObject* object, lua_State* L) {
+    LuaRef table = newTable(L);
+    int i = 0; for (auto child : object->childrenB) {
+        table[++i] = child;
+    }
+    return table;
 }
 
 static SokuLib::v2::GameObject* battle_Player_createObject(SokuLib::v2::Player* player, lua_State* L) {
@@ -449,16 +509,24 @@ void ShadyLua::LualibBattle(lua_State* L) {
                 .addFunction("advanceFrame", &SokuLib::v2::GameObjectBase::advanceFrame)
                 .addFunction("resetForces", &SokuLib::v2::GameObjectBase::resetForces)
                 .addFunction("isOnGround", &SokuLib::v2::GameObjectBase::isOnGround)
+                .addFunction("setHitBoxData", battle_GameObjectBase_setHitBoxData)
+                .addFunction("getHitBoxData", SokuLib::union_cast<int (SokuLib::v2::GameObjectBase::*)(lua_State*)>(battle_GameObjectBase_getHitBoxData))
             .endClass()
 
             .deriveClass<SokuLib::v2::GameObject, SokuLib::v2::GameObjectBase>("Object")
                 .addProperty("lifetime", &SokuLib::v2::GameObject::lifetime, true)
+                .addProperty("parentPlayerB", &SokuLib::v2::GameObject::parentPlayerB)
+                .addProperty("parentObjectB", &SokuLib::v2::GameObject::parentB)
 
+                .addFunction("getChildrenB", battle_GameObject_getChildren)
                 .addFunction("setTail", &SokuLib::v2::GameObject::setTail)
                 .addFunction("getCustomData", battle_GameObject_getCustomData)
                 .addFunction("checkGrazed", &SokuLib::v2::GameObject::checkGrazed)
                 .addFunction("checkProjectileHit", &SokuLib::v2::GameObject::checkProjectileHit)
                 .addFunction("checkTurnIntoCrystals", &SokuLib::v2::GameObject::checkTurnIntoCrystals)
+
+                .addFunction("createObject", battle_GameObject_createObject)
+                .addFunction("createChild", battle_GameObject_createChild)
             .endClass()
 
             .deriveClass<SokuLib::v2::Player, SokuLib::v2::GameObjectBase>("Player")
@@ -475,15 +543,15 @@ void ShadyLua::LualibBattle(lua_State* L) {
                 .addProperty("comboDamage", &SokuLib::v2::Player::comboDamage, false)
                 .addProperty("comboLimit", &SokuLib::v2::Player::comboLimit, false)
                 .addProperty("untech", &SokuLib::v2::Player::untech, false)
-                .addProperty("skillCancelCount", &SokuLib::v2::Player::skillCancelCount, false)
+                .addProperty("skillCancelCount", &SokuLib::v2::Player::skillCancelCount, true)
 
-                .addProperty("meleeInvulTimer", &SokuLib::v2::Player::meleeInvulTimer, false)
-                .addProperty("grabInvulTimer", &SokuLib::v2::Player::grabInvulTimer, false)
-                .addProperty("projectileInvulTimer", &SokuLib::v2::Player::projectileInvulTimer, false)
-                .addProperty("grazeTimer", &SokuLib::v2::Player::grazeTimer, false)
-                .addProperty("confusionDebuffTimer", &SokuLib::v2::Player::confusionDebuffTimer, false)
-                .addProperty("SORDebuffTimer", &SokuLib::v2::Player::SORDebuffTimer, false)
-                .addProperty("healCharmTimer", &SokuLib::v2::Player::healCharmTimer, false)
+                .addProperty("meleeInvulTimer", &SokuLib::v2::Player::meleeInvulTimer, true)
+                .addProperty("grabInvulTimer", &SokuLib::v2::Player::grabInvulTimer, true)
+                .addProperty("projectileInvulTimer", &SokuLib::v2::Player::projectileInvulTimer, true)
+                .addProperty("grazeTimer", &SokuLib::v2::Player::grazeTimer, true)
+                .addProperty("confusionDebuffTimer", &SokuLib::v2::Player::confusionDebuffTimer, true)
+                .addProperty("SORDebuffTimer", &SokuLib::v2::Player::SORDebuffTimer, true)
+                .addProperty("healCharmTimer", &SokuLib::v2::Player::healCharmTimer, true)
 
                 .addProperty("handCount", MEMBER_ADDRESS(unsigned char, SokuLib::v2::Player, handInfo.cardCount), false)
                 .addFunction("handGetId", battle_Player_handGetId)
@@ -525,20 +593,22 @@ void ShadyLua::LualibBattle(lua_State* L) {
             .endClass()
 
             .beginClass<SokuLib::PlayerInfo>("PlayerInfo")
-                .addProperty("character", MEMBER_ADDRESS(int, SokuLib::PlayerInfo, character), false)
+                .addProperty("character", MEMBER_ADDRESS(int, SokuLib::PlayerInfo, character), true)
                 .addProperty("isRight", &SokuLib::PlayerInfo::isRight, false)
                 .addProperty("teamId", &SokuLib::PlayerInfo::isRight, false)
-                .addProperty("palette", &SokuLib::PlayerInfo::palette, false)
-                .addProperty("paletteId", &SokuLib::PlayerInfo::palette, false)
+                .addProperty("palette", &SokuLib::PlayerInfo::palette, true)
+                .addProperty("paletteId", &SokuLib::PlayerInfo::palette, true)
                 .addProperty("inputType", &SokuLib::PlayerInfo::padding2, false)
-                .addProperty("deckId", &SokuLib::PlayerInfo::deck, false)
+                .addProperty("deckId", &SokuLib::PlayerInfo::deck, true)
             .endClass()
 
             .beginClass<SokuLib::GameStartParams>("GameParams")
-                .addProperty("stageId", &SokuLib::GameStartParams::stageId)
-                .addProperty("musicId", &SokuLib::GameStartParams::musicId)
-                .addProperty("player1", &SokuLib::GameStartParams::leftPlayerInfo, false)
-                .addProperty("player2", &SokuLib::GameStartParams::rightPlayerInfo, false)
+                .addProperty("difficulty", MEMBER_ADDRESS(int, SokuLib::GameStartParams, offset_0x00), true)
+                .addProperty("stageId", &SokuLib::GameStartParams::stageId, true)
+                .addProperty("musicId", &SokuLib::GameStartParams::musicId, true)
+                .addProperty("player1", &SokuLib::GameStartParams::leftPlayerInfo, true)
+                .addProperty("player2", &SokuLib::GameStartParams::rightPlayerInfo, true)
+                .addProperty("randomSeed", &SokuLib::GameStartParams::randomSeed, false)
             .endClass()
 
             .beginClass<SokuLib::BattleManager>("Manager")

@@ -64,10 +64,10 @@ static bool __fastcall ReadyHook_replFn(void* unknown, int unused, void* data) {
 }
 
 // ---- BattleHook ----
-static void BattleHook_replFn(const SokuLib::GameStartParams& params);
+static void BattleHook_replFn(SokuLib::GameStartParams& params);
 using BattleHook = ShadyLua::CallHook<0x0043e63b, BattleHook_replFn>;
 BattleHook::typeFn BattleHook::origFn = reinterpret_cast<BattleHook::typeFn>(0x004386a0);
-static void BattleHook_replFn(const SokuLib::GameStartParams& params) {
+static void BattleHook_replFn(SokuLib::GameStartParams& params) {
     std::shared_lock guard(eventMapLock);
     auto& listeners = eventMap[Event::BATTLE];
     for(auto iter = listeners.begin(); iter != listeners.end(); ++iter) {
@@ -353,7 +353,7 @@ void ShadyLua::LualibSoku(lua_State* L) {
                 .addConstant<int>("None",               SokuLib::v2::GameObjectBase::COLLISION_TYPE_NONE)
                 .addConstant<int>("Hit",                SokuLib::v2::GameObjectBase::COLLISION_TYPE_HIT)
                 .addConstant<int>("Blocked",            SokuLib::v2::GameObjectBase::COLLISION_TYPE_BLOCKED)
-                .addConstant<int>("Type3",              SokuLib::v2::GameObjectBase::COLLISION_TYPE_3)
+                .addConstant<int>("Invul",              SokuLib::v2::GameObjectBase::COLLISION_TYPE_INVUL)
                 .addConstant<int>("BulletHighDensity",  SokuLib::v2::GameObjectBase::COLLISION_TYPE_BULLET_COLLIDE_HIGH_DENSITY)
                 .addConstant<int>("Type5",              SokuLib::v2::GameObjectBase::COLLISION_TYPE_5)
                 .addConstant<int>("Grazed",             SokuLib::v2::GameObjectBase::COLLISION_TYPE_GRAZED)

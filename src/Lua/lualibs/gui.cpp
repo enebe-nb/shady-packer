@@ -256,6 +256,14 @@ void ShadyLua::Renderer::clear() {
     activeLayers.clear();
 }
 
+static int font_loadFontFile(lua_State* L, const char* filepath) {
+    auto readFile = luabridge::getGlobal(L, "readfile");
+    auto data = readFile(filepath).cast<std::string>();
+    DWORD numFonts = 0;
+    AddFontMemResourceEx(data.data(), data.size(), 0, &numFonts);
+    return numFonts;
+}
+
 ShadyLua::MenuProxy::MenuProxy(int handler, lua_State* L)
     : processHandler(handler), data(newTable(L)), script(ShadyLua::ScriptMap[L]) {}
 
@@ -444,6 +452,7 @@ void ShadyLua::LualibGui(lua_State* L) {
                 .addProperty("offsetY", &ShadyLua::FontProxy::offsetY, true)
                 .addProperty("spacingX", &ShadyLua::FontProxy::charSpaceX, true)
                 .addProperty("spacingY", &ShadyLua::FontProxy::charSpaceY, true)
+                .addStaticFunction("loadFontFile", font_loadFontFile)
             .endClass()
         .endNamespace()
     ;

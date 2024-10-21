@@ -40,6 +40,15 @@ static int memory_readint(int address) {
     return value;
 }
 
+/** Read a short from memory */
+static int memory_readshort(int address) {
+    DWORD dwOldProtect;
+    VirtualProtect(reinterpret_cast<LPVOID>(address), 2, PAGE_EXECUTE_READWRITE, &dwOldProtect);
+    short value = *(short*)address;
+    VirtualProtect(reinterpret_cast<LPVOID>(address), 2, dwOldProtect, &dwOldProtect);
+    return value;
+}
+
 /** Writes a string into memory */
 static void memory_writebytes(int address, std::string value) {
     DWORD dwOldProtect;
@@ -72,6 +81,14 @@ static void memory_writeint(int address, int value) {
     VirtualProtect(reinterpret_cast<LPVOID>(address), 4, dwOldProtect, &dwOldProtect);
 }
 
+/** Writes a int into memory */
+static void memory_writeshort(int address, short value) {
+    DWORD dwOldProtect;
+    VirtualProtect(reinterpret_cast<LPVOID>(address), 2, PAGE_EXECUTE_READWRITE, &dwOldProtect);
+    *(short*)address = value;
+    VirtualProtect(reinterpret_cast<LPVOID>(address), 2, dwOldProtect, &dwOldProtect);
+}
+
 void ShadyLua::LualibMemory(lua_State* L) {
     getGlobalNamespace(L)
         .beginNamespace("memory")
@@ -79,10 +96,12 @@ void ShadyLua::LualibMemory(lua_State* L) {
             .addFunction("readdouble", memory_readdouble)
             .addFunction("readfloat", memory_readfloat)
             .addFunction("readint", memory_readint)
+            .addFunction("readshort", memory_readshort)
             .addFunction("writebytes", memory_writebytes)
             .addFunction("writedouble", memory_writedouble)
             .addFunction("writefloat", memory_writefloat)
             .addFunction("writeint", memory_writeint)
+            .addFunction("writeshort", memory_writeshort)
         .endNamespace()
     ;
 }
