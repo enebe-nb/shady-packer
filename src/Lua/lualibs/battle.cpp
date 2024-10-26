@@ -495,7 +495,7 @@ void ShadyLua::LualibBattle(lua_State* L) {
 
                 .addProperty("hp", &SokuLib::v2::GameObjectBase::HP, true)
                 .addProperty("maxHp", &SokuLib::v2::GameObjectBase::MaxHP, true)
-                .addProperty("collisionType", MEMBER_ADDRESS(int, SokuLib::v2::GameObjectBase, collisionType), false)
+                .addProperty("collisionType", MEMBER_ADDRESS(int, SokuLib::v2::GameObjectBase, collisionType), true)
                 .addProperty("collisionLimit", MEMBER_ADDRESS(unsigned char, SokuLib::v2::GameObjectBase, collisionLimit), true)
                 .addProperty("hitStop", &SokuLib::v2::GameObjectBase::hitStop, true)
 
