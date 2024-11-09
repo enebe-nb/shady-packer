@@ -100,7 +100,7 @@ void LoadSettings() {
 	iniEnableLua = GetPrivateProfileIntW(L"Options", L"enableLua", true, ipath.c_str());
 	wchar_t buffer[2048];
 	size_t len = GetPrivateProfileStringW(L"Options", L"remoteConfig",
-			L"http://shady.pinkysmile.fr/config.json", buffer, 2048, ipath.c_str());
+			L"https://shady.pinkysmile.fr/config.json", buffer, 2048, ipath.c_str());
 	th123intl::ConvertCodePage(buffer, CP_UTF8, iniRemoteConfig);
 }
 

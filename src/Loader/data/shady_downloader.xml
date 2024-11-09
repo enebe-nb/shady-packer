@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <layout version="4">
-	<static id="0" xposition="35" yposition="28" mirror="0">
-		<image name="loader_title.bmp" xposition="0" yposition="0" width="210" height="54"/>
+	<static id="0" xposition="35" yposition="22" mirror="0">
+		<image name="loader_titleM.bmp" xposition="0" yposition="0" width="210" height="80"/>
 	</static>
 	<static id="0" xposition="25" yposition="75" mirror="0">
 		<image name="profile_list_seat.bmp" xposition="24" yposition="24" width="202" height="290"/>
