@@ -18,6 +18,7 @@
 void ShadyCli::ListCommand::buildOptions() {
     options.add_options()
         ("s,sort", "How to sort the output: `unsorted`, `type` or `path`.", cxxopts::value<std::string>()->default_value("unsorted"))
+        ("m,match", "Show only resource paths that contain this value.", cxxopts::value<std::string>()->default_value(""))
         ("files", "Source directories or data packages", cxxopts::value<std::vector<std::string> >())
         ;
 
@@ -126,17 +127,22 @@ namespace {
 
 bool ShadyCli::ListCommand::run(const cxxopts::ParseResult& options) {
     std::string sort = options["sort"].as<std::string>();
+    std::string match = options["match"].as<std::string>();
+    if (!match.empty()) std::transform(match.begin(), match.end(), match.begin(),
+        [](char ch){ return static_cast<char>(std::tolower(static_cast<unsigned char>(ch))); });
     auto &files = options["files"].as<std::vector<std::string>>();
 
     if (sort == "unsorted") {
         for (std::filesystem::path file : files) {
-            readInnerFiles(file, [](const std::string& str) {
+            readInnerFiles(file, [&match](const std::string& str) {
+                if (!match.empty() && str.find(match) == std::string::npos) return;
                 std::cout << typeToString(ShadyCore::FileType::get(str.c_str())) << str << std::endl;
             });
         }
     } else if (sort == "type") {
         std::multimap<ShadyCore::FileType, std::string, fileTypeCompare> output;
-        for (std::filesystem::path file : files) readInnerFiles(file, [&output](const std::string& str) {
+        for (std::filesystem::path file : files) readInnerFiles(file, [&output, &match](const std::string& str) {
+            if (!match.empty() && str.find(match) == std::string::npos) return;
             output.emplace(ShadyCore::FileType::get(str.c_str()), str);
         });
 
@@ -145,7 +151,8 @@ bool ShadyCli::ListCommand::run(const cxxopts::ParseResult& options) {
         }
     } else if (sort == "path") {
         std::set<std::string> output;
-        for (std::filesystem::path file : files) readInnerFiles(file, [&output](const std::string& str) {
+        for (std::filesystem::path file : files) readInnerFiles(file, [&output, &match](const std::string& str) {
+            if (!match.empty() && str.find(match) == std::string::npos) return;
             output.emplace(str);
         });
 
