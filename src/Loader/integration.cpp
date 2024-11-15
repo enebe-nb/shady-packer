@@ -24,6 +24,19 @@ namespace {
 		inline charbuf(const char* begin, const char* end) {
 			this->setg((char*)begin, (char*)begin, (char*)end);
 		}
+
+		pos_type seekoff(off_type off, std::ios_base::seekdir dir, std::ios_base::openmode which = std::ios_base::in) {
+			if (dir == std::ios_base::cur) gbump(off);
+			else if (dir == std::ios_base::end)
+				setg(eback(), egptr() + off, egptr());
+			else if (dir == std::ios_base::beg)
+				setg(eback(), eback() + off, egptr());
+			return gptr() - eback();
+		}
+
+		pos_type seekpos(pos_type pos, std::ios_base::openmode which = std::ios_base::in) {
+			return seekoff(pos, std::ios::beg);
+		}
 	};
 
 	struct ExposedMods {
@@ -166,3 +179,123 @@ extern "C" __declspec(dllexport) bool setEnabled(bool enabled, char *moduleName)
 }
 
 extern "C" __declspec(dllexport) bool canBeDisabled = true;
+
+namespace {
+	using FT = ShadyCore::FileType;
+
+	const std::unordered_map<FT::Type, FT> typeMap = {
+		{FT::TYPE_TEXT,    FT(FT::TYPE_TEXT, FT::TEXT_GAME, FT::getExtValue(".cv0"))},
+		{FT::TYPE_TABLE,   FT(FT::TYPE_TABLE, FT::TABLE_GAME, FT::getExtValue(".cv1"))},
+		{FT::TYPE_LABEL,   FT(FT::TYPE_LABEL, FT::LABEL_RIFF, FT::getExtValue(".sfl"))},
+		{FT::TYPE_IMAGE,   FT(FT::TYPE_IMAGE, FT::IMAGE_GAME, FT::getExtValue(".cv2"))},
+		{FT::TYPE_PALETTE, FT(FT::TYPE_PALETTE, FT::PALETTE_PAL, FT::getExtValue(".pal"))},
+		{FT::TYPE_SFX,     FT(FT::TYPE_SFX, FT::SFX_GAME, FT::getExtValue(".cv3"))},
+		{FT::TYPE_BGM,     FT(FT::TYPE_BGM, FT::BGM_OGG, FT::getExtValue(".ogg"))},
+	};
+}
+
+extern "C" __declspec(dllexport) const char* readFileData(const char* filename, size_t& size) {
+	using FT = ShadyCore::FileType;
+
+	// normalize output format
+	auto filetype = FT::get(filename);
+	if (filetype.format == FT::FORMAT_UNKNOWN) switch(filetype.type) {
+		case FT::TYPE_TEXT: filetype.format = FT::TEXT_GAME; break;
+		case FT::TYPE_TABLE: filetype.format = FT::TABLE_GAME; break;
+		case FT::TYPE_SCHEMA: {
+			std::string_view fname(filename);
+			if (fname.ends_with("effect.pat") || fname.ends_with("stand.pat"))
+				filetype.format = FT::SCHEMA_GAME_ANIM;
+			else filetype.format = FT::SCHEMA_GAME_PATTERN;
+		}
+	}
+
+	// try loading from shady's loaded packages
+	{ std::shared_lock lock(*ModPackage::basePackage);
+		auto iter = ModPackage::basePackage->find(filename, filetype.type);
+		if (iter != ModPackage::basePackage->end()) {
+			auto innertype = iter.fileType();
+
+			// if same format then passthrough otherwise convert it
+			char * data = nullptr;
+			if (filetype.format != innertype.format) {
+				auto& input = iter.open();
+				std::stringstream buffer;
+				ShadyCore::convertResource(filetype.type, innertype.format, input, filetype.format, buffer);
+				size = buffer.tellp();
+				iter.close(input);
+				if (size == 0) return 0;
+
+				data = (char*)SokuLib::NewFct(size);
+				buffer.read(data, size);
+			} else {
+				size = iter.entry().getSize();
+				auto& buffer = iter.open();
+				data = (char*)SokuLib::NewFct(size);
+				buffer.read(data, size);
+				iter.close(buffer);
+			}
+
+			return data;
+		}
+	}
+
+	SokuLib::PackageReader reader; reader.fp = 0;
+	FT::Format innerformat = FT::FORMAT_UNKNOWN;
+	const char* cdot = strrchr(filename, '.');
+	if (!cdot) cdot = filename + strlen(filename);
+
+	// normalize input format from game standards and open the reader
+	if (filetype.type == FT::TYPE_SCHEMA) {
+		if (filetype.format != FT::SCHEMA_GAME_ANIM && filetype.format != FT::SCHEMA_GAME_PATTERN) {
+			std::string innername(filename, cdot);
+			FT::appendExtValue(innername, FT::getExtValue(".dat"));
+			reader.open(innername.c_str());
+			if (reader.fp) innerformat = FT::SCHEMA_GAME_GUI;
+		}
+		if (reader.fp == 0 || filetype.format != FT::SCHEMA_GAME_GUI) {
+			std::string innername(filename, cdot);
+			FT::appendExtValue(innername, FT::getExtValue(".pat"));
+			reader.open(innername.c_str());
+			if (reader.fp) if (innername.ends_with("effect.pat") || innername.ends_with("stand.pat"))
+				innerformat = FT::SCHEMA_GAME_ANIM;
+			else innerformat = FT::SCHEMA_GAME_PATTERN;
+		}
+	} else {
+		auto iter = typeMap.find(filetype.type);
+		if (iter == typeMap.end()) return 0;
+		std::string innername(filename, cdot);
+		FT::appendExtValue(innername, iter->second.extValue);
+		reader.open(innername.c_str());
+		innerformat = iter->second.format;
+	}
+
+	// on failure returns zero
+	if (reader.fp == 0) return 0;
+	if (innerformat == FT::FORMAT_UNKNOWN) { reader.close(); return 0; }
+
+	// if same format then passthrough otherwise convert it
+	if (filetype.format != innerformat) {
+		size = reader.GetLength();
+		char* data = new char[size];
+		reader.Read(data, size);
+		reader.close();
+
+		std::stringstream output;
+		{ charbuf buffer(data, data+size);
+		std::istream input(&buffer);
+		ShadyCore::convertResource(filetype.type, innerformat, input, filetype.format, output);
+		delete[] data; }
+
+		size = output.tellp();
+		data = (char*)SokuLib::NewFct(size);
+		output.read(data, size);
+		return data;
+	} else {
+		size = reader.GetLength();
+		char* data = (char*)SokuLib::NewFct(size);
+		reader.Read(data, size);
+		reader.close();
+		return data;
+	}
+}
