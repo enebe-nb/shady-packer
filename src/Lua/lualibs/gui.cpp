@@ -256,12 +256,14 @@ void ShadyLua::Renderer::clear() {
     activeLayers.clear();
 }
 
-static int font_loadFontFile(lua_State* L, const char* filepath) {
+static int font_loadFontFile(lua_State* L) {
     auto readFile = luabridge::getGlobal(L, "readfile");
+    const char* filepath = luaL_checkstring(L, 1);
     auto data = readFile(filepath).cast<std::string>();
     DWORD numFonts = 0;
     AddFontMemResourceEx(data.data(), data.size(), 0, &numFonts);
-    return numFonts;
+    luabridge::push(L, numFonts);
+    return 1;
 }
 
 ShadyLua::MenuProxy::MenuProxy(int handler, lua_State* L)
