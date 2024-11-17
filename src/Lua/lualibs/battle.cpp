@@ -351,7 +351,7 @@ static ShadyLua::Renderer::Effect* battle_GameObjectBase_createEffect(SokuLib::v
     float y = luaL_checknumber(L, 4);
     char direction = luaL_optinteger(L, 5, object->direction);
     char layer = luaL_optinteger(L, 6, 1);
-    auto fx = fxmanager->CreateEffect(actionId, x, y, (SokuLib::Direction)direction, layer, (int)object);
+    auto fx = fxmanager->CreateEffect(actionId, x, y, direction, layer, (int)object);
     return (ShadyLua::Renderer::Effect*)fx;
 }
 
@@ -398,7 +398,7 @@ static SokuLib::v2::GameObject* battle_GameObject_createObject(SokuLib::v2::Game
     char layer = luaL_optinteger(L, 6, 1);
     size_t dataSize = 0;
     const char* data = luaL_optlstring(L, 7, "", &dataSize);
-    return object->createObject(actionId, x, y, (SokuLib::Direction)direction, layer, dataSize? (float*)data : 0, dataSize);
+    return object->createObject(actionId, x, y, direction, layer, dataSize? (float*)data : 0, dataSize);
 }
 
 static SokuLib::v2::GameObject* battle_GameObject_createChild(SokuLib::v2::GameObject* object, lua_State* L) {
@@ -409,7 +409,7 @@ static SokuLib::v2::GameObject* battle_GameObject_createChild(SokuLib::v2::GameO
     char layer = luaL_optinteger(L, 6, 1);
     size_t dataSize = 0;
     const char* data = luaL_optlstring(L, 7, "", &dataSize);
-    return object->createChild(actionId, x, y, (SokuLib::Direction)direction, layer, dataSize? (float*)data : 0, dataSize);
+    return object->createChild(actionId, x, y, direction, layer, dataSize? (float*)data : 0, dataSize);
 }
 
 static LuaRef battle_GameObject_getChildren(SokuLib::v2::GameObject* object, lua_State* L) {
@@ -428,7 +428,7 @@ static SokuLib::v2::GameObject* battle_Player_createObject(SokuLib::v2::Player* 
     char layer = luaL_optinteger(L, 6, 1);
     size_t dataSize = 0;
     const char* data = luaL_optlstring(L, 7, "", &dataSize);
-    return player->objectList->createObject(0, player, (SokuLib::Action)actionId, x, y, (SokuLib::Direction)direction, layer, dataSize ? (void*)data : 0, dataSize);
+    return player->objectList->createObject(0, player, (SokuLib::Action)actionId, x, y, direction, layer, dataSize ? (void*)data : 0, dataSize);
 }
 
 static int battle_Player_handGetId(SokuLib::v2::Player* player, lua_State* L) {

@@ -208,7 +208,7 @@ int ShadyLua::Renderer::createEffect(lua_State* L) {
     float y = (argc < 4) ? 0 : luaL_checknumber(L, 4);
     int dir = (argc < 5) ? 1 : luaL_checkinteger(L, 5);
     int layer = (argc < 6) ? 0 : luaL_checkinteger(L, 6);
-    Effect* effect = (Effect*) effects.CreateEffect(id, x, y, (SokuLib::Direction)dir, layer, 0);
+    Effect* effect = (Effect*) effects.CreateEffect(id, x, y, dir, layer, 0);
     Stack<Effect*>::push(L, effect);
     activeLayers.insert(layer);
     return 1;
