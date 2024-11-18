@@ -598,7 +598,7 @@ void ShadyLua::LualibBattle(lua_State* L) {
                 .addProperty("teamId", &SokuLib::PlayerInfo::isRight, false)
                 .addProperty("palette", &SokuLib::PlayerInfo::palette, true)
                 .addProperty("paletteId", &SokuLib::PlayerInfo::palette, true)
-                .addProperty("inputType", &SokuLib::PlayerInfo::padding2, false)
+                .addProperty("inputType", &SokuLib::PlayerInfo::inputType, false)
                 .addProperty("deckId", &SokuLib::PlayerInfo::deck, true)
             .endClass()
 

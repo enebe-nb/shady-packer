@@ -1,0 +1,37 @@
+[submodule "thirdparty/zlib"]
+	path = thirdparty/zlib
+	url = https://github.com/madler/zlib
+[submodule "thirdparty/rapidxml"]
+	path = thirdparty/rapidxml
+	url = https://github.com/discord/rapidxml
+[submodule "thirdparty/libpng"]
+	path = thirdparty/libpng
+	url = git://git.code.sf.net/p/libpng/code
+	branch = libpng16
+[submodule "thirdparty/libzip"]
+	path = thirdparty/libzip
+	url = https://github.com/nih-at/libzip/
+[submodule "thirdparty/cxxopts"]
+	path = thirdparty/cxxopts
+	url = https://github.com/jarro2783/cxxopts
+	branch = v2_2
+[submodule "thirdparty/SokuLib"]
+	path = thirdparty/SokuLib
+	url = https://github.com/SokuDev/SokuLib
+	branch = dev
+[submodule "thirdparty/json"]
+	path = thirdparty/json
+	url = https://github.com/nlohmann/json
+[submodule "thirdparty/curl"]
+	path = thirdparty/curl
+	url = https://github.com/curl/curl
+[submodule "thirdparty/luafilesystem"]
+	path = thirdparty/luafilesystem
+	url = https://github.com/lunarmodules/luafilesystem
+[submodule "thirdparty/luasocket"]
+	path = thirdparty/luasocket
+	url = https://github.com/lunarmodules/luasocket
+[submodule "thirdparty/lua"]
+	path = thirdparty/lua
+	url = https://github.com/lua/lua
+	branch = v5.4
