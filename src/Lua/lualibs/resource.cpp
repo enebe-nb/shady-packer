@@ -245,7 +245,7 @@ static int resource_Sfx_setData(lua_State* L) {
     return 0;
 }
 
-template <typename T, ShadyCore::FileType::Type U> static inline RefCountedObjectPtr<_ResourceProxy<T>>& castResourceProxy(size_t addr) {
+template <typename T, ShadyCore::FileType::Type U> static inline RefCountedObjectPtr<_ResourceProxy<T>> castResourceProxy(size_t addr) {
     return (_ResourceProxy<T>*)(new ShadyLua::ResourceProxy((T*)addr, U, false));
 }
 
