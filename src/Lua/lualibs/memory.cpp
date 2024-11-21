@@ -1,8 +1,140 @@
 #include "../lualibs.hpp"
 #include <LuaBridge/LuaBridge.h>
+#include <LuaBridge/RefCountedObject.h>
 #include <windows.h>
 
 using namespace luabridge;
+
+namespace {
+    struct cpustate {
+        int edi, esi, ebp, esp,
+            ebx, edx, ecx, eax;
+    };
+
+    class Callback : public RefCountedObject {
+    private:
+        lua_State* L;
+        int ref;
+        size_t argc;
+
+    public:
+        bool enabled = true;
+        inline Callback(lua_State* L, int ref, size_t argc) : L(L), ref(ref), argc(argc) {}
+
+        bool call(cpustate& state) {
+            lua_rawgeti(L, LUA_REGISTRYINDEX, ref);
+            Stack<const cpustate&>::push(L, state);
+            int i = 0; while(i < argc) {
+                lua_pushinteger(L, ((int*)state.esp)[++i]);
+            }
+
+            auto ret = lua_pcall(L, argc+1, 1, 0);
+            if (ret) {
+                Logger::Error(lua_tostring(L, -1));
+                lua_pop(L, 1);
+                return false;
+            } else if (!lua_isnil(L, -1)) {
+                state.eax = lua_tointeger(L, -1);
+                lua_pop(L, 1);
+                return true;
+            } else {
+                lua_pop(L, 1);
+                return false;
+            }
+        }
+
+        int luacall(lua_State* L2) {
+            if (!enabled) return 0;
+
+            size_t c = argc < lua_gettop(L2) ? argc : lua_gettop(L2);
+            lua_rawgeti(L, LUA_REGISTRYINDEX, ref);
+            lua_pushnil(L);
+            for (int i = 0; i < c; ++i) lua_pushinteger(L, lua_tointeger(L2, i));
+
+            auto ret = lua_pcall(L, c+1, 1, 0);
+            if (ret) {
+                Logger::Error(lua_tostring(L, -1));
+                lua_pop(L, 1);
+                return 0;
+            }
+
+            int retValue = lua_tointeger(L, 1);
+            lua_pop(L, 1);
+            lua_pushinteger(L2, retValue);
+            return 1;
+        }
+    };
+
+    struct BaseHook {
+        std::list<RefCountedObjectPtr<Callback>> callbacks;
+
+        bool listener(cpustate state) {
+            for (auto& cb : callbacks) if (cb->enabled && cb->call(state)) return true;
+            return false;
+        }
+
+        inline BaseHook(void* shim, size_t shimsize) {
+            DWORD oldProt; VirtualProtect(shim, shimsize, PAGE_EXECUTE_READWRITE, &oldProt);
+        }
+    };
+
+    struct CallHook : public BaseHook {
+    protected:
+        const unsigned char shim[22] = {
+            0x60,                           // pushad
+            0xB9, 0x00, 0x00, 0x00, 0x00,   // mov ecx, this
+            0xE8, 0x00, 0x00, 0x00, 0x00,   // call listener
+            0x85, 0xC0,                     // test eax, eax
+            0x61,                           // popad
+            0x75, 0x05,                     // jne skip:
+            0xE9, 0x00, 0x00, 0x00, 0x00,   // jmp original_addr
+            // skip:
+            0xC3,                           // ret
+        };
+
+    public:
+        inline CallHook(DWORD addr) : BaseHook((void*)shim, sizeof(shim)) {
+            DWORD oldProt;
+            VirtualProtect((LPVOID)addr, 5, PAGE_EXECUTE_READWRITE, &oldProt);
+            auto original = SokuLib::TamperNearJmpOpr(addr, shim);
+            VirtualProtect((LPVOID)addr, 5, oldProt, &oldProt);
+
+            *(int*)&shim[2] = (int)this;
+            SokuLib::TamperNearJmpOpr((DWORD)&shim[6], &BaseHook::listener);
+            SokuLib::TamperNearJmpOpr((DWORD)&shim[16], original);
+        }
+    };
+
+    struct VTableHook : public BaseHook {
+    protected:
+        const unsigned char shim[22] = {
+            0x60,                           // pushad
+            0xB9, 0x00, 0x00, 0x00, 0x00,   // mov ecx, this
+            0xE8, 0x00, 0x00, 0x00, 0x00,   // call listener
+            0x85, 0xC0,                     // test eax, eax
+            0x61,                           // popad
+            0x75, 0x05,                     // jne skip:
+            0xE9, 0x00, 0x00, 0x00, 0x00,   // jmp original_addr
+            // skip:
+            0xC3,                           // ret
+        };
+
+    public:
+        inline VTableHook(DWORD addr) : BaseHook((void*)shim, sizeof(shim)) {
+            DWORD oldProt;
+            VirtualProtect((LPVOID)addr, 4, PAGE_EXECUTE_READWRITE, &oldProt);
+            auto original = SokuLib::TamperDword(addr, shim);
+            VirtualProtect((LPVOID)addr, 4, oldProt, &oldProt);
+
+            *(int*)&shim[2] = (int)this;
+            SokuLib::TamperNearJmpOpr((DWORD)&shim[6], &BaseHook::listener);
+            SokuLib::TamperNearJmpOpr((DWORD)&shim[16], original);
+        }
+    };
+
+    std::unordered_map<size_t, BaseHook*> hookedAddr;
+    std::unordered_map<std::string, RefCountedObjectPtr<Callback>> IPCmap;
+}
 
 /** Read from memory into a string */
 static std::string memory_readbytes(int address, int size) {
@@ -89,6 +221,32 @@ static void memory_writeshort(int address, short value) {
     VirtualProtect(reinterpret_cast<LPVOID>(address), 2, dwOldProtect, &dwOldProtect);
 }
 
+static int memory_createcallback(lua_State* L) {
+    int argc = luaL_checkinteger(L, 1);
+
+    if(!lua_isfunction(L, 2)) return luaL_error(L, "createcallback must receive a function.");
+    lua_pushvalue(L, 2);
+    RefCountedObjectPtr<Callback> cb(new Callback(L, luaL_ref(L, LUA_REGISTRYINDEX), argc));
+
+    luabridge::push(L, cb);
+    return 1;
+}
+
+static void memory_hookcall(size_t addr, RefCountedObjectPtr<Callback> cb) {
+    auto result = hookedAddr.insert(std::make_pair(addr, nullptr));
+    if (result.second) result.first->second = new CallHook(addr);
+    result.first->second->callbacks.push_back(cb);
+}
+
+static void memory_hookvtable(size_t addr, RefCountedObjectPtr<Callback> cb) {
+    auto result = hookedAddr.insert(std::make_pair(addr, nullptr));
+    if (result.second) result.first->second = new VTableHook(addr);
+    result.first->second->callbacks.push_back(cb);
+}
+
+static void memory_setIPC(const std::string& name, RefCountedObjectPtr<Callback> cb) { IPCmap[name] = cb; }
+static RefCountedObjectPtr<Callback> memory_getIPC(const std::string& name) { return IPCmap[name]; }
+
 void ShadyLua::LualibMemory(lua_State* L) {
     getGlobalNamespace(L)
         .beginNamespace("memory")
@@ -102,6 +260,28 @@ void ShadyLua::LualibMemory(lua_State* L) {
             .addFunction("writefloat", memory_writefloat)
             .addFunction("writeint", memory_writeint)
             .addFunction("writeshort", memory_writeshort)
+
+            .beginClass<cpustate>("CPUState")
+                .addProperty("eax", &cpustate::eax)
+                .addProperty("ecx", &cpustate::ecx)
+                .addProperty("edx", &cpustate::edx)
+                .addProperty("ebx", &cpustate::ebx)
+                .addProperty("esp", &cpustate::esp)
+                .addProperty("ebp", &cpustate::ebp)
+                .addProperty("esi", &cpustate::esi)
+                .addProperty("edi", &cpustate::edi)
+            .endClass()
+
+            .beginClass<Callback>("Callback")
+                .addProperty("enabled", &Callback::enabled)
+                .addFunction("__call", &Callback::luacall)
+            .endClass()
+            .addCFunction("createcallback", memory_createcallback)
+            .addFunction("hookcall", memory_hookcall)
+            .addFunction("hookvtable", memory_hookvtable)
+
+            .addFunction("setIPC", memory_setIPC)
+            .addFunction("getIPC", memory_getIPC)
         .endNamespace()
     ;
 }
