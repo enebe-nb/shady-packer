@@ -199,6 +199,7 @@ static SokuLib::IScene* __fastcall SceneHook_replFn(void* sceneManager, int unus
 void ShadyLua::RemoveEvents(LuaScript* script) {
     RemoveLoaderEvents(script);
     RemoveBattleEvents(script);
+    RemoveMemoryEvents(script);
     { std::unique_lock lock(eventMapLock);
     for (auto& hooks : eventMap) {
         auto i = hooks.begin(); while (i != hooks.end()) {

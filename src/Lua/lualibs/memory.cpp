@@ -1,4 +1,5 @@
 #include "../lualibs.hpp"
+#include "../script.hpp"
 #include <LuaBridge/LuaBridge.h>
 #include <LuaBridge/RefCountedObject.h>
 #include <windows.h>
@@ -12,12 +13,11 @@ namespace {
     };
 
     class Callback : public RefCountedObject {
-    private:
-        lua_State* L;
-        int ref;
-        size_t argc;
-
     public:
+        lua_State* const L;
+        const int ref;
+        const size_t argc;
+
         bool enabled = true;
         inline Callback(lua_State* L, int ref, size_t argc) : L(L), ref(ref), argc(argc) {}
 
@@ -134,6 +134,20 @@ namespace {
 
     std::unordered_map<size_t, BaseHook*> hookedAddr;
     std::unordered_map<std::string, RefCountedObjectPtr<Callback>> IPCmap;
+}
+
+void ShadyLua::RemoveMemoryEvents(LuaScript* script) {
+    for (auto hook : hookedAddr) {
+        for (auto iter = hook.second->callbacks.begin(); iter != hook.second->callbacks.end();) {
+            if (iter->getObject()->L == script->L) iter = hook.second->callbacks.erase(iter);
+            else ++iter;
+        }
+    }
+
+    for (auto iter = IPCmap.begin(); iter != IPCmap.end();) {
+        if (iter->second->L == script->L) iter = IPCmap.erase(iter);
+        else ++iter;
+    }
 }
 
 /** Read from memory into a string */

@@ -464,10 +464,13 @@ static int battle_random(lua_State* L) {
     return 1;
 }
 
+template <typename T> static inline T& castFromPtr(size_t addr) { return *(T*)addr; }
+
 void ShadyLua::LualibBattle(lua_State* L) {
     getGlobalNamespace(L)
         .beginNamespace("battle")
             .beginClass<SokuLib::RenderInfo>("RenderInfo")
+                .addStaticFunction("fromPtr", castFromPtr<SokuLib::RenderInfo>)
                 .addConstructor<void (*)()>()
                 .addData<unsigned int>("color", &SokuLib::RenderInfo::color, true)
                 .addData<int>("shaderType", &SokuLib::RenderInfo::shaderType, true)
@@ -478,6 +481,7 @@ void ShadyLua::LualibBattle(lua_State* L) {
                 .addData("zRotation", &SokuLib::RenderInfo::zRotation, true)
             .endClass()
             .beginClass<SokuLib::v2::GameObjectBase>("ObjectBase")
+                .addStaticFunction("fromPtr", castFromPtr<SokuLib::v2::GameObjectBase>)
                 .addProperty("ptr", battle_GameObjectBase_getPtr, 0)
                 .addProperty("position", &SokuLib::v2::GameObjectBase::position, true)
                 .addProperty("speed", &SokuLib::v2::GameObjectBase::speed, true)
@@ -514,6 +518,7 @@ void ShadyLua::LualibBattle(lua_State* L) {
             .endClass()
 
             .deriveClass<SokuLib::v2::GameObject, SokuLib::v2::GameObjectBase>("Object")
+                .addStaticFunction("fromPtr", castFromPtr<SokuLib::v2::GameObject>)
                 .addProperty("lifetime", &SokuLib::v2::GameObject::lifetime, true)
                 .addProperty("parentPlayerB", &SokuLib::v2::GameObject::parentPlayerB)
                 .addProperty("parentObjectB", &SokuLib::v2::GameObject::parentB)
@@ -530,6 +535,7 @@ void ShadyLua::LualibBattle(lua_State* L) {
             .endClass()
 
             .deriveClass<SokuLib::v2::Player, SokuLib::v2::GameObjectBase>("Player")
+                .addStaticFunction("fromPtr", castFromPtr<SokuLib::v2::Player>)
                 .addProperty("character", MEMBER_ADDRESS(int, SokuLib::v2::Player, characterIndex), false)
                 .addProperty("unknown4A6", &SokuLib::v2::Player::spellStopCounter, true)
                 .addProperty("spellStopCounter", &SokuLib::v2::Player::spellStopCounter, true)
@@ -593,6 +599,7 @@ void ShadyLua::LualibBattle(lua_State* L) {
             .endClass()
 
             .beginClass<SokuLib::PlayerInfo>("PlayerInfo")
+                .addStaticFunction("fromPtr", castFromPtr<SokuLib::PlayerInfo>)
                 .addProperty("character", MEMBER_ADDRESS(int, SokuLib::PlayerInfo, character), true)
                 .addProperty("isRight", &SokuLib::PlayerInfo::isRight, false)
                 .addProperty("teamId", &SokuLib::PlayerInfo::isRight, false)
@@ -603,6 +610,7 @@ void ShadyLua::LualibBattle(lua_State* L) {
             .endClass()
 
             .beginClass<SokuLib::GameStartParams>("GameParams")
+                .addStaticFunction("fromPtr", castFromPtr<SokuLib::GameStartParams>)
                 .addProperty("difficulty", MEMBER_ADDRESS(int, SokuLib::GameStartParams, offset_0x00), true)
                 .addProperty("stageId", &SokuLib::GameStartParams::stageId, true)
                 .addProperty("musicId", &SokuLib::GameStartParams::musicId, true)
@@ -612,6 +620,7 @@ void ShadyLua::LualibBattle(lua_State* L) {
             .endClass()
 
             .beginClass<SokuLib::BattleManager>("Manager")
+                .addStaticFunction("fromPtr", castFromPtr<SokuLib::BattleManager>)
                 .addProperty("player1", battle_Manager_getPlayer<0>, 0)
                 .addProperty("player2", battle_Manager_getPlayer<1>, 0)
                 .addProperty("frameCount", &SokuLib::BattleManager::frameCount, false)

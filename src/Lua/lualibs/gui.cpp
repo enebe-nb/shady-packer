@@ -343,6 +343,8 @@ ShadyLua::FontProxy::FontProxy() {
     strcpy_s(faceName, (char*)0x858764);
 }
 
+template <typename T> static inline T& castFromPtr(size_t addr) { return *(T*)addr; }
+
 void ShadyLua::LualibGui(lua_State* L) {
     getGlobalNamespace(L)
         .beginNamespace("gui")
@@ -374,6 +376,7 @@ void ShadyLua::LualibGui(lua_State* L) {
                 .addData("data", &SceneProxy::data, true)
             .endClass()
             .beginClass<SokuLib::CDesign>("Design")
+                .addStaticFunction("fromPtr", castFromPtr<SokuLib::CDesign>)
                 .addConstructor<void(*)(void), RefCountedPtr<SokuLib::CDesign> >()
                 .addFunction("setColor", &SokuLib::CDesign::setColor)
                 .addFunction("loadResource", &SokuLib::CDesign::loadResource)
@@ -383,6 +386,7 @@ void ShadyLua::LualibGui(lua_State* L) {
                 .addFunction("getItemCount", gui_design_GetItemCount)
             .endClass()
             .beginClass<SokuLib::CDesign::Object>("DesignObject")
+                .addStaticFunction("fromPtr", castFromPtr<SokuLib::CDesign::Object>)
                 .addData("x", &SokuLib::CDesign::Object::x2, true)
                 .addData("y", &SokuLib::CDesign::Object::y2, true)
                 .addData("isActive", &SokuLib::CDesign::Object::active, true)
@@ -394,6 +398,7 @@ void ShadyLua::LualibGui(lua_State* L) {
                 .addData("number", &ValueProxy::number, true)
             .endClass()
             .beginClass<SokuLib::KeyInput>("KeyInput")
+                .addStaticFunction("fromPtr", castFromPtr<SokuLib::KeyInput>)
                 .addData("axisH", &SokuLib::KeyInput::horizontalAxis, false)
                 .addData("axisV", &SokuLib::KeyInput::verticalAxis, false)
                 .addData("a", &SokuLib::KeyInput::a, false)

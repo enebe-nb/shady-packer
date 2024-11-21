@@ -245,6 +245,10 @@ static int resource_Sfx_setData(lua_State* L) {
     return 0;
 }
 
+template <typename T, ShadyCore::FileType::Type U> static inline RefCountedObjectPtr<_ResourceProxy<T>>& castResourceProxy(size_t addr) {
+    return (_ResourceProxy<T>*)(new ShadyLua::ResourceProxy((T*)addr, U, false));
+}
+
 void ShadyLua::LualibResource(lua_State* L) {
     getGlobalNamespace(L)
         .beginNamespace("resource")
@@ -264,21 +268,25 @@ void ShadyLua::LualibResource(lua_State* L) {
             .addFunction("export", resource_export)
             .beginClass<ResourceProxy>("Resource").endClass()
             .deriveClass<_ResourceProxy<ShadyCore::TextResource>, ResourceProxy>("Text")
+                .addStaticFunction("fromPtr", castResourceProxy<ShadyCore::TextResource, ShadyCore::FileType::TYPE_TEXT>)
                 .addConstructor<void(*)(), RefCountedObjectPtr<_ResourceProxy<ShadyCore::TextResource>>>() // TODO test reference counter
                 .addProperty("data", resource_Text_getData, resource_Text_setData)
             .endClass()
             .deriveClass<_ResourceProxy<ShadyCore::LabelResource>, ResourceProxy>("Label")
+                .addStaticFunction("fromPtr", castResourceProxy<ShadyCore::LabelResource, ShadyCore::FileType::TYPE_LABEL>)
                 .addConstructor<void(*)(), RefCountedObjectPtr<_ResourceProxy<ShadyCore::LabelResource>>>()
                 .addProperty("begin", resource_Label_getBegin, resource_Label_setBegin)
                 .addProperty("finish", resource_Label_getEnd, resource_Label_setEnd)
             .endClass()
             .deriveClass<_ResourceProxy<ShadyCore::Palette>, ResourceProxy>("Palette")
+                .addStaticFunction("fromPtr", castResourceProxy<ShadyCore::Palette, ShadyCore::FileType::TYPE_PALETTE>)
                 .addConstructor<void(*)(), RefCountedObjectPtr<_ResourceProxy<ShadyCore::Palette>>>()
                 .addProperty("data", resource_Palette_getData, resource_Palette_setData)
                 .addCFunction("getColor", SokuLib::union_cast<int (_ResourceProxy<ShadyCore::Palette>::*)(lua_State*)>(resource_Palette_getColor))
                 .addCFunction("setColor", SokuLib::union_cast<int (_ResourceProxy<ShadyCore::Palette>::*)(lua_State*)>(resource_Palette_setColor))
             .endClass()
             .deriveClass<_ResourceProxy<ShadyCore::Image>, ResourceProxy>("Image")
+                .addStaticFunction("fromPtr", castResourceProxy<ShadyCore::Image, ShadyCore::FileType::TYPE_IMAGE>)
                 .addConstructor<void(*)(), RefCountedObjectPtr<_ResourceProxy<ShadyCore::Image>>>()
                 .addFunction("create", resource_Image_create)
                 .addProperty("width", resource_Image_getWidth, 0)
@@ -289,6 +297,7 @@ void ShadyLua::LualibResource(lua_State* L) {
                 .addProperty("raw", resource_Image_getRaw, resource_Image_setRaw)
             .endClass()
             .deriveClass<_ResourceProxy<ShadyCore::Sfx>, ResourceProxy>("Sfx")
+                .addStaticFunction("fromPtr", castResourceProxy<ShadyCore::Sfx, ShadyCore::FileType::TYPE_SFX>)
                 .addConstructor<void(*)(), RefCountedObjectPtr<_ResourceProxy<ShadyCore::Sfx>>>()
                 .addProperty("channels", resource_Sfx_getChannels, resource_Sfx_setChannels)
                 .addProperty("sampleRate", resource_Sfx_getSampleRate, resource_Sfx_setSampleRate)

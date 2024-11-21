@@ -14,7 +14,7 @@ namespace ShadyLua {
         using fnClose_t = void (*)(void* userdata, File* file);
         using fnDestroy_t = void (*)(void* userdata);
 
-        lua_State* L;
+        lua_State* const L;
         std::mutex mutex;
         void* const userdata;
     protected:
