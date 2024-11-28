@@ -12,6 +12,53 @@ namespace {
             ebx, edx, ecx, eax;
     };
 
+    class FuncCall : public RefCountedObject {
+    public:
+        lua_State* const L;
+        size_t addrOrIndex;
+        const size_t argc;
+        bool isThisCall, isVirtual;
+
+        inline FuncCall(lua_State* L, size_t addrOrIndex, size_t argc, bool thisCall, bool isVirtual)
+            : L(L), addrOrIndex(addrOrIndex), argc(argc), isThisCall(thisCall), isVirtual(isVirtual) {}
+
+        int luacall(lua_State* L) {
+            size_t c = argc + (isThisCall ? 1 : 0);
+            if (lua_gettop(L) < c) return luaL_error(L, "FuncCall called with invalid number of arguments.");
+            int* argv = new int[c ? c : 1]; // alloc at least one integer
+            for (int i = 2; i <= c+1; ++i) argv[i-2] = luaL_checkinteger(L, i);
+
+            const auto _address = isVirtual ? (*(size_t**)argv[0])[addrOrIndex] : addrOrIndex;
+            const auto _argc = argc;
+            size_t _ret;
+            __asm {
+                mov esi, esp;
+                mov edi, argv;
+                mov ebx, _argc;
+                xor edx, edx;           // init registers
+            argloop:
+                cmp edx, ebx;
+                jge endloop;            // for (i = 0; i < argc; ++i)
+                mov ecx, c;
+                sub ecx, edx;
+                mov ecx, [edi+ecx*4-4]; // ecx = argv[c-i-1]
+                push ecx;               // push arg
+                inc edx;
+                jmp argloop;
+            endloop:
+                mov ecx, [edi];         // first argument as ecx
+                mov eax, _address;
+                call eax;               // ret = call(...)
+                mov esp, esi;
+                mov _ret, eax;
+            }
+
+            delete[] argv;
+            lua_pushinteger(L, _ret);
+            return 1;
+        }
+    };
+
     class Callback : public RefCountedObject {
     public:
         lua_State* const L;
@@ -22,6 +69,8 @@ namespace {
         inline Callback(lua_State* L, int ref, size_t argc) : L(L), ref(ref), argc(argc) {}
 
         bool call(cpustate& state) {
+            if (!enabled) return false;
+
             lua_rawgeti(L, LUA_REGISTRYINDEX, ref);
             Stack<const cpustate&>::push(L, state);
             int i = 0; while(i < argc) {
@@ -69,7 +118,7 @@ namespace {
         std::list<RefCountedObjectPtr<Callback>> callbacks;
 
         bool listener(cpustate state) {
-            for (auto& cb : callbacks) if (cb->enabled && cb->call(state)) return true;
+            for (auto& cb : callbacks) if (cb->call(state)) return true;
             return false;
         }
 
@@ -246,6 +295,28 @@ static int memory_createcallback(lua_State* L) {
     return 1;
 }
 
+static int memory_createfunccall(lua_State* L) {
+    if (lua_gettop(L) < 3) return luaL_error(L, "invalid number of arguments");
+    int addr = luaL_checkinteger(L, 1);
+    int argc = luaL_checkinteger(L, 2);
+    bool thisCall = lua_toboolean(L, 3);
+
+    RefCountedObjectPtr<FuncCall> cb(new FuncCall(L, addr, argc, thisCall, false));
+
+    luabridge::push(L, cb);
+    return 1;
+}
+
+static int memory_createvirtualcall(lua_State* L) {
+    int index = luaL_checkinteger(L, 1);
+    int argc = luaL_checkinteger(L, 2);
+
+    RefCountedObjectPtr<FuncCall> cb(new FuncCall(L, index, argc, true, true));
+
+    luabridge::push(L, cb);
+    return 1;
+}
+
 static void memory_hookcall(size_t addr, RefCountedObjectPtr<Callback> cb) {
     auto result = hookedAddr.insert(std::make_pair(addr, nullptr));
     if (result.second) result.first->second = new CallHook(addr);
@@ -290,7 +361,12 @@ void ShadyLua::LualibMemory(lua_State* L) {
                 .addProperty("enabled", &Callback::enabled)
                 .addFunction("__call", &Callback::luacall)
             .endClass()
+            .beginClass<FuncCall>("FuncCall")
+                .addFunction("__call", &FuncCall::luacall)
+            .endClass()
             .addCFunction("createcallback", memory_createcallback)
+            .addCFunction("createfunccall", memory_createfunccall)
+            .addCFunction("createvirtualcall", memory_createvirtualcall)
             .addFunction("hookcall", memory_hookcall)
             .addFunction("hookvtable", memory_hookvtable)
 
