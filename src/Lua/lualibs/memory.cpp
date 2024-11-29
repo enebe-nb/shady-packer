@@ -117,7 +117,7 @@ namespace {
     struct BaseHook {
         std::list<RefCountedObjectPtr<Callback>> callbacks;
 
-        bool listener(cpustate state) {
+        bool __cdecl listener(cpustate state) {
             for (auto& cb : callbacks) if (cb->call(state)) return true;
             return false;
         }
@@ -129,10 +129,11 @@ namespace {
 
     struct CallHook : public BaseHook {
     protected:
-        const unsigned char shim[22] = {
+        const unsigned char shim[23] = {
             0x60,                           // pushad
-            0xB9, 0x00, 0x00, 0x00, 0x00,   // mov ecx, this
+            0x68, 0x00, 0x00, 0x00, 0x00,   // push this
             0xE8, 0x00, 0x00, 0x00, 0x00,   // call listener
+            0x59,                           // pop this
             0x85, 0xC0,                     // test eax, eax
             0x61,                           // popad
             0x75, 0x05,                     // jne skip:
@@ -150,16 +151,17 @@ namespace {
 
             *(int*)&shim[2] = (int)this;
             SokuLib::TamperNearJmpOpr((DWORD)&shim[6], &BaseHook::listener);
-            SokuLib::TamperNearJmpOpr((DWORD)&shim[16], original);
+            SokuLib::TamperNearJmpOpr((DWORD)&shim[17], original);
         }
     };
 
     struct VTableHook : public BaseHook {
     protected:
-        const unsigned char shim[22] = {
+        const unsigned char shim[23] = {
             0x60,                           // pushad
-            0xB9, 0x00, 0x00, 0x00, 0x00,   // mov ecx, this
+            0x68, 0x00, 0x00, 0x00, 0x00,   // push this
             0xE8, 0x00, 0x00, 0x00, 0x00,   // call listener
+            0x59,                           // pop this
             0x85, 0xC0,                     // test eax, eax
             0x61,                           // popad
             0x75, 0x05,                     // jne skip:
@@ -177,7 +179,7 @@ namespace {
 
             *(int*)&shim[2] = (int)this;
             SokuLib::TamperNearJmpOpr((DWORD)&shim[6], &BaseHook::listener);
-            SokuLib::TamperNearJmpOpr((DWORD)&shim[16], original);
+            SokuLib::TamperNearJmpOpr((DWORD)&shim[17], original);
         }
     };
 
