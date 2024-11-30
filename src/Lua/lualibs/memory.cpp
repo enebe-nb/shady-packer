@@ -117,9 +117,9 @@ namespace {
     struct BaseHook {
         std::list<RefCountedObjectPtr<Callback>> callbacks;
 
-        bool __cdecl listener(cpustate state) {
-            for (auto& cb : callbacks) if (cb->call(state)) return true;
-            return false;
+        int __cdecl listener(cpustate state) {
+            for (auto& cb : callbacks) if (cb->call(state)) return 1;
+            return 0;
         }
 
         inline BaseHook(void* shim, size_t shimsize) {
@@ -319,20 +319,26 @@ static int memory_createvirtualcall(lua_State* L) {
     return 1;
 }
 
-static void memory_hookcall(size_t addr, RefCountedObjectPtr<Callback> cb) {
+static bool memory_hookcall(size_t addr, RefCountedObjectPtr<Callback> cb) {
     auto result = hookedAddr.insert(std::make_pair(addr, nullptr));
     if (result.second) result.first->second = new CallHook(addr);
     result.first->second->callbacks.push_back(cb);
+    return result.second;
 }
 
-static void memory_hookvtable(size_t addr, RefCountedObjectPtr<Callback> cb) {
+static bool memory_hookvtable(size_t addr, RefCountedObjectPtr<Callback> cb) {
     auto result = hookedAddr.insert(std::make_pair(addr, nullptr));
     if (result.second) result.first->second = new VTableHook(addr);
     result.first->second->callbacks.push_back(cb);
+    return result.second;
 }
 
 static void memory_setIPC(const std::string& name, RefCountedObjectPtr<Callback> cb) { IPCmap[name] = cb; }
-static RefCountedObjectPtr<Callback> memory_getIPC(const std::string& name) { return IPCmap[name]; }
+static RefCountedObjectPtr<Callback> memory_getIPC(const std::string& name) {
+    auto iter = IPCmap.find(name);
+    if (iter == IPCmap.end()) return nullptr;
+    return iter->second;
+}
 
 void ShadyLua::LualibMemory(lua_State* L) {
     getGlobalNamespace(L)
