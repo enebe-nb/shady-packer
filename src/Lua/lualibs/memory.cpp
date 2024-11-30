@@ -59,6 +59,7 @@ namespace {
         }
     };
 
+#pragma optimize( "", off )
     class Callback : public RefCountedObject {
     public:
         lua_State* const L;
@@ -126,6 +127,7 @@ namespace {
             DWORD oldProt; VirtualProtect(shim, shimsize, PAGE_EXECUTE_READWRITE, &oldProt);
         }
     };
+#pragma optimize( "", on )
 
     struct CallHook : public BaseHook {
     protected:
