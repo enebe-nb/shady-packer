@@ -185,6 +185,39 @@ namespace {
         }
     };
 
+    struct TrampHook : public BaseHook {
+    protected:
+        const unsigned char shim[34] = {
+            0x60,                           // pushad
+            0x68, 0x00, 0x00, 0x00, 0x00,   // push this
+            0xE8, 0x00, 0x00, 0x00, 0x00,   // call listener
+            0x59,                           // pop this
+            0x61,                           // popad
+            // extra data [16+5]
+            0x90, 0x90, 0x90, 0x90,
+            0x90, 0x90, 0x90, 0x90,
+            0x90, 0x90, 0x90, 0x90,
+            0x90, 0x90, 0x90, 0x90,
+            0x90, 0x90, 0x90, 0x90, 0x90,
+        };
+
+    public:
+        inline TrampHook(DWORD addr, size_t opsize) : BaseHook((void*)shim, sizeof(shim)) {
+            if (opsize < 5 || opsize > 16) throw std::runtime_error("Error: Operator size limit (5, 16).");
+
+            DWORD oldProt;
+            VirtualProtect((LPVOID)addr, opsize, PAGE_EXECUTE_READWRITE, &oldProt);
+            memcpy((void*)&shim[13], (void*)addr, opsize);
+            SokuLib::TamperNearJmp(addr, shim);
+            memset((void*)(addr + 5), 0x90, opsize - 5);
+            VirtualProtect((LPVOID)addr, opsize, oldProt, &oldProt);
+
+            *(int*)&shim[2] = (int)this;
+            SokuLib::TamperNearJmpOpr((DWORD)&shim[6], &BaseHook::listener);
+            SokuLib::TamperNearJmp((DWORD)&shim[13 + opsize], addr + opsize);
+        }
+    };
+
     std::unordered_map<size_t, BaseHook*> hookedAddr;
     std::unordered_map<std::string, RefCountedObjectPtr<Callback>> IPCmap;
 }
@@ -335,6 +368,13 @@ static bool memory_hookvtable(size_t addr, RefCountedObjectPtr<Callback> cb) {
     return result.second;
 }
 
+static bool memory_hooktramp(size_t addr, size_t opsize, RefCountedObjectPtr<Callback> cb) {
+    auto result = hookedAddr.insert(std::make_pair(addr, nullptr));
+    if (result.second) result.first->second = new TrampHook(addr, opsize);
+    result.first->second->callbacks.push_back(cb);
+    return result.second;
+}
+
 static void memory_setIPC(const std::string& name, RefCountedObjectPtr<Callback> cb) { IPCmap[name] = cb; }
 static RefCountedObjectPtr<Callback> memory_getIPC(const std::string& name) {
     auto iter = IPCmap.find(name);
@@ -379,6 +419,7 @@ void ShadyLua::LualibMemory(lua_State* L) {
             .addCFunction("createvirtualcall", memory_createvirtualcall)
             .addFunction("hookcall", memory_hookcall)
             .addFunction("hookvtable", memory_hookvtable)
+            .addFunction("hooktramp", memory_hooktramp)
 
             .addFunction("setIPC", memory_setIPC)
             .addFunction("getIPC", memory_getIPC)
