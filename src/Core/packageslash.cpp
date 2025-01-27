@@ -12,14 +12,22 @@ struct Matcher {
 	Matcher(std::initializer_list<Matcher> c = {})
 		: name(), children(c) {}
 
-	size_t match(const std::string_view& value) const {
-		if (name.empty() && !std::isdigit(value.data()[0])) return value.find_first_of('_');
-		else if (value.starts_with(name)) return name.size() - 1;
-		return std::string_view::npos;
-	}
+	size_t match(const std::string_view& value) const;
 };
 
 namespace {
+	const std::unordered_set<std::string_view> characterNames = {
+		"yuyuko", "yuuka", "yukari", "youmu",
+		"utsuho", "udonge", "tenshi", "tewi",
+		"suwako", "suika", "shou", "sekibanki",
+		"satori", "sanae", "sakuya", "remilia",
+		"reimu", "patchouli", "orin", "namazu",
+		"murasa", "momiji", "mokou", "mima",
+		"meirin", "marisa", "komachi", "kaguya",
+		"iku", "flandre", "clownpiece", "chirno",
+		"aya", "alice"
+	};
+
 	const std::vector<Matcher> dirTree = {
 		{"data_", {
 			{"weather_", {
@@ -54,6 +62,7 @@ namespace {
 				{"logo_"},
 			}},
 			{"scenario_", {
+				{"effect_"},
 				{
 					{"effect_"},
 				},
@@ -84,9 +93,13 @@ namespace {
 			{"guide_"},
 			{"effect_"},
 			{"csv_", {
+				{"system_"},
+				{"common_"},
+				{"background_"},
 				{},
 			}},
 			{"character_", {
+				{"common_"},
 				{
 					{"stand_"},
 					{"face_"},
@@ -94,17 +107,44 @@ namespace {
 				},
 			}},
 			{"card_", {
+				{"common_"},
 				{},
 			}},
 			{"bgm_"},
 			{"battle_"},
 			{"background_", {
-				{
+				{"bg38_"},
+				{"bg37_"},
+				{"bg36_"},
+				{"bg34_", {
 					{"object_"},
+				}},
+				{"bg33_"},
+				{"bg32_"},
+				{"bg31_"},
+				{"bg30_"},
+
+				{"bg18_"},
+				{"bg17_"},
+				{"bg16_"},
+				{"bg15_"},
+				{"bg14_"},
+				{"bg13_"},
+				{"bg12_"},
+				{"bg11_"},
+				{"bg10_"},
+
+				{"bg06_"},
+				{"bg05_"},
+				{"bg04_"},
+				{"bg03_"},
+				{"bg02_", {
 					{"right_"},
 					{"left_"},
 					{"center_"},
-				},
+				}},
+				{"bg01_"},
+				{"bg00_"},
 			}},
 		}},
 	};
@@ -424,6 +464,15 @@ namespace {
 		{ "data_", "data/" },
 	};
 */
+}
+
+size_t Matcher::match(const std::string_view& value) const {
+	if (name.empty()) {
+		size_t last = value.find_first_of('_');
+		if (last != std::string_view::npos 
+			&& characterNames.contains(std::string_view(value.data(), last))) return last;
+	} else if (value.starts_with(name)) return name.size() - 1;
+	return std::string_view::npos;
 }
 
 void ShadyCore::Package::underlineToSlash(std::string& name) {
