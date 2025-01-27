@@ -13,7 +13,7 @@ struct Matcher {
 		: name(), children(c) {}
 
 	size_t match(const std::string_view& value) const {
-		if (name.empty()) return value.find_first_of('_');
+		if (name.empty() && !std::isdigit(value.data()[0])) return value.find_first_of('_');
 		else if (value.starts_with(name)) return name.size() - 1;
 		return std::string_view::npos;
 	}
