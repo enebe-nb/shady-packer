@@ -23,12 +23,13 @@ namespace {
 		"satori", "sanae", "sakuya", "remilia",
 		"reimu", "patchouli", "orin", "namazu",
 		"murasa", "momiji", "mokou", "mima",
-		"meirin", "marisa", "komachi", "kaguya",
-		"iku", "flandre", "clownpiece", "chirno",
-		"aya", "alice"
+		"meirin", "marisa", "mamizou", "komachi",
+		"kaguya", "iku", "flandre", "clownpiece",
+		"chirno", "aya", "alice"
 	};
 
 	const std::vector<Matcher> dirTree = {
+		{"shady_"},
 		{"data_", {
 			{"weather_", {
 				{"effect_"},

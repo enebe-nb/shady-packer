@@ -16,7 +16,7 @@ static inline std::string_view createNormalizedName(const std::string_view& str)
 			// sjis character (those stand pictures)
 			buffer[i] = str[i];
 			++i; buffer[i] = str[i];
-		} else if (str[i] == '/' || str[i] == '\\') buffer[i] = '_';
+		} else if (str[i] == '\\') buffer[i] = '/';
 		else buffer[i] = std::tolower(str[i]);
 		if (buffer[i] == '.') dotPos = i;
 		++i;

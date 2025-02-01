@@ -72,26 +72,35 @@ static bool loader_addAlias(const char* alias, const char* target, lua_State* L)
 	std::shared_lock guard(packageMapLock);
 	auto package = packageMap[ShadyLua::ScriptMap[L]];
 
-	auto iter = package->find(target);
+	std::string s_alias(alias);
+	ShadyCore::Package::underlineToSlash(s_alias);
+	std::string s_target(target);
+	ShadyCore::Package::underlineToSlash(s_target);
+
+	auto iter = package->find(s_target);
 	if (iter == package->end()) { Logger::Error("Target resource was not found."); return false; }
 
-	return package->alias(alias, iter.entry()) != package->end();
+	return package->alias(s_alias, iter.entry()) != package->end();
 }
 
 static int loader_addData(lua_State* L) {
 	const char* alias = luaL_checkstring(L, 1);
+	std::string s_alias(alias);
+	ShadyCore::Package::underlineToSlash(s_alias);
+
 	size_t dataSize; const char* data = luaL_checklstring(L, 2, &dataSize);
 	charbuf buffer(data, data+dataSize);
 	std::istream input(&buffer);
 
 	std::shared_lock guard(packageMapLock);
 	auto package = packageMap[ShadyLua::ScriptMap[L]];
-	lua_pushboolean(L, package->insert(alias, input) != package->end());
+	lua_pushboolean(L, package->insert(s_alias, input) != package->end());
 	return 1;
 }
 
 static bool loader_addResource(std::string alias, RefCountedObjectPtr<ShadyLua::ResourceProxy> proxy, lua_State* L) {
 	auto outputType = ShadyCore::GetDataPackageDefaultType(proxy->type, proxy->resource);
+	ShadyCore::Package::underlineToSlash(alias);
 	alias = alias.substr(0, alias.find_last_of('.')); outputType.appendExtValue(alias); // replace extension
 	auto tempFile = ShadyUtil::TempFile();
 	std::ofstream output(tempFile, std::ios::binary);
@@ -103,24 +112,33 @@ static bool loader_addResource(std::string alias, RefCountedObjectPtr<ShadyLua::
 }
 
 static bool loader_addFile(const char* alias, const char* filename, lua_State* L) {
+	std::string s_alias(alias);
+	ShadyCore::Package::underlineToSlash(s_alias);
+
 	std::shared_lock guard(packageMapLock);
 	ShadyCore::PackageEx* package = reinterpret_cast<ShadyCore::PackageEx*>(packageMap[ShadyLua::ScriptMap[L]]);
 
-	return package->insert(alias, std::filesystem::u8path(filename)) != package->end();
+	return package->insert(s_alias, std::filesystem::u8path(filename)) != package->end();
 }
 
 static int loader_addPackage(const char* filename, lua_State* L) {
+	std::string s_filename(filename);
+	ShadyCore::Package::underlineToSlash(s_filename);
+
 	std::shared_lock guard(packageMapLock);
 	ShadyCore::PackageEx* package = reinterpret_cast<ShadyCore::PackageEx*>(packageMap[ShadyLua::ScriptMap[L]]);
 
-	return (int)package->merge(std::filesystem::u8path(filename));
+	return (int)package->merge(std::filesystem::u8path(s_filename));
 }
 
 static bool loader_removeFile(const char* alias, lua_State* L) {
+	std::string s_alias(alias);
+	ShadyCore::Package::underlineToSlash(s_alias);
+
 	std::shared_lock guard(packageMapLock);
 	ShadyCore::PackageEx* package = reinterpret_cast<ShadyCore::PackageEx*>(packageMap[ShadyLua::ScriptMap[L]]);
 
-	return package->erase(alias);
+	return package->erase(s_alias);
 }
 
 static bool loader_removePackage(int childId, lua_State* L) {
@@ -131,6 +149,12 @@ static bool loader_removePackage(int childId, lua_State* L) {
 	child = package->demerge(child);
 	if (child) delete child;
 	return child;
+}
+
+static const char* loader_underlineToSlash(const char* filename) {
+	std::string s_filename(filename);
+	ShadyCore::Package::underlineToSlash(s_filename);
+	return s_filename.c_str();
 }
 
 void ShadyLua::LualibLoader(lua_State* L, ShadyCore::PackageEx* package) {
@@ -147,5 +171,6 @@ void ShadyLua::LualibLoader(lua_State* L, ShadyCore::PackageEx* package) {
 			.addFunction("addPackage", loader_addPackage)
 			.addFunction("removeFile", loader_removeFile)
 			.addFunction("removePackage", loader_removePackage)
+			.addFunction("underlineToSlash", loader_underlineToSlash)
 		.endNamespace();
 }

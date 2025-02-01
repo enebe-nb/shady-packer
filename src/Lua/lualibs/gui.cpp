@@ -329,7 +329,7 @@ int ShadyLua::SceneProxy::onProcess() {
             auto ret = lua_toboolean(L, -1);
             lua_pop(L, 1);
             return ret;
-        }
+        } else lua_pop(L, 1);
     }
     return -1;
 }

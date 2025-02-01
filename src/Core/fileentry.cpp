@@ -21,9 +21,9 @@ inline std::wstring sjis2ws(const std::string_view& str) {
 #else
 #include "util/encodingConverter.hpp"
 
-#define ws2sjis convertEncoding<char, char, UTF8Decode, shiftJISEncode>
+#define utf2sjis convertEncoding<char, char, UTF8Decode, shiftJISEncode>
 
-inline std::string sjis2ws(const std::string_view& str) {
+inline std::string sjis2utf(const std::string_view& str) {
     return convertEncoding<char, char, shiftJISDecode, UTF8Encode>(std::string(str));
 }
 
@@ -53,16 +53,14 @@ void ShadyCore::FilePackageEntry::close(std::istream& stream) {
 void ShadyCore::Package::loadDir(const std::filesystem::path& path, const std::filesystem::path& root) {
 	for (std::filesystem::recursive_directory_iterator iter(path), end; iter != end; ++iter) {
 		if (std::filesystem::is_regular_file(iter->path())) {
-			std::filesystem::path resName = std::filesystem::relative(iter->path(), root).lexically_normal();
-			std::filesystem::path filename = std::filesystem::relative(iter->path(), path).lexically_normal();
-			this->insert(
 #ifdef _WIN32
-				ws2sjis(resName.wstring()),
+			std::string resName = ws2sjis(std::filesystem::relative(iter->path(), root).lexically_normal().wstring());
 #else
-				resName.string(),
+			std::string resName = utf2sjis(std::filesystem::relative(iter->path(), root).lexically_normal().string());
 #endif
-				new FilePackageEntry(this, filename)
-			);
+			underlineToSlash(resName);
+			std::filesystem::path filename = std::filesystem::relative(iter->path(), path).lexically_normal();
+			this->insert(resName, new FilePackageEntry(this, filename));
 		}
 	}
 }
@@ -109,15 +107,17 @@ void ShadyCore::Package::saveDir(const std::filesystem::path& directory) {
 #ifdef _WIN32
 		std::wstring filename = sjis2ws(i->first.name);
 #else
-		std::string filename = sjis2ws(i->first.name);
+		std::string filename = sjis2utf(i->first.name);
 #endif
 
 		std::error_code err;
-		std::filesystem::rename(tempFile, target / targetType.appendExtValue(filename), err);
+		targetType.appendExtValue(filename);
+		std::filesystem::create_directories((target / filename).parent_path());
+		std::filesystem::rename(tempFile, target / filename, err);
 		if (!err)
 			continue;
-		std::filesystem::remove(target / targetType.appendExtValue(filename), err);
-		std::filesystem::copy(tempFile, target / targetType.appendExtValue(filename));
+		std::filesystem::remove(target / filename, err);
+		std::filesystem::copy(tempFile, target / filename);
 		std::filesystem::remove(tempFile);
 	}
 }

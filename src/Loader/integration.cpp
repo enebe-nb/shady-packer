@@ -58,13 +58,20 @@ namespace {
 }
 
 static bool loader_addAlias(const char* alias, const char* target) {
-	auto iter = ModPackage::basePackage->find(target);
+	std::string s_alias(alias);
+	ShadyCore::Package::underlineToSlash(s_alias);
+	std::string s_target(target);
+	ShadyCore::Package::underlineToSlash(s_target);
+
+	auto iter = ModPackage::basePackage->find(s_target);
 	if (iter == ModPackage::basePackage->end()) return false;
-	return ModPackage::basePackage->alias(alias, iter.entry()) != ModPackage::basePackage->end();
+	return ModPackage::basePackage->alias(s_alias, iter.entry()) != ModPackage::basePackage->end();
 }
 
 static int loader_addData(lua_State* L) {
-	const char* alias = luaL_checkstring(L, 1);
+	std::string alias(luaL_checkstring(L, 1));
+	ShadyCore::Package::underlineToSlash(alias);
+
 	size_t dataSize; const char* data = luaL_checklstring(L, 2, &dataSize);
 	charbuf buffer(data, data+dataSize);
 	std::istream input(&buffer);
@@ -74,7 +81,10 @@ static int loader_addData(lua_State* L) {
 }
 
 static bool loader_removeFile(const char* alias, lua_State* L) {
-	auto iter = ModPackage::basePackage->find(alias);
+	std::string s_alias(alias);
+	ShadyCore::Package::underlineToSlash(s_alias);
+
+	auto iter = ModPackage::basePackage->find(s_alias);
 	if (iter == ModPackage::basePackage->end()) return false;
 	auto loader = reinterpret_cast<_lua_loader*>(ShadyLua::ScriptMap[L]->userdata);
 	if (iter.entry().getParent() != loader->base
@@ -83,7 +93,13 @@ static bool loader_removeFile(const char* alias, lua_State* L) {
 		return false;
 	}
 
-	return ModPackage::basePackage->erase(alias);
+	return ModPackage::basePackage->erase(s_alias);
+}
+
+static const char* loader_underlineToSlash(const char* filename) {
+	std::string s_filename(filename);
+	ShadyCore::Package::underlineToSlash(s_filename);
+	return s_filename.c_str();
 }
 
 static ShadyCore::BasePackageEntry* _lua_find(ShadyCore::Package* base, ShadyCore::Package* owner, const char* filename) {
@@ -124,6 +140,7 @@ static void LualibLoader(lua_State* L) {
 			.addFunction("addAlias", loader_addAlias)
 			.addFunction("addData", loader_addData)
 			.addFunction("removeFile", loader_removeFile)
+			.addFunction("underlineToSlash", loader_underlineToSlash)
 		.endNamespace();
 }
 

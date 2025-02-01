@@ -306,7 +306,9 @@ void ShadyCore::Package::loadZip(const std::filesystem::path& path, const std::s
 
 		std::string name(fileStat.name);
 		if (name.ends_with('/')) continue;
-		this->insert(prepend + name, new ZipPackageEntry(this, fileStat.name, fileStat.size));
+		name = prepend + name;
+		underlineToSlash(name);
+		this->insert(name, new ZipPackageEntry(this, fileStat.name, fileStat.size));
 	}
 
 	zip_close(file);
@@ -378,6 +380,11 @@ void ShadyCore::Package::saveZip(const std::filesystem::path& filename) {
 		}
 
 		std::string filename(i->first.name);
+		for (size_t offset = filename.find_first_of('/'); offset != std::string_view::npos; offset = filename.find_first_of('/', offset+1)) {
+			std::string dirname(filename.data(), offset+1);
+			if (zip_name_locate(file, dirname.c_str(), 0) != -1) continue;
+			zip_dir_add(file, dirname.c_str(), 0);
+		}
 		zip_file_add(file, targetType.appendExtValue(filename).c_str(), inputSource, ZIP_FL_OVERWRITE);
 	}
 

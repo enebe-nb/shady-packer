@@ -290,7 +290,7 @@ void ShadyCore::Package::saveData(const std::filesystem::path& filename) {
 		ShadyCore::convertResource(inputType.type, inputType.format, input, targetType.format, output);
 
 		entry->close(input);
-		Package::underlineToSlash(tempFiles.back().first);
+		//Package::underlineToSlash(tempFiles.back().first);
 		targetType.appendExtValue(tempFiles.back().first);
 		listSize += 9 + tempFiles.back().first.size();
 	}
