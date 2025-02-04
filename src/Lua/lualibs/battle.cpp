@@ -8,15 +8,24 @@ using namespace luabridge;
 #define MEMBER_ADDRESS(u,s,m) SokuLib::union_cast<u s::*>(&reinterpret_cast<char const volatile&>(((s*)0)->m))
 
 namespace {
+    struct playerDataHash {
+        inline std::size_t operator()(const std::pair<lua_State*, SokuLib::v2::GameObjectBase*>& key) const {
+            return ((size_t)key.first) ^ ((size_t)key.second);
+        }
+    };
+    std::unordered_map<std::pair<lua_State*, SokuLib::v2::Player*>, LuaRef, playerDataHash> playerData;
+    static inline LuaRef& playerDataInsertOrGet(lua_State* L, SokuLib::v2::Player* player) {
+        return playerData.insert({std::pair(L, player), newTable(L)}).first->second;
+    }
+
     struct HookData {
         int updateHandler = LUA_REFNIL;
         int initSeqHandler = LUA_REFNIL;
         // int update2Handler = LUA_REFNIL;
         int initHandler = LUA_REFNIL;
         ShadyLua::LuaScript* script;
-        luabridge::LuaRef data;
 
-        inline HookData(lua_State* L) : data(newTable(L)), script(ShadyLua::ScriptMap[L]) {}
+        inline HookData(lua_State* L) : script(ShadyLua::ScriptMap[L]) {}
     };
 
     std::list<std::list<HookData>*> allListeners;
@@ -66,9 +75,13 @@ namespace {
                 lua_rawgeti(L, LUA_REGISTRYINDEX, data.updateHandler);
                 if constexpr(std::is_base_of<SokuLib::v2::Player, T>::value) {
                     luabridge::push(L, (SokuLib::v2::Player*)object);
-                } else luabridge::push(L, (SokuLib::v2::GameObject*)object);
-                lua_pushinteger(L, object->frameState.actionId);
-                luabridge::push(L, data.data);
+                    lua_pushinteger(L, object->frameState.actionId);
+                    luabridge::push(L, playerDataInsertOrGet(L, (SokuLib::v2::Player*) object));
+                } else {
+                    luabridge::push(L, (SokuLib::v2::GameObject*)object);
+                    lua_pushinteger(L, object->frameState.actionId);
+                    luabridge::push(L, playerDataInsertOrGet(L, object->gameData.owner));
+                }
 
                 if (lua_pcall(L, 3, 1, 0)) {
                     Logger::Error(lua_tostring(L, -1));
@@ -90,9 +103,13 @@ namespace {
                 lua_rawgeti(L, LUA_REGISTRYINDEX, data.initSeqHandler);
                 if constexpr(std::is_base_of<SokuLib::v2::Player, T>::value) {
                     luabridge::push(L, (SokuLib::v2::Player*)object);
-                } else luabridge::push(L, (SokuLib::v2::GameObject*)object);
-                lua_pushinteger(L, object->frameState.actionId);
-                luabridge::push(L, data.data);
+                    lua_pushinteger(L, object->frameState.actionId);
+                    luabridge::push(L, playerDataInsertOrGet(L, (SokuLib::v2::Player*) object));
+                } else {
+                    luabridge::push(L, (SokuLib::v2::GameObject*)object);
+                    lua_pushinteger(L, object->frameState.actionId);
+                    luabridge::push(L, playerDataInsertOrGet(L, object->gameData.owner));
+                }
 
                 if (lua_pcall(L, 3, 1, 0)) {
                     Logger::Error(lua_tostring(L, -1));
@@ -119,8 +136,11 @@ namespace {
                 lua_rawgeti(L, LUA_REGISTRYINDEX, data.initHandler);
                 if constexpr(std::is_base_of<SokuLib::v2::Player, T>::value) {
                     luabridge::push(L, (SokuLib::v2::Player*)object);
-                } else luabridge::push(L, (SokuLib::v2::GameObject*)object);
-                luabridge::push(L, data.data);
+                    luabridge::push(L, playerDataInsertOrGet(L, (SokuLib::v2::Player*) object));
+                } else {
+                    luabridge::push(L, (SokuLib::v2::GameObject*)object);
+                    luabridge::push(L, playerDataInsertOrGet(L, object->gameData.owner));
+                }
 
                 if (lua_pcall(L, 2, 1, 0)) {
                     Logger::Error(lua_tostring(L, -1));
@@ -202,6 +222,144 @@ namespace {
     const DWORD ObjectHook<SokuLib::v2::PlayerSuwako>::customUpdateRetAddress       = 0x7678c0;
     const DWORD ObjectHook<SokuLib::v2::PlayerNamazu>::customUpdateAddress          = 0x7d4a6c;
     const DWORD ObjectHook<SokuLib::v2::PlayerNamazu>::customUpdateRetAddress       = 0x7ea106;
+
+    struct RollCallbacks {
+        unsigned int (*saveState)();
+        void (*loadStatePre)(size_t frame, unsigned int);
+        void (*loadStatePost)(unsigned int);
+        void (*freeState)(unsigned int);
+    };
+    using SetCallbacks_t = void (*)(const RollCallbacks*);
+    bool rollInit = false;
+}
+
+static void lua_serialize(std::ostream& stream, lua_State* L) {
+    switch(lua_type(L, -1)) {
+        default:
+            Logger::Error("Lua Serialize: Unsupported lua type.");
+        case LUA_TNIL: stream.put(LUA_TNIL); break;
+        case LUA_TNUMBER: {
+            stream.put(LUA_TNUMBER);
+            auto v = lua_tonumber(L, -1);
+            stream.write((char*)&v, sizeof(v));
+        } break;
+        case LUA_TBOOLEAN: {
+            stream.put(LUA_TBOOLEAN);
+            bool v = lua_toboolean(L, -1);
+            stream.write((char*)&v, sizeof(v));
+        } break;
+        case LUA_TSTRING: {
+            stream.put(LUA_TSTRING);
+            size_t size;
+            auto v = lua_tolstring(L, -1, &size);
+            stream.write((char*)&size, sizeof(size));
+            stream.write(v, size);
+        } break;
+        case LUA_TLIGHTUSERDATA: {
+            stream.put(LUA_TLIGHTUSERDATA);
+            auto v = lua_topointer(L, -1);
+            stream.write((char*)&v, sizeof(v));
+        } break;
+        case LUA_TTABLE: {
+            stream.put(LUA_TTABLE);
+            lua_pushnil(L);
+            while(lua_next(L, -2)) {
+                lua_pushvalue(L, -2);
+                lua_serialize(stream, L);
+                lua_serialize(stream, L);
+            }
+            stream.put(-LUA_TTABLE);
+        } break;
+    } lua_pop(L, 1);
+}
+
+static void lua_deserialize(std::istream& stream, lua_State* L) {
+    switch(stream.get()) {
+        default: 
+            Logger::Error("Lua Serialize: Unsupported lua type.");
+        case LUA_TNIL: lua_pushnil(L); break;
+        case LUA_TNUMBER: {
+            lua_Number v;
+            stream.read((char*)&v, sizeof(v));
+            lua_pushnumber(L, v);
+        } break;
+        case LUA_TBOOLEAN: {
+            bool v;
+            stream.read((char*)&v, sizeof(v));
+            lua_pushboolean(L, v);
+        } break;
+        case LUA_TSTRING: {
+            size_t size;
+            stream.read((char*)&size, sizeof(size));
+            char* buffer = new char[size];
+            stream.read(buffer, size);
+            lua_pushlstring(L, buffer, size);
+            delete[] buffer;
+        } break;
+        case LUA_TLIGHTUSERDATA: {
+            void* v;
+            stream.read((char*)&v, sizeof(v));
+            lua_pushlightuserdata(L, v);
+        } break;
+        case LUA_TTABLE: {
+            lua_newtable(L);
+            while(stream.peek() != (unsigned char)-LUA_TTABLE) {
+                lua_deserialize(stream, L);
+                lua_deserialize(stream, L);
+                lua_settable(L, -3);
+            } stream.get();
+        } break;
+    }
+}
+
+static unsigned int roll_saveState() {
+    auto stream = new std::stringstream();
+    size_t players = playerData.size();
+    stream->write((char*)&players, sizeof(players));
+
+    for (auto& data : playerData) {
+        lua_State* L = data.first.first;
+        SokuLib::v2::Player* player = data.first.second;
+        auto& userdata = data.second;
+
+        stream->write((char*)&L, sizeof(L));
+        stream->write((char*)&player, sizeof(player));
+        userdata.push(L);
+        lua_serialize(*stream, L);
+    }
+
+    return (unsigned int)stream;
+}
+
+static void roll_loadStatePre(size_t frame, unsigned int address) {
+    const auto stream = reinterpret_cast<std::stringstream*>(address);
+    playerData.clear();
+    stream->clear();
+    stream->seekg(0);
+    size_t players; stream->read((char*)&players, sizeof(players));
+
+    for (int i = 0; i < players; ++i) {
+        lua_State* L; stream->read((char*)&L, sizeof(L));
+        SokuLib::v2::Player* player; stream->read((char*)&player, sizeof(player));
+        lua_deserialize(*stream, L);
+        playerData.insert_or_assign(std::pair(L, player), LuaRef::fromStack(L));
+    }
+}
+
+static void roll_loadStatePost(unsigned int address) { return; }
+
+static void roll_freeState(unsigned int address) {
+    const auto stream = reinterpret_cast<std::stringstream*>(address);
+    Logger::Debug(std::to_string(stream->tellp()), ": ", stream->str());
+    delete (std::stringstream*) address;
+}
+
+static void __fastcall onBattleInit_replFn(void* self, int unused, int other);
+using onBattleInitHook = ShadyLua::CallHook<0x00479556, onBattleInit_replFn>;
+onBattleInitHook::typeFn onBattleInitHook::origFn = reinterpret_cast<onBattleInitHook::typeFn>(0x0046b450);
+static void __fastcall onBattleInit_replFn(void* self, int unused, int other) {
+    onBattleInitHook::origFn(self, unused, other);
+    playerData.clear();
 }
 
 void ShadyLua::RemoveBattleEvents(ShadyLua::LuaScript* script) {
@@ -215,12 +373,27 @@ void ShadyLua::RemoveBattleEvents(ShadyLua::LuaScript* script) {
 
 template<class T>
 static inline void addObjectListener(const HookData& data) {
+    ShadyLua::initHook<onBattleInitHook>();
     const DWORD ADDR = SokuLib::_vtable_info<T>::baseAddr;
     if (!ShadyLua::hooks[ADDR]) {
         ShadyLua::hooks[ADDR].reset(new ObjectHook<T>());
         allListeners.push_back(&ObjectHook<T>::listeners);
     }
     ObjectHook<T>::listeners.push_back(data);
+
+    if (!rollInit) {
+        rollInit = true;
+        auto module = LoadLibraryA("giuroll");
+        if (!module) return;
+        auto SetCallbacks = reinterpret_cast<SetCallbacks_t>(GetProcAddress(module, "addRollbackCb"));
+        if (!SetCallbacks) return;
+        RollCallbacks callbacks = {
+            roll_saveState,
+            roll_loadStatePre,
+            roll_loadStatePost,
+            roll_freeState,
+        }; SetCallbacks(&callbacks);
+    }
 }
 
 static int battle_replaceCharacter(lua_State* L) {

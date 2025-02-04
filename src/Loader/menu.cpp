@@ -53,6 +53,7 @@ ModList::ModList() : CFileList() {
 }
 
 void ModList::renderScroll(float x, float y, int offset, int size, int view) {
+	size = size == 0 ? 1 : size;
 	// just set values, render is done on CDesign
 	this->scrollLen = size < view ? 286 : view*286/size;
 	this->scrollBar->y1 = 286*offset/size + this->scrollLen - 286;
@@ -258,7 +259,7 @@ int ModMenu::onRender() {
 	design.getById(&pos, 100);
 	if (this->state == 0) {
 		SokuLib::MenuCursor::render(pos->x2, pos->y2 + (modCursor.pos - scrollPos)*16, 256);
-		if (orderCursor >= scrollPos && orderCursor < scrollPos + 16)
+		if (orderCursor >= scrollPos && orderCursor <= scrollPos + 16)
 			SokuLib::MenuCursor::render(pos->x2, pos->y2 + (orderCursor - scrollPos)*16, 256);
 	}
 	modList.renderScroll(pos->x2, pos->y2, scrollPos, modList.getLength(), 17);

@@ -330,6 +330,7 @@ static int __fastcall titleOnProcess(SokuLib::Title* t) {
     if (SokuLib::checkKeyOneshot(0x3C, false, false, false) && !*((int*)0x89a88c)) {
         // the virtual destructor will call free from this binary
         // so here should be `new` instead of `SokuLib::New`
+        SokuLib::playSEWaveBuffer(0x28);
         SokuLib::activateMenu(new ModMenu());
     }
 
