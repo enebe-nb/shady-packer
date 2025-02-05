@@ -369,6 +369,11 @@ void ShadyLua::RemoveBattleEvents(ShadyLua::LuaScript* script) {
             if (iter->script == script) iter = list->erase(iter);
             else ++iter;
         }
+
+    auto iter = playerData.begin(); while (iter != playerData.end()) {
+        if (script->L == iter->first.first) iter = playerData.erase(iter);
+        else ++iter;
+    }
 }
 
 template<class T>
