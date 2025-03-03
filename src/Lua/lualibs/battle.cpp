@@ -349,8 +349,6 @@ static void roll_loadStatePre(size_t frame, unsigned int address) {
 static void roll_loadStatePost(unsigned int address) { return; }
 
 static void roll_freeState(unsigned int address) {
-    const auto stream = reinterpret_cast<std::stringstream*>(address);
-    Logger::Debug(std::to_string(stream->tellp()), ": ", stream->str());
     delete (std::stringstream*) address;
 }
 
