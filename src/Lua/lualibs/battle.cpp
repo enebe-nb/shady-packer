@@ -400,8 +400,6 @@ static inline void addObjectListener(const HookData& data) {
 }
 
 static int battle_replaceCharacter(lua_State* L) {
-    if (lua_getglobal(L, "CloseDesyncAlert") == LUA_TBOOLEAN and lua_toboolean(L, -1))
-        Logger::Warning("ALERT: a mod that can cause desync was loaded!");
     unsigned int c = luaL_checkinteger(L, 1);
     HookData data(L);
     if (lua_isfunction(L, 2)) {
