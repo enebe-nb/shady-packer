@@ -308,16 +308,16 @@ void ModMenu::updateView(int index) {
 	else {
 		std::string cpStr;
 		th123intl::ConvertCodePage(CP_UTF8, package->version(), cp, cpStr);
-		temp += "Version: <color 404040>" + cpStr + "</color><br>";
+		temp += "Version: <color 606060>" + cpStr + "</color><br>";
 		th123intl::ConvertCodePage(CP_UTF8, package->creator(), cp, cpStr);
-		temp += "Creator: <color 404040>" + cpStr + "</color><br>";
+		temp += "Creator: <color 606060>" + cpStr + "</color><br>";
 		th123intl::ConvertCodePage(CP_UTF8, package->description(), cp, cpStr);
-		temp += "Description: <color 404040>" + cpStr + "</color><br>";
+		temp += "Description: <color 606060>" + cpStr + "</color><br>";
 		temp += "Tags: ";
 		for (int i = 0; i < package->tags.size(); ++i) {
 			if (i > 0) temp += ", ";
 			th123intl::ConvertCodePage(CP_UTF8, package->tags[i], cp, cpStr);
-			temp += "<color 404040>" + cpStr + "</color>";
+			temp += "<color 606060>" + cpStr + "</color>";
 		}
 	}
 

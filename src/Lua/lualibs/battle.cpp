@@ -400,7 +400,8 @@ static inline void addObjectListener(const HookData& data) {
 }
 
 static int battle_replaceCharacter(lua_State* L) {
-    Logger::Warning("ALERT: a mod that can cause desync was loaded!");
+    if (lua_getglobal(L, "CloseDesyncAlert") == LUA_TBOOLEAN and lua_toboolean(L, -1))
+        Logger::Warning("ALERT: a mod that can cause desync was loaded!");
     unsigned int c = luaL_checkinteger(L, 1);
     HookData data(L);
     if (lua_isfunction(L, 2)) {
@@ -440,11 +441,13 @@ static int battle_replaceCharacter(lua_State* L) {
         case SokuLib::CHARACTER_NAMAZU:     addObjectListener<SokuLib::v2::PlayerNamazu>(data); break;
         default: luaL_error(L, "Character not found: %d", c);
     }
+    if (lua_getglobal(L, "CloseDesyncAlert") != LUA_TBOOLEAN or !lua_toboolean(L, -1))
+        Logger::Warning("ALERT: a mod that can cause desync was loaded!");
+    lua_pop(L, 1);
     return 0;
 }
 
 static int battle_replaceObjects(lua_State* L) {
-    Logger::Warning("ALERT: a mod that can cause desync was loaded!");
     unsigned int c = luaL_checkinteger(L, 1);
     HookData data(L);
     if (lua_isfunction(L, 2)) {
@@ -480,6 +483,9 @@ static int battle_replaceObjects(lua_State* L) {
         case SokuLib::CHARACTER_NAMAZU:     addObjectListener<SokuLib::v2::GameObjectNamazu>(data); break;
         default: luaL_error(L, "Character not found: %d", c);
     }
+    if (lua_getglobal(L, "CloseDesyncAlert") != LUA_TBOOLEAN or !lua_toboolean(L, -1))
+        Logger::Warning("ALERT: a mod that can cause desync was loaded!");
+    lua_pop(L, 1);
     return 0;
 }
 
@@ -669,6 +675,8 @@ void ShadyLua::LualibBattle(lua_State* L) {
                 .addProperty("poseId", MEMBER_ADDRESS(unsigned short, SokuLib::v2::GameObjectBase, frameState.poseId), false)
                 .addProperty("poseFrame", MEMBER_ADDRESS(unsigned short, SokuLib::v2::GameObjectBase, frameState.poseFrame), false)
                 .addProperty("currentFrame", MEMBER_ADDRESS(unsigned int, SokuLib::v2::GameObjectBase, frameState.currentFrame), false)
+                .addProperty("sequenceSize", MEMBER_ADDRESS(unsigned short, SokuLib::v2::GameObjectBase, frameState.sequenceSize), false)
+                .addProperty("poseDuration", MEMBER_ADDRESS(unsigned short, SokuLib::v2::GameObjectBase, frameState.poseDuration), false)
                 .addProperty("owner", battle_GameObjectBase_getOwner, 0)
                 .addProperty("ally", battle_GameObjectBase_getAlly, 0)
                 .addProperty("opponent", battle_GameObjectBase_getOpponent, 0)
@@ -734,6 +742,8 @@ void ShadyLua::LualibBattle(lua_State* L) {
                 .addProperty("confusionDebuffTimer", &SokuLib::v2::Player::confusionDebuffTimer, true)
                 .addProperty("SORDebuffTimer", &SokuLib::v2::Player::SORDebuffTimer, true)
                 .addProperty("healCharmTimer", &SokuLib::v2::Player::healCharmTimer, true)
+                
+                .addProperty("shotAngle", &SokuLib::v2::Player::unknown7F0, true)
 
                 .addProperty("handCount", MEMBER_ADDRESS(unsigned char, SokuLib::v2::Player, handInfo.cardCount), false)
                 .addFunction("handGetId", battle_Player_handGetId)
@@ -742,6 +752,7 @@ void ShadyLua::LualibBattle(lua_State* L) {
                 .addFunction("createObject", battle_Player_createObject)
                 .addFunction("updateGroundMovement", &SokuLib::v2::Player::updateGroundMovement)
                 .addFunction("updateAirMovement", &SokuLib::v2::Player::updateAirMovement)
+                .addFunction("decideShotAngle", &SokuLib::v2::Player::updateAirMovement)
                 .addFunction("handleCardSwitch", &SokuLib::v2::Player::handleCardSwitch)
                 .addFunction("useSystemCard", &SokuLib::v2::Player::useSystemCard)
                 .addFunction("canSpendSpirit", &SokuLib::v2::Player::canSpendSpirit)
