@@ -745,6 +745,7 @@ void ShadyLua::LualibBattle(lua_State* L) {
                 
                 .addProperty("shotAngle", &SokuLib::v2::Player::unknown7F0, true)
 
+
                 .addProperty("handCount", MEMBER_ADDRESS(unsigned char, SokuLib::v2::Player, handInfo.cardCount), false)
                 .addFunction("handGetId", battle_Player_handGetId)
                 .addFunction("handGetCost", battle_Player_handGetCost)
