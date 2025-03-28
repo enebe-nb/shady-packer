@@ -113,8 +113,7 @@ ModMenu::ModMenu() {
 	design.getById((SokuLib::CDesign::Sprite**)&modList.scrollBar, 101);
 	modList.scrollBar->active = true;
 	modList.scrollBar->gauge.set(&modList.scrollLen, 0, 286);
-	modCursor.set(&SokuLib::inputMgrs.input.verticalAxis, modList.names.size());
-
+	modCursor.set(&SokuLib::inputMgrs.input.verticalAxis, modList.names.size(), 0, rowsInList);
 	ModPackage::LoadFromRemote();
 }
 
@@ -140,7 +139,8 @@ int ModMenu::onProcess() {
 	if (ModPackage::descMutex.try_lock_shared()) {
 		if (listDirty) {
 			modList.updateList();
-			modCursor.set(&SokuLib::inputMgrs.input.verticalAxis, modList.names.size(), modCursor.pos);
+			//modCursor.set(&SokuLib::inputMgrs.input.verticalAxis, modList.names.size(), modCursor.pos, rowsInList);
+			modCursor.max = max(1, modList.names.size());
 		}
 		if (viewDirty) this->updateView(modCursor.pos);
 		ModPackage::descMutex.unlock_shared();
@@ -155,6 +155,13 @@ int ModMenu::onProcess() {
 	// // Cursor On List
 	if (this->state == 0) {
 		if (modCursor.update()) {
+			SokuLib::playSEWaveBuffer(0x27);
+			viewDirty = true;
+		}
+		//page rolling
+		else if (abs(SokuLib::inputMgrs.input.horizontalAxis) == 1) {
+			SokuLib::inputMgrs.input.horizontalAxis > 0 ? modCursor.pgDn() : modCursor.pgUp();
+			modCursor.pgPos = min(modCursor.pgPos, max(0, modList.getLength() - rowsInList));
 			SokuLib::playSEWaveBuffer(0x27);
 			viewDirty = true;
 		}
@@ -249,20 +256,20 @@ int ModMenu::onProcess() {
 int ModMenu::onRender() {
 	design.render4();
 
-	if (modCursor.pos > scrollPos + 16) {
-		scrollPos = modCursor.pos - 16;
-	} else if (modCursor.pos < scrollPos) {
-		scrollPos = modCursor.pos;
+	if (modCursor.pos >= modCursor.pgPos + rowsInList) {
+		modCursor.pgPos = modCursor.pos - rowsInList + 1;
+	} else if (modCursor.pos < modCursor.pgPos) {
+		modCursor.pgPos = modCursor.pos;
 	}
 
 	SokuLib::CDesign::Object* pos;
 	design.getById(&pos, 100);
 	if (this->state == 0) {
-		SokuLib::MenuCursor::render(pos->x2, pos->y2 + (modCursor.pos - scrollPos)*16, 256);
-		if (orderCursor >= scrollPos && orderCursor <= scrollPos + 16)
-			SokuLib::MenuCursor::render(pos->x2, pos->y2 + (orderCursor - scrollPos)*16, 256);
+		SokuLib::MenuCursor::render(pos->x2, pos->y2 + (modCursor.pos - modCursor.pgPos)*16, 256);
+		if (orderCursor >= modCursor.pgPos && orderCursor < modCursor.pgPos + rowsInList)
+			SokuLib::MenuCursor::render(pos->x2, pos->y2 + (orderCursor - modCursor.pgPos)*16, 256);
 	}
-	modList.renderScroll(pos->x2, pos->y2, scrollPos, modList.getLength(), 17);
+	modList.renderScroll(pos->x2, pos->y2, modCursor.pgPos, modList.getLength(), rowsInList);
 
 	design.getById(&pos, 200);
 	viewTitle.render(pos->x2, pos->y2);
@@ -308,16 +315,16 @@ void ModMenu::updateView(int index) {
 	else {
 		std::string cpStr;
 		th123intl::ConvertCodePage(CP_UTF8, package->version(), cp, cpStr);
-		temp += "Version: <color 404040>" + cpStr + "</color><br>";
+		temp += "Version: <color 606060>" + cpStr + "</color><br>";
 		th123intl::ConvertCodePage(CP_UTF8, package->creator(), cp, cpStr);
-		temp += "Creator: <color 404040>" + cpStr + "</color><br>";
+		temp += "Creator: <color 606060>" + cpStr + "</color><br>";
 		th123intl::ConvertCodePage(CP_UTF8, package->description(), cp, cpStr);
-		temp += "Description: <color 404040>" + cpStr + "</color><br>";
+		temp += "Description: <color 606060>" + cpStr + "</color><br>";
 		temp += "Tags: ";
 		for (int i = 0; i < package->tags.size(); ++i) {
 			if (i > 0) temp += ", ";
 			th123intl::ConvertCodePage(CP_UTF8, package->tags[i], cp, cpStr);
-			temp += "<color 404040>" + cpStr + "</color>";
+			temp += "<color 606060>" + cpStr + "</color>";
 		}
 	}
 
