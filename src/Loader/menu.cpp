@@ -140,7 +140,7 @@ int ModMenu::onProcess() {
 		if (listDirty) {
 			modList.updateList();
 			//modCursor.set(&SokuLib::inputMgrs.input.verticalAxis, modList.names.size(), modCursor.pos, rowsInList);
-			modCursor.max = modList.names.size();
+			modCursor.max = max(1, modList.names.size());
 		}
 		if (viewDirty) this->updateView(modCursor.pos);
 		ModPackage::descMutex.unlock_shared();
@@ -161,7 +161,7 @@ int ModMenu::onProcess() {
 		//page rolling
 		else if (abs(SokuLib::inputMgrs.input.horizontalAxis) == 1) {
 			SokuLib::inputMgrs.input.horizontalAxis > 0 ? modCursor.pgDn() : modCursor.pgUp();
-			modCursor.pgPos = min(modCursor.pgPos, modList.getLength() - rowsInList);
+			modCursor.pgPos = min(modCursor.pgPos, max(0, modList.getLength() - rowsInList));
 			SokuLib::playSEWaveBuffer(0x27);
 			viewDirty = true;
 		}
