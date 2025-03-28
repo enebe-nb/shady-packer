@@ -679,8 +679,8 @@ void ShadyLua::LualibBattle(lua_State* L) {
                 .addProperty("ally", battle_GameObjectBase_getAlly, 0)
                 .addProperty("opponent", battle_GameObjectBase_getOpponent, 0)
 
-                .addProperty("hp", &SokuLib::v2::GameObjectBase::HP, true)
-                .addProperty("maxHp", &SokuLib::v2::GameObjectBase::MaxHP, true)
+                .addProperty("hp", &SokuLib::v2::GameObjectBase::hp, true)
+                .addProperty("maxHp", &SokuLib::v2::GameObjectBase::maxHP, true)
                 .addProperty("collisionType", MEMBER_ADDRESS(int, SokuLib::v2::GameObjectBase, collisionType), true)
                 .addProperty("collisionLimit", MEMBER_ADDRESS(unsigned char, SokuLib::v2::GameObjectBase, collisionLimit), true)
                 .addProperty("hitStop", &SokuLib::v2::GameObjectBase::hitStop, true)
@@ -741,17 +741,14 @@ void ShadyLua::LualibBattle(lua_State* L) {
                 .addProperty("SORDebuffTimer", &SokuLib::v2::Player::SORDebuffTimer, true)
                 .addProperty("healCharmTimer", &SokuLib::v2::Player::healCharmTimer, true)
                 
-                .addProperty("shotAngle", &SokuLib::v2::Player::unknown7F0, true)
-
-
                 .addProperty("handCount", MEMBER_ADDRESS(unsigned char, SokuLib::v2::Player, handInfo.cardCount), false)
                 .addFunction("handGetId", battle_Player_handGetId)
                 .addFunction("handGetCost", battle_Player_handGetCost)
 
                 .addFunction("createObject", battle_Player_createObject)
                 .addFunction("updateGroundMovement", &SokuLib::v2::Player::updateGroundMovement)
-                .addFunction("updateAirMovement", &SokuLib::v2::Player::updateAirMovement)
-                .addFunction("decideShotAngle", &SokuLib::v2::Player::updateAirMovement)
+                .addFunction("updateAirMovement", &SokuLib::v2::Player::decideShotAngle)
+                .addFunction("decideShotAngle", &SokuLib::v2::Player::decideShotAngle)
                 .addFunction("handleCardSwitch", &SokuLib::v2::Player::handleCardSwitch)
                 .addFunction("useSystemCard", &SokuLib::v2::Player::useSystemCard)
                 .addFunction("canSpendSpirit", &SokuLib::v2::Player::canSpendSpirit)
@@ -774,7 +771,8 @@ void ShadyLua::LualibBattle(lua_State* L) {
                 .addFunction("applyGroundMechanics", &SokuLib::v2::Player::applyGroundMechanics)
                 .addFunction("applyAirMechanics", &SokuLib::v2::Player::applyAirMechanics)
                 .addFunction("playSFX", &SokuLib::v2::Player::playSFX)
-                .addFunction("unknown487C20", &SokuLib::v2::Player::Unknown487C20)
+                .addFunction("unknown487C20", &SokuLib::v2::Player::checkTurnAround)
+                .addFunction("checkTurnAround", &SokuLib::v2::Player::checkTurnAround)
                 .addFunction("playSpellBackground", &SokuLib::v2::Player::playSpellBackground)
                 .addFunction("consumeSpirit", &SokuLib::v2::Player::consumeSpirit)
                 .addFunction("consumeCard", &SokuLib::v2::Player::consumeCard)

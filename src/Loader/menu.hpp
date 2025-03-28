@@ -30,7 +30,6 @@ private:
     SokuLib::MenuCursor viewCursor;
     SokuLib::Guide guide;
     int orderCursor = -1;
-    int scrollPos = 0;
     int state = 0;
     int optionCount = 0;
     int options[3];
