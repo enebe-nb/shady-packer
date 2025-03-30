@@ -17,6 +17,7 @@ bool iniAutoUpdate;
 bool iniUseLoadLock;
 bool iniEnableLua;
 std::string iniRemoteConfig;
+std::string iniViewFont;
 
 void activate_menu(){
 	SokuLib::activateMenu(new ModMenu());
@@ -102,6 +103,9 @@ void LoadSettings() {
 	size_t len = GetPrivateProfileStringW(L"Options", L"remoteConfig",
 			L"https://shady.pinkysmile.fr/config.json", buffer, 2048, ipath.c_str());
 	th123intl::ConvertCodePage(buffer, CP_UTF8, iniRemoteConfig);
+	GetPrivateProfileStringW(L"Options", L"viewFont",
+		L"", buffer, 2048, ipath.c_str());
+	th123intl::ConvertCodePage(buffer, CP_UTF8, iniViewFont);
 }
 
 void SaveSettings() {
