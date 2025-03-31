@@ -11,6 +11,10 @@ namespace {
 	_locale_t intlLocale;
 
 	enum :int { OPTION_ENABLE_DISABLE, OPTION_DOWNLOAD, OPTION_SHOW };
+
+	constexpr int listHeight = 286;
+	constexpr int rowHeight = 16;
+	constexpr int rowsInList = listHeight / rowHeight;
 }
 
 static void setPackageEnabled(ModPackage* package, bool value) {
@@ -53,13 +57,12 @@ ModList::ModList() : CFileList() {
 }
 
 void ModList::renderScroll(float x, float y, int offset, int size, int view) {
-	size = size == 0 ? 1 : size;
 	// just set values, render is done on CDesign
-	this->scrollLen = size < view ? 286 : view*286/size;
-	this->scrollBar->y1 = 286*offset/size + this->scrollLen - 286;
+	this->scrollHeight = size < view ? listHeight : view*listHeight/size;
+	this->scrollBar->y1 = listHeight*offset/size + this->scrollHeight - listHeight;
 
 	for (int i = 0; i < view && i < size - offset; ++i) {
-		this->renderLine(x, y + i*16, i + offset);
+		this->renderLine(x, y + i*rowHeight, i + offset);
 	}
 }
 
@@ -112,7 +115,7 @@ ModMenu::ModMenu() {
 
 	design.getById((SokuLib::CDesign::Sprite**)&modList.scrollBar, 101);
 	modList.scrollBar->active = true;
-	modList.scrollBar->gauge.set(&modList.scrollLen, 0, 286);
+	modList.scrollBar->gauge.set(&modList.scrollHeight, 0, listHeight);
 	modCursor.set(&SokuLib::inputMgrs.input.verticalAxis, modList.names.size(), 0, rowsInList);
 	ModPackage::LoadFromRemote();
 }
@@ -139,10 +142,9 @@ int ModMenu::onProcess() {
 	if (ModPackage::descMutex.try_lock_shared()) {
 		if (listDirty) {
 			modList.updateList();
-			//modCursor.set(&SokuLib::inputMgrs.input.verticalAxis, modList.names.size(), modCursor.pos, rowsInList);
-			modCursor.max = max(1, modList.names.size());
+			modCursor.max = modList.names.size() == 0 ? 1 : modList.names.size();
 		}
-		if (viewDirty) this->updateView(modCursor.pos);
+		if (viewDirty && modCursor.pos < modList.names.size()) this->updateView(modCursor.pos);
 		ModPackage::descMutex.unlock_shared();
 		viewDirty = listDirty = false;
 	}
@@ -157,13 +159,19 @@ int ModMenu::onProcess() {
 		if (modCursor.update()) {
 			SokuLib::playSEWaveBuffer(0x27);
 			viewDirty = true;
-		}
-		//page rolling
-		else if (abs(SokuLib::inputMgrs.input.horizontalAxis) == 1) {
-			SokuLib::inputMgrs.input.horizontalAxis > 0 ? modCursor.pgDn() : modCursor.pgUp();
-			modCursor.pgPos = min(modCursor.pgPos, max(0, modList.getLength() - rowsInList));
-			SokuLib::playSEWaveBuffer(0x27);
-			viewDirty = true;
+		} else if (modCursor.max > modCursor.dRows) {
+			// page rolling
+			if (SokuLib::inputMgrs.input.horizontalAxis == 1) {
+				modCursor.pgDn();
+				if (modCursor.pgPos > modCursor.max - modCursor.dRows)
+					modCursor.pgPos = modCursor.max - modCursor.dRows;
+				SokuLib::playSEWaveBuffer(0x27);
+				viewDirty = true;
+			} else if (SokuLib::inputMgrs.input.horizontalAxis == -1) {
+				modCursor.pgUp();
+				SokuLib::playSEWaveBuffer(0x27);
+				viewDirty = true;
+			}
 		}
 
 		if (SokuLib::inputMgrs.input.c == 1) {
@@ -264,19 +272,20 @@ int ModMenu::onRender() {
 
 	SokuLib::CDesign::Object* pos;
 	design.getById(&pos, 100);
-	if (this->state == 0) {
-		SokuLib::MenuCursor::render(pos->x2, pos->y2 + (modCursor.pos - modCursor.pgPos)*16, 256);
+	if (this->state == 0 && modList.getLength()) {
+		SokuLib::MenuCursor::render(pos->x2, pos->y2 + (modCursor.pos - modCursor.pgPos)*rowHeight, 256);
 		if (orderCursor >= modCursor.pgPos && orderCursor < modCursor.pgPos + rowsInList)
-			SokuLib::MenuCursor::render(pos->x2, pos->y2 + (orderCursor - modCursor.pgPos)*16, 256);
+			SokuLib::MenuCursor::render(pos->x2, pos->y2 + (orderCursor - modCursor.pgPos)*rowHeight, 256);
 	}
-	modList.renderScroll(pos->x2, pos->y2, modCursor.pgPos, modList.getLength(), rowsInList);
+	if (modList.getLength() > rowsInList)
+		modList.renderScroll(pos->x2, pos->y2, modCursor.pgPos, modList.getLength(), rowsInList);
 
 	design.getById(&pos, 200);
 	viewTitle.render(pos->x2, pos->y2);
 	design.getById(&pos, 201);
 	viewContent.render(pos->x2, pos->y2);
 	design.getById(&pos, 202);
-	if (this->state == 1) SokuLib::MenuCursor::render(pos->x2, pos->y2 + viewCursor.pos*16, 120);
+	if (this->state == 1) SokuLib::MenuCursor::render(pos->x2, pos->y2 + viewCursor.pos*rowHeight, 120);
 	viewOption.render(pos->x2, pos->y2);
 	design.getById(&pos, 203);
 	if(viewPreview.dxHandle) viewPreview.renderScreen(pos->x2, pos->y2, pos->x2 + 200, pos->y2 + 150);

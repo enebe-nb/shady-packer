@@ -765,7 +765,7 @@ void ShadyLua::LualibBattle(lua_State* L) {
                 .addFunction("applyGroundMechanics", &SokuLib::v2::Player::applyGroundMechanics)
                 .addFunction("applyAirMechanics", &SokuLib::v2::Player::applyAirMechanics)
                 .addFunction("playSFX", &SokuLib::v2::Player::playSFX)
-                .addFunction("unknown487C20", &SokuLib::v2::Player::Unknown487C20)
+                .addFunction("checkTurnAround", &SokuLib::v2::Player::checkTurnAround)
                 .addFunction("playSpellBackground", &SokuLib::v2::Player::playSpellBackground)
                 .addFunction("consumeSpirit", &SokuLib::v2::Player::consumeSpirit)
                 .addFunction("consumeCard", &SokuLib::v2::Player::consumeCard)

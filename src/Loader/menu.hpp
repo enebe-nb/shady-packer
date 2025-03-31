@@ -5,7 +5,7 @@
 class ModList : public SokuLib::CFileList {
 public:
     SokuLib::CDesign::Gauge* scrollBar;
-    int scrollLen;
+    int scrollHeight;
 
     ModList();
     void renderScroll(float x, float y, int offset, int size, int view);

@@ -1,6 +1,6 @@
 
 project ( lua C )
-cmake_minimum_required ( VERSION 2.8 )
+cmake_minimum_required ( VERSION 3.16 )
 
 set(LUA_PATH ../lua CACHE PATH "Path to lua library")
 
