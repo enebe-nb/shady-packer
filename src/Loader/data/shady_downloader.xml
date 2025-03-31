@@ -14,4 +14,7 @@
 	<mutable id="201" xposition="272" yposition="124"/>
 	<mutable id="202" xposition="490" yposition="280"/>
 	<mutable id="203" xposition="272" yposition="264"/>
+	<static id="300" xposition="190" yposition="208" mirror="0">
+		<image name="loading.bmp" xposition="0" yposition="0" width="260" height="64"/>
+	</static>
 </layout>

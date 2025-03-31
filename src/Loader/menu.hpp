@@ -4,6 +4,7 @@
 
 class ModList : public SokuLib::CFileList {
 public:
+    SokuLib::CDesign::Sprite* loadMessage;
     SokuLib::CDesign::Gauge* scrollBar;
     int scrollHeight;
 

@@ -58,8 +58,12 @@ ModList::ModList() : CFileList() {
 
 void ModList::renderScroll(float x, float y, int offset, int size, int view) {
 	// just set values, render is done on CDesign
-	this->scrollHeight = size < view ? listHeight : view*listHeight/size;
-	this->scrollBar->y1 = listHeight*offset/size + this->scrollHeight - listHeight;
+	if (size <= rowsInList) {
+		this->scrollHeight = 0;
+	} else {
+		this->scrollHeight = size < view ? listHeight : view*listHeight/size;
+		this->scrollBar->y1 = listHeight*offset/size + this->scrollHeight - listHeight;
+	}
 
 	for (int i = 0; i < view && i < size - offset; ++i) {
 		this->renderLine(x, y + i*rowHeight, i + offset);
@@ -81,6 +85,7 @@ void ModList::updateList() {
 		this->names.back().assign(name.c_str(), name.size());
 		this->types.push_back(package->isEnabled());
 	}
+	if (this->loadMessage) this->loadMessage->active = this->names.size() == 0;
 	this->updateResources();
 }
 
@@ -117,6 +122,8 @@ ModMenu::ModMenu() {
 	modList.scrollBar->active = true;
 	modList.scrollBar->gauge.set(&modList.scrollHeight, 0, listHeight);
 	modCursor.set(&SokuLib::inputMgrs.input.verticalAxis, modList.names.size(), 0, rowsInList);
+
+	design.getById(&modList.loadMessage, 300);
 	ModPackage::LoadFromRemote();
 }
 
@@ -277,8 +284,7 @@ int ModMenu::onRender() {
 		if (orderCursor >= modCursor.pgPos && orderCursor < modCursor.pgPos + rowsInList)
 			SokuLib::MenuCursor::render(pos->x2, pos->y2 + (orderCursor - modCursor.pgPos)*rowHeight, 256);
 	}
-	if (modList.getLength() > rowsInList)
-		modList.renderScroll(pos->x2, pos->y2, modCursor.pgPos, modList.getLength(), rowsInList);
+	modList.renderScroll(pos->x2, pos->y2, modCursor.pgPos, modList.getLength(), rowsInList);
 
 	design.getById(&pos, 200);
 	viewTitle.render(pos->x2, pos->y2);
