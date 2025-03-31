@@ -35,3 +35,6 @@
 	path = thirdparty/lua
 	url = https://github.com/lua/lua
 	branch = v5.4
+[submodule "thirdparty/LuaBridge"]
+	path = thirdparty/LuaBridge
+	url = https://github.com/vinniefalco/LuaBridge
