@@ -9,6 +9,7 @@ extern bool iniAutoUpdate;
 extern bool iniUseLoadLock;
 extern bool iniEnableLua;
 extern std::string iniRemoteConfig;
+extern std::string iniViewFont;
 
 void LoadSettings();
 void SaveSettings();
