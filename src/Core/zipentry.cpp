@@ -304,7 +304,7 @@ static inline bool sjis2utf(const std::string_view& str, std::string& out) {
 
 static inline bool utf2sjis(const std::string_view& str, std::string& out) {
 	size_t size;
-	constexpr DWORD inFlags = WC_ERR_INVALID_CHARS;
+	constexpr DWORD inFlags = MB_ERR_INVALID_CHARS;
 	size = MultiByteToWideChar(CP_UTF8, inFlags, str.data(), str.size(), NULL, NULL);
 	std::wstring wstr(size, L'\0');
 	if (!size) return false;
