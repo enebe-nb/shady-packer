@@ -336,8 +336,8 @@ void ModMenu::updateView(int index) {
 		th123intl::ConvertCodePage(CP_UTF8, package->creator(), cp, cpStr);
 		temp += "Creator: <color 606060>" + cpStr + "</color><br>";
 		th123intl::ConvertCodePage(CP_UTF8, package->description(), cp, cpStr);
-		temp += "ºÚΩÈ: <color 808080>" + cpStr + "</color><br>";
-		temp += "±Í«©: <color 808080>";
+		temp += "Description: <color 606060>" + cpStr + "</color><br>";
+		temp += "Tags: <color 606060>";
 		for (int i = 0; i < package->tags.size(); ++i) {
 			if (i > 0) temp += "  ";
 			th123intl::ConvertCodePage(CP_UTF8, package->tags[i], cp, cpStr);
