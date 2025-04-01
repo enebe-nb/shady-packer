@@ -5,6 +5,7 @@
 #include <fstream>
 #include <mutex>
 #include <cctype>
+#include <zip.h>
 
 std::filesystem::path ModPackage::basePath(std::filesystem::current_path());
 std::unique_ptr<ShadyCore::PackageEx> ModPackage::basePackage;
@@ -14,6 +15,37 @@ std::shared_mutex ModPackage::descMutex;
 static ModPackage* findPackage(const std::string& name) {
 	for(auto& pack : ModPackage::descPackage) if(name == pack->name) return pack;
 	return 0;
+}
+
+static bool extractZipToFolder(const std::filesystem::path& filename, const std::filesystem::path& target, size_t& offset) {
+	auto zsrc = zip_source_win32w_create(filename.c_str(), 0, ZIP_LENGTH_TO_END, 0);
+	if (!zsrc) return false;
+	auto zobj = zip_open_from_source(zsrc, ZIP_RDONLY, 0);
+	if (!zobj) { zip_source_close(zsrc); return false; }
+
+	bool isSuccessful = true;
+	for (;offset < zip_get_num_entries(zobj, 0); ++offset) {
+		zip_stat_t stats; zip_stat_init(&stats);
+		if (zip_stat_index(zobj, offset, ZIP_STAT_NAME, &stats) == -1) continue;
+		std::wstring resname; th123intl::ConvertCodePage(CP_UTF8, stats.name, resname);
+		if (resname.empty()) continue;
+		if (resname.back() == '/') {
+			std::filesystem::create_directory(target / resname);
+		} else {
+			std::ofstream output(target / resname, std::ios::binary | std::ios::trunc, _SH_DENYRW);
+			if (!output.is_open()) { isSuccessful = false; break; }
+
+			auto zfile = zip_fopen_index(zobj, offset, 0);
+			if (!zfile) continue;
+			char buffer[4096]; zip_int64_t read = 0;
+			while((read = zip_fread(zfile, buffer, 4096)) > 0) {
+				output.write(buffer, read);
+			} zip_fclose(zfile);
+		}
+	}
+	zip_close(zobj);
+	zip_source_close(zsrc);
+	return isSuccessful;
 }
 
 namespace {
@@ -78,8 +110,15 @@ namespace {
 							std::filesystem::path target(filename);
 							target.replace_extension();
 							std::error_code err;
-							std::filesystem::remove(target, err);
-							if (!err) std::filesystem::rename(filename, target, err);
+							if (std::filesystem::is_directory(target)) {
+								if (!extractZipToFolder(filename, target, i->second->resumeOffset)) {
+									err = std::make_error_code(std::errc::device_or_resource_busy);
+								} else std::filesystem::remove(filename);
+							} else {
+								std::filesystem::remove(target, err);
+								if (!err ) std::filesystem::rename(filename, target, err);	
+							}
+
 							if (!err) {
 								p->data["version"] = p->data.value("remoteVersion", "");
 								p->requireUpdate = false;

@@ -34,6 +34,7 @@ protected:
 public:
     std::string fileId;
     std::filesystem::path filename;
+    size_t resumeOffset = 0;
     inline FetchFile() {}
     inline FetchFile(const std::string& fileId, const std::filesystem::path& filename)
         : fileId(fileId), filename(filename) {}
