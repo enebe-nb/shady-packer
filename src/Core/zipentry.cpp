@@ -287,6 +287,36 @@ void ShadyCore::ZipPackageEntry::close(std::istream& zipStream) {
 
 //-------------------------------------------------------------
 
+static inline bool sjis2utf(const std::string_view& str, std::string& out) {
+	size_t size;
+	constexpr DWORD inFlags = MB_USEGLYPHCHARS;
+	size = MultiByteToWideChar(932, inFlags, str.data(), str.size(), NULL, NULL);
+	std::wstring wstr(size, L'\0');
+	if (!size) return false;
+	if (!MultiByteToWideChar(932, inFlags, str.data(), str.size(), wstr.data(), wstr.size())) return false;
+
+	constexpr DWORD outFlags = 0;
+	size = WideCharToMultiByte(CP_UTF8, outFlags, wstr.data(), wstr.size(), NULL, NULL, NULL, NULL);
+	if (!size) return false;
+	out.resize(size);
+	return WideCharToMultiByte(CP_UTF8, outFlags, wstr.data(), wstr.size(), out.data(), out.size(), NULL, NULL);
+}
+
+static inline bool utf2sjis(const std::string_view& str, std::string& out) {
+	size_t size;
+	constexpr DWORD inFlags = WC_ERR_INVALID_CHARS;
+	size = MultiByteToWideChar(CP_UTF8, inFlags, str.data(), str.size(), NULL, NULL);
+	std::wstring wstr(size, L'\0');
+	if (!size) return false;
+	if (!MultiByteToWideChar(CP_UTF8, inFlags, str.data(), str.size(), wstr.data(), wstr.size())) return false;
+
+	constexpr DWORD outFlags = WC_COMPOSITECHECK|WC_DEFAULTCHAR|WC_NO_BEST_FIT_CHARS;
+	size = WideCharToMultiByte(932, outFlags, wstr.data(), wstr.size(), NULL, NULL, NULL, NULL);
+	if (!size) return false;
+	out.resize(size);
+	return WideCharToMultiByte(932, outFlags, wstr.data(), wstr.size(), out.data(), out.size(), NULL, NULL);
+}
+
 void ShadyCore::Package::loadZip(const std::filesystem::path& path, const std::string& prepend) {
 #ifdef _WIN32
 	auto handle = CreateFileW(path.wstring().c_str(), GENERIC_READ, FILE_SHARE_READ, 0, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
@@ -304,7 +334,8 @@ void ShadyCore::Package::loadZip(const std::filesystem::path& path, const std::s
 		zip_stat_t fileStat;
 		zip_stat_index(file, i, 0, &fileStat);
 
-		std::string name(fileStat.name);
+		std::string name;
+		if (!utf2sjis(fileStat.name, name)) continue;
 		if (name.ends_with('/')) continue;
 		name = prepend + name;
 		underlineToSlash(name);
@@ -379,7 +410,7 @@ void ShadyCore::Package::saveZip(const std::filesystem::path& filename) {
 			entry->close(input);
 		}
 
-		std::string filename(i->first.name);
+		std::string filename; sjis2utf(i->first.name, filename);
 		for (size_t offset = filename.find_first_of('/'); offset != std::string_view::npos; offset = filename.find_first_of('/', offset+1)) {
 			std::string dirname(filename.data(), offset+1);
 			if (zip_name_locate(file, dirname.c_str(), 0) != -1) continue;

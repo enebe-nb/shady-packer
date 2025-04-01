@@ -6,13 +6,13 @@
 #include <windows.h>
 #define CP_SHIFT_JIS 932
 
-inline std::string ws2sjis(const std::wstring& wstr) {
+static inline std::string ws2sjis(const std::wstring_view& wstr) {
     int size_needed = WideCharToMultiByte(CP_SHIFT_JIS, 0, &wstr[0], (int)wstr.size(), NULL, 0, NULL, NULL);
     std::string strTo(size_needed, 0);
     WideCharToMultiByte(CP_SHIFT_JIS, 0, &wstr[0], (int)wstr.size(), &strTo[0], size_needed, NULL, NULL);
     return strTo;
 }
-inline std::wstring sjis2ws(const std::string_view& str) {
+static inline std::wstring sjis2ws(const std::string_view& str) {
     int size_needed = MultiByteToWideChar(CP_SHIFT_JIS, 0, &str[0], (int)str.size(), NULL, 0);
     std::wstring wstrTo( size_needed, 0 );
     MultiByteToWideChar(CP_SHIFT_JIS, 0, &str[0], (int)str.size(), &wstrTo[0], size_needed);
@@ -23,7 +23,7 @@ inline std::wstring sjis2ws(const std::string_view& str) {
 
 #define utf2sjis convertEncoding<char, char, UTF8Decode, shiftJISEncode>
 
-inline std::string sjis2utf(const std::string_view& str) {
+static inline std::string sjis2utf(const std::string_view& str) {
     return convertEncoding<char, char, shiftJISDecode, UTF8Encode>(std::string(str));
 }
 
