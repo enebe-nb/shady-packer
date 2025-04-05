@@ -340,7 +340,7 @@ ShadyLua::FontProxy::FontProxy() {
     offsetX = offsetY = charSpaceX = charSpaceY = 0;
     bufferSize = 100000;
     r1 = g1 = b1 = b2 = r2 = g2 = 0xff;
-    strcpy_s(faceName, (char*)0x858764);
+    strcpy_s(faceName, SokuLib::defaultFontName);
 }
 
 template <typename T> static inline T& castFromPtr(size_t addr) { return *(T*)addr; }

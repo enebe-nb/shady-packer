@@ -30,6 +30,7 @@ private:
     SokuLib::Sprite viewPreview;
     SokuLib::MenuCursor viewCursor;
     SokuLib::Guide guide;
+    void* translationPack = 0;
     int orderCursor = -1;
     int state = 0;
     int optionCount = 0;
