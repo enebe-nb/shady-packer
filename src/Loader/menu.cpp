@@ -38,7 +38,7 @@ namespace {
 	} *intlFn = 0;
 
 	SokuLib::FontDescription fontTitle {
-		"Tahoma",
+		"Verdana",
 		0xff, 0xa0, 0xff, 0xa0, 0xff, 0xff,
 		20, 400,
 		false, true, false,
@@ -46,7 +46,7 @@ namespace {
 	};
 
 	SokuLib::FontDescription fontDesc {
-		"Tahoma",
+		"Verdana",
 		0xff, 0xa0, 0xff, 0xa0, 0xff, 0xff,
 		14, 300,
 		false, true, true,

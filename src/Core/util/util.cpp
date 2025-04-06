@@ -182,6 +182,8 @@ namespace {
 						if (watcher = _find(oldFilename)) {
 							watcher->filename = filename;
 							changes.push_back({watcher, ShadyUtil::FileWatcher::RENAMED});
+						} else if (watcher = _find(filename)) {
+							changes.push_back({watcher, ShadyUtil::FileWatcher::CREATED});
 						} break;
 					}
 
