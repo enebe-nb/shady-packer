@@ -5,9 +5,10 @@ cmake_policy(SET CMP0091 NEW)
 string(TIMESTAMP SHADY_VER_DAY "%m%d" UTC)
 string(TIMESTAMP SHADY_VER_YEAR "%Y" UTC)
 project(shady-packer
-	VERSION 2.7.${SHADY_VER_YEAR}.${SHADY_VER_DAY}
+	VERSION 2.8.${SHADY_VER_YEAR}.${SHADY_VER_DAY}
 	DESCRIPTION "Tools for a specific fighting game.")
 set(SHADY_VERSION ${PROJECT_VERSION})
+set(SHADY_DESCRIPTION "A specific fighting game resource manipulator.")
 string(REPLACE . , SHADY_VERSION_COMMA ${SHADY_VERSION})
 
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")

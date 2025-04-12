@@ -3,10 +3,10 @@
 
 LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_US
 
-1 ICON "icon.ico"
+@SHADY_ICON_STRING@
 
-1 VERSIONINFO
-FILEVERSION         @SHADY_VERSION_COMMA@
+VS_VERSION_INFO VERSIONINFO
+    FILEVERSION     @SHADY_VERSION_COMMA@
     PRODUCTVERSION  @SHADY_VERSION_COMMA@
     FILEFLAGSMASK   VS_FFI_FILEFLAGSMASK
 #ifndef DEBUG
@@ -15,7 +15,7 @@ FILEVERSION         @SHADY_VERSION_COMMA@
     FILEFLAGS       VS_FF_DEBUG
 #endif
     FILEOS          VOS__WINDOWS32
-    FILETYPE        VFT_APP
+    FILETYPE        @SHADY_FILETYPE@
     FILESUBTYPE     VFT2_UNKNOWN
 BEGIN
     BLOCK "StringFileInfo"
@@ -26,7 +26,7 @@ BEGIN
             VALUE "FileDescription", "@SHADY_DESCRIPTION@"
             VALUE "FileVersion", "@SHADY_VERSION@"
             VALUE "InternalName", "@SHADY_TARGET_NAME@"
-            VALUE "OriginalFilename", "@SHADY_TARGET_NAME@.exe"
+            VALUE "OriginalFilename", "@SHADY_TARGET_FILE@"
             VALUE "ProductName", "@SHADY_NAME@"
             VALUE "ProductVersion", "@SHADY_VERSION@"
             VALUE "License", "LGPL\0"
