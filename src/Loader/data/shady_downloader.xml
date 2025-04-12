@@ -3,18 +3,23 @@
 	<static id="0" xposition="35" yposition="22" mirror="0">
 		<image name="loader_titleM.bmp" xposition="0" yposition="0" width="210" height="80"/>
 	</static>
-	<static id="0" xposition="25" yposition="75" mirror="0">
-		<image name="profile_list_seat.bmp" xposition="24" yposition="24" width="202" height="290"/>
+	<static id="0" xposition="0" yposition="0" mirror="0">
+		<image name="profile_list_seat.bmp" xposition="0" yposition="0" width="640" height="480"/>
 	</static>
 	<mutable id="100" xposition="56" yposition="106"/>
 	<slidervert id="101" xposition="245" yposition="100" mirror="0">
 		<image name="scroll.bmp" xposition="0" yposition="0" width="2" height="286"/>
 	</slidervert>
-	<mutable id="200" xposition="272" yposition="98"/>
-	<mutable id="201" xposition="272" yposition="124"/>
+	<!--PackTitle-->
+	<mutable id="200" xposition="265" yposition="93"/>
+	<!--Text-->
+	<mutable id="201" xposition="273" yposition="127"/>
+	<!--Options-->
 	<mutable id="202" xposition="490" yposition="280"/>
-	<mutable id="203" xposition="272" yposition="264"/>
-	<static id="300" xposition="190" yposition="208" mirror="0">
+	<!--Preview-->
+	<mutable id="203" xposition="267" yposition="264"/>
+	<!--Zero Hint-->
+	<static id="300" xposition="25" yposition="208" mirror="0">
 		<image name="loading.bmp" xposition="0" yposition="0" width="260" height="64"/>
 	</static>
 </layout>
