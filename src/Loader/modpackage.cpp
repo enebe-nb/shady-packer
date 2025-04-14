@@ -365,7 +365,10 @@ void ModPackage::CheckUpdates() {
 			if (p->watcher == current) { package = p; break; }
 		} }
 
-		if (package) switch (current->action) {
+		if (package) {
+			static std::mutex localMutex;
+			std::lock_guard lock(localMutex);
+		switch (current->action) {
 		case ShadyUtil::FileWatcher::CREATED:
 			EnablePackage(package);
 			break;
@@ -379,6 +382,6 @@ void ModPackage::CheckUpdates() {
 			DisablePackage(package);
 			EnablePackage(package);
 			break;
-		}
+		}}
 	}
 }

@@ -118,6 +118,7 @@ namespace {
 	struct Change {
 		ShadyUtil::FileWatcher* watcher;
 		ShadyUtil::FileWatcher::Action action;
+		inline bool operator==(const Change& o) { return watcher == o.watcher && action == o.action; }
 	};
 	std::list<Change> changes;
 
@@ -129,9 +130,20 @@ namespace {
 		std::filesystem::path folder;
 		std::list<ShadyUtil::FileWatcher*> files;
 
+		inline std::wstring _trunk(const std::wstring_view& filename) {
+			size_t len = filename.find_first_of(L"\\/");
+			if (len == std::string_view::npos) return std::wstring(filename);
+			return std::wstring(filename.substr(0, len));
+		}
+
 		inline ShadyUtil::FileWatcher* _find(const std::wstring_view& filename) {
 			for (auto file : files) if (file->filename == filename) return file;
 			return 0;
+		}
+
+		inline void _push_unique(const Change& newchange) {
+			for (auto& change : changes) if (change == newchange) return;
+			changes.push_back(newchange);
 		}
 
 		static inline Delegate* create(const std::filesystem::path& folder) {
@@ -144,7 +156,7 @@ namespace {
 			delegate->handle = handle;
 			delegate->overlapped.hEvent = CreateEvent(nullptr, true, false, nullptr);
 			if (!delegate->overlapped.hEvent) throw std::runtime_error("Fail to create a event " + std::to_string(GetLastError())); // TODO
-			if (!ReadDirectoryChangesW(handle, delegate->buffer, bufferSize, false,
+			if (!ReadDirectoryChangesW(handle, delegate->buffer, bufferSize, true,
 				FILE_NOTIFY_CHANGE_FILE_NAME | FILE_NOTIFY_CHANGE_DIR_NAME | FILE_NOTIFY_CHANGE_LAST_WRITE,
 				nullptr, &delegate->overlapped, nullptr)) throw std::runtime_error("Fail to read directory (start) " + std::to_string(GetLastError())); // TODO
 			delegate->folder = folder;
@@ -166,14 +178,14 @@ namespace {
 				FILE_NOTIFY_INFORMATION* info = reinterpret_cast<FILE_NOTIFY_INFORMATION*>(buffer);
 				std::wstring_view oldFilename;
 				if (bytes) for(;;) {
-					std::wstring_view filename(info->FileName, info->FileNameLength/sizeof(WCHAR));
+					std::wstring filename = _trunk(std::wstring_view(info->FileName, info->FileNameLength/sizeof(WCHAR)));
 
 					ShadyUtil::FileWatcher* watcher;
 					switch (info->Action) {
 					case FILE_ACTION_ADDED:
 					case FILE_ACTION_REMOVED:
 					case FILE_ACTION_MODIFIED:
-						if (watcher = _find(filename)) changes.push_back({watcher, (ShadyUtil::FileWatcher::Action)info->Action});
+						if (watcher = _find(filename)) _push_unique({watcher, (ShadyUtil::FileWatcher::Action)info->Action});
 						break;
 					case FILE_ACTION_RENAMED_OLD_NAME:
 						oldFilename = filename;
@@ -181,9 +193,9 @@ namespace {
 					case FILE_ACTION_RENAMED_NEW_NAME:
 						if (watcher = _find(oldFilename)) {
 							watcher->filename = filename;
-							changes.push_back({watcher, ShadyUtil::FileWatcher::RENAMED});
+							_push_unique({watcher, ShadyUtil::FileWatcher::RENAMED});
 						} else if (watcher = _find(filename)) {
-							changes.push_back({watcher, ShadyUtil::FileWatcher::CREATED});
+							_push_unique({watcher, ShadyUtil::FileWatcher::CREATED});
 						} break;
 					}
 
@@ -192,7 +204,7 @@ namespace {
 				}
 			}
 
-			if (!ReadDirectoryChangesW(handle, buffer, bufferSize, false,
+			if (!ReadDirectoryChangesW(handle, buffer, bufferSize, true,
 				FILE_NOTIFY_CHANGE_FILE_NAME | FILE_NOTIFY_CHANGE_DIR_NAME | FILE_NOTIFY_CHANGE_LAST_WRITE,
 				nullptr, &overlapped, nullptr)) throw std::runtime_error("Fail to read directory (loop) " + std::to_string(GetLastError())); // TODO
 		};
