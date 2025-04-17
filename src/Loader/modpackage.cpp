@@ -333,12 +333,6 @@ void LoadPackage() {
 	}
 
 	if (iniAutoUpdate) ModPackage::LoadFromRemote();
-	std::filesystem::path loaderPack = ModPackage::basePath / L"shady-loader.dat";
-	if (std::filesystem::exists(loaderPack)
-		|| std::filesystem::exists(loaderPack.replace_extension(L".zip"))
-		|| std::filesystem::exists(loaderPack.replace_extension(L""))) {
-		ModPackage::basePackage->merge(loaderPack);
-	}
 }
 
 void UnloadPackage() {

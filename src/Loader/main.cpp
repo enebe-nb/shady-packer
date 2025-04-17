@@ -12,6 +12,7 @@ namespace {
 	const BYTE TARGET_HASH[16] = { 0xdf, 0x35, 0xd1, 0xfb, 0xc7, 0xb5, 0x83, 0x31, 0x7a, 0xda, 0xbe, 0x8c, 0xd9, 0xf5, 0x3b, 0x2e };
 	bool _initialized = false, _initialized2 = false;
 	auto __onRender = reinterpret_cast<bool (__fastcall *)(void* renderer)>(0x00444790);
+	auto __onSokuSetup = reinterpret_cast<bool (__fastcall *)(void*, int, void*)>(0x00407970);
 }
 bool iniAutoUpdate;
 bool iniUseLoadLock;
@@ -61,6 +62,12 @@ static bool __fastcall onRender(void* renderer) {
     return ret;
 }
 
+static bool __fastcall onSokuSetup(void* self, int unused, void* data) {
+	auto path = std::filesystem::relative(ModPackage::basePath / L"shady-loader.dat");
+	if (std::filesystem::is_regular_file(path)) SokuLib::appendDatFile(path.string().c_str());
+	return __onSokuSetup(self, unused, data);
+}
+
 extern "C" __declspec(dllexport) bool Initialize(HMODULE hMyModule, HMODULE hParentModule) {
 	if (!_initialized) _initialized = true;
 	else return FALSE;
@@ -70,9 +77,10 @@ extern "C" __declspec(dllexport) bool Initialize(HMODULE hMyModule, HMODULE hPar
 #else
 	Logger::Initialize(Logger::LOG_ERROR | Logger::LOG_WARNING);
 #endif
-	DWORD prot; VirtualProtect((LPVOID)0x0043dda6, 5, PAGE_EXECUTE_WRITECOPY, &prot);
+	DWORD prot; VirtualProtect((LPVOID)TEXT_SECTION_OFFSET, TEXT_SECTION_SIZE, PAGE_EXECUTE_WRITECOPY, &prot);
 	__onRender = SokuLib::TamperNearJmpOpr(0x0043dda6, onRender);
-	VirtualProtect((LPVOID)0x0043dda6, 5, prot, &prot);
+	__onSokuSetup = SokuLib::TamperNearCall(0x007fb871, onSokuSetup);
+	VirtualProtect((LPVOID)TEXT_SECTION_OFFSET, TEXT_SECTION_SIZE, prot, &prot);
 
 	GetModulePath(hMyModule, ModPackage::basePath);
 	ModPackage::basePackage.reset(new ShadyCore::PackageEx(ModPackage::basePath));
