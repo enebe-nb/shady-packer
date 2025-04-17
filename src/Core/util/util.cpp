@@ -130,10 +130,11 @@ namespace {
 		std::filesystem::path folder;
 		std::list<ShadyUtil::FileWatcher*> files;
 
-		inline std::wstring _trunk(const std::wstring_view& filename) {
+		inline bool _trunk(const std::wstring_view& filename, std::wstring& out) {
 			size_t len = filename.find_first_of(L"\\/");
-			if (len == std::string_view::npos) return std::wstring(filename);
-			return std::wstring(filename.substr(0, len));
+			if (len == std::string_view::npos) { out = filename; return false; }
+			out = filename.substr(0, len);
+			return true;
 		}
 
 		inline ShadyUtil::FileWatcher* _find(const std::wstring_view& filename) {
@@ -178,12 +179,15 @@ namespace {
 				FILE_NOTIFY_INFORMATION* info = reinterpret_cast<FILE_NOTIFY_INFORMATION*>(buffer);
 				std::wstring_view oldFilename;
 				if (bytes) for(;;) {
-					std::wstring filename = _trunk(std::wstring_view(info->FileName, info->FileNameLength/sizeof(WCHAR)));
+					std::wstring filename;
+					bool wasTree = _trunk(std::wstring_view(info->FileName, info->FileNameLength/sizeof(WCHAR)), filename);
 
 					ShadyUtil::FileWatcher* watcher;
 					switch (info->Action) {
 					case FILE_ACTION_ADDED:
 					case FILE_ACTION_REMOVED:
+						if (watcher = _find(filename)) _push_unique({watcher, wasTree ? ShadyUtil::FileWatcher::MODIFIED : (ShadyUtil::FileWatcher::Action)info->Action});
+						break;
 					case FILE_ACTION_MODIFIED:
 						if (watcher = _find(filename)) _push_unique({watcher, (ShadyUtil::FileWatcher::Action)info->Action});
 						break;
