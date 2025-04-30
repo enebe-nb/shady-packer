@@ -571,7 +571,21 @@ static SokuLib::v2::GameObject* battle_GameObject_createObject(SokuLib::v2::Game
     char direction = luaL_optinteger(L, 5, object->direction);
     char layer = luaL_optinteger(L, 6, 1);
     size_t dataSize = 0;
-    const char* data = luaL_optlstring(L, 7, "", &dataSize);
+    const char* data = nullptr;
+    std::vector<float> fdata;
+    if lua_istable(L, 7) {
+        lua_pushnil(L);
+        while (lua_next(L, 7)) {
+            fdata.push_back((float)luaL_checknumber(L, -1));
+            lua_pop(L, 1);
+        }
+        data = reinterpret_cast<const char*>(fdata.data());
+        dataSize = fdata.size();
+    }
+    else {
+        data = luaL_optlstring(L, 7, "", &dataSize);
+        dataSize /= 4;
+    }
     return object->createObject(actionId, x, y, direction, layer, dataSize? (float*)data : 0, dataSize);
 }
 
@@ -582,7 +596,20 @@ static SokuLib::v2::GameObject* battle_GameObject_createChild(SokuLib::v2::GameO
     char direction = luaL_optinteger(L, 5, object->direction);
     char layer = luaL_optinteger(L, 6, 1);
     size_t dataSize = 0;
-    const char* data = luaL_optlstring(L, 7, "", &dataSize);
+    const char* data = nullptr;
+    std::vector<float> fdata;
+    if lua_istable(L, 7) {    
+        lua_pushnil(L);
+        while (lua_next(L, 7)) {
+            fdata.push_back((float)luaL_checknumber(L, -1));
+            lua_pop(L, 1);
+        }
+        data = reinterpret_cast<const char *>(fdata.data());
+        dataSize = fdata.size();
+    } else {
+        data = luaL_optlstring(L, 7, "", &dataSize);
+        dataSize /= 4;
+    }
     return object->createChild(actionId, x, y, direction, layer, dataSize? (float*)data : 0, dataSize);
 }
 
@@ -601,7 +628,21 @@ static SokuLib::v2::GameObject* battle_Player_createObject(SokuLib::v2::Player* 
     char direction = luaL_optinteger(L, 5, player->direction);
     char layer = luaL_optinteger(L, 6, 1);
     size_t dataSize = 0;
-    const char* data = luaL_optlstring(L, 7, "", &dataSize);
+    const char* data = nullptr;
+    std::vector<float> fdata;
+    if lua_istable(L, 7) {
+        lua_pushnil(L);
+        while (lua_next(L, 7)) {
+            fdata.push_back((float)luaL_checknumber(L, -1));
+            lua_pop(L, 1);
+        }
+        data = reinterpret_cast<const char*>(fdata.data());
+        dataSize = fdata.size();
+    }
+    else {
+        data = luaL_optlstring(L, 7, "", &dataSize);
+        dataSize /= 4;
+    }
     return player->objectList->createObject(0, player, (SokuLib::Action)actionId, x, y, direction, layer, dataSize ? (void*)data : 0, dataSize);
 }
 
