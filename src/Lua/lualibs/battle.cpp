@@ -2,6 +2,7 @@
 #include "../script.hpp"
 #include "gui.hpp"
 #include <LuaBridge/LuaBridge.h>
+#include <LuaBridge/Vector.h>
 
 using namespace luabridge;
 
@@ -573,18 +574,18 @@ static SokuLib::v2::GameObject* battle_GameObject_createObject(SokuLib::v2::Game
     size_t dataSize = 0;
     const char* data = nullptr;
     std::vector<float> fdata;
-    if lua_istable(L, 7) {
-        lua_pushnil(L);
-        while (lua_next(L, 7)) {
-            fdata.push_back((float)luaL_checknumber(L, -1));
-            lua_pop(L, 1);
-        }
-        data = reinterpret_cast<const char*>(fdata.data());
-        dataSize = fdata.size();
-    }
-    else {
-        data = luaL_optlstring(L, 7, "", &dataSize);
-        dataSize /= 4;
+    switch(lua_type(L, 7)) {
+        case LUA_TNONE: break;
+        case LUA_TTABLE:
+            fdata = Stack<std::vector<float>>::get(L, 7);
+            data = reinterpret_cast<const char*>(fdata.data());
+            dataSize = fdata.size();
+            break;
+        case LUA_TSTRING: 
+            data = lua_tolstring(L, 7, &dataSize);
+            dataSize /= 4;
+            break;
+        default: luaL_argerror(L, 7, "optional argument can only accept string or table of numbers");
     }
     return object->createObject(actionId, x, y, direction, layer, dataSize? (float*)data : 0, dataSize);
 }
@@ -598,17 +599,18 @@ static SokuLib::v2::GameObject* battle_GameObject_createChild(SokuLib::v2::GameO
     size_t dataSize = 0;
     const char* data = nullptr;
     std::vector<float> fdata;
-    if lua_istable(L, 7) {    
-        lua_pushnil(L);
-        while (lua_next(L, 7)) {
-            fdata.push_back((float)luaL_checknumber(L, -1));
-            lua_pop(L, 1);
-        }
-        data = reinterpret_cast<const char *>(fdata.data());
-        dataSize = fdata.size();
-    } else {
-        data = luaL_optlstring(L, 7, "", &dataSize);
-        dataSize /= 4;
+    switch(lua_type(L, 7)) {
+        case LUA_TNONE: break;
+        case LUA_TTABLE:
+            fdata = Stack<std::vector<float>>::get(L, 7);
+            data = reinterpret_cast<const char*>(fdata.data());
+            dataSize = fdata.size();
+            break;
+        case LUA_TSTRING: 
+            data = lua_tolstring(L, 7, &dataSize);
+            dataSize /= 4;
+            break;
+        default: luaL_argerror(L, 7, "optional argument can only accept string or table of numbers");
     }
     return object->createChild(actionId, x, y, direction, layer, dataSize? (float*)data : 0, dataSize);
 }
@@ -630,18 +632,18 @@ static SokuLib::v2::GameObject* battle_Player_createObject(SokuLib::v2::Player* 
     size_t dataSize = 0;
     const char* data = nullptr;
     std::vector<float> fdata;
-    if lua_istable(L, 7) {
-        lua_pushnil(L);
-        while (lua_next(L, 7)) {
-            fdata.push_back((float)luaL_checknumber(L, -1));
-            lua_pop(L, 1);
-        }
-        data = reinterpret_cast<const char*>(fdata.data());
-        dataSize = fdata.size();
-    }
-    else {
-        data = luaL_optlstring(L, 7, "", &dataSize);
-        dataSize /= 4;
+    switch(lua_type(L, 7)) {
+        case LUA_TNONE: break;
+        case LUA_TTABLE:
+            fdata = Stack<std::vector<float>>::get(L, 7);
+            data = reinterpret_cast<const char*>(fdata.data());
+            dataSize = fdata.size();
+            break;
+        case LUA_TSTRING: 
+            data = lua_tolstring(L, 7, &dataSize);
+            dataSize /= 4;
+            break;
+        default: luaL_argerror(L, 7, "optional argument can only accept string or table of numbers");
     }
     return player->objectList->createObject(0, player, (SokuLib::Action)actionId, x, y, direction, layer, dataSize ? (void*)data : 0, dataSize);
 }

@@ -69,11 +69,12 @@ namespace {
         bool enabled = true;
         inline Callback(lua_State* L, int ref, size_t argc) : L(L), ref(ref), argc(argc) {}
 
-        bool call(cpustate& state) {
+        bool call(cpustate& state, bool isRegisterWritable = false) {
             if (!enabled) return false;
 
             lua_rawgeti(L, LUA_REGISTRYINDEX, ref);
-            Stack<const cpustate&>::push(L, state);
+            if (isRegisterWritable) Stack<cpustate&>::push(L, state);
+            else Stack<const cpustate&>::push(L, state);
             int i = 0; while(i < argc) {
                 lua_pushinteger(L, ((int*)state.esp)[++i]);
             }
@@ -117,9 +118,10 @@ namespace {
 
     struct BaseHook {
         std::list<RefCountedObjectPtr<Callback>> callbacks;
+        virtual inline bool isRegisterWritable() { return false; }
 
         int __cdecl listener(cpustate state) {
-            for (auto& cb : callbacks) if (cb->call(state)) return 1;
+            for (auto& cb : callbacks) if (cb->call(state, isRegisterWritable())) return 1;
             return 0;
         }
 
@@ -200,6 +202,7 @@ namespace {
             0x90, 0x90, 0x90, 0x90,
             0x90, 0x90, 0x90, 0x90, 0x90,
         };
+        virtual inline bool isRegisterWritable() { return true; }
 
     public:
         inline TrampHook(DWORD addr, size_t opsize) : BaseHook((void*)shim, sizeof(shim)) {
@@ -423,6 +426,8 @@ void ShadyLua::LualibMemory(lua_State* L) {
 
             .addFunction("setIPC", memory_setIPC)
             .addFunction("getIPC", memory_getIPC)
+            .addFunction("new", reinterpret_cast<size_t (*const)(size_t)>(SokuLib::NewFct))
+            .addFunction("delete", reinterpret_cast<void (*const)(size_t)>(SokuLib::DeleteFct))
         .endNamespace()
     ;
 }
