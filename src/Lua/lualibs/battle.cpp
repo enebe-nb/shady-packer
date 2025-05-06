@@ -686,6 +686,17 @@ template <typename T> static inline T& castFromPtr(size_t addr) { return *(T*)ad
 void ShadyLua::LualibBattle(lua_State* L) {
     getGlobalNamespace(L)
         .beginNamespace("battle")
+            .beginClass<SokuLib::KeyInputLight>("KeyInputLight")
+                .addStaticFunction("fromPtr", castFromPtr<SokuLib::KeyInputLight>)
+                .addData("axisH", &SokuLib::KeyInputLight::horizontalAxis, false)
+                .addData("axisV", &SokuLib::KeyInputLight::verticalAxis, false)
+                .addData("a", &SokuLib::KeyInputLight::a, false)
+                .addData("b", &SokuLib::KeyInputLight::b, false)
+                .addData("c", &SokuLib::KeyInputLight::c, false)
+                .addData("d", &SokuLib::KeyInputLight::d, false)
+                .addData("change", &SokuLib::KeyInputLight::changeCard, false)
+                .addData("spell", &SokuLib::KeyInputLight::spellcard, false)
+            .endClass()
             .beginClass<SokuLib::RenderInfo>("RenderInfo")
                 .addStaticFunction("fromPtr", castFromPtr<SokuLib::RenderInfo>)
                 .addConstructor<void (*)()>()
@@ -700,6 +711,7 @@ void ShadyLua::LualibBattle(lua_State* L) {
             .beginClass<SokuLib::v2::GameObjectBase>("ObjectBase")
                 .addStaticFunction("fromPtr", castFromPtr<SokuLib::v2::GameObjectBase>)
                 .addProperty("ptr", battle_GameObjectBase_getPtr, 0)
+                .addProperty("center", &SokuLib::v2::GameObjectBase::center, true)
                 .addProperty("position", &SokuLib::v2::GameObjectBase::position, true)
                 .addProperty("speed", &SokuLib::v2::GameObjectBase::speed, true)
                 .addProperty("gravity", &SokuLib::v2::GameObjectBase::gravity, true)
@@ -742,6 +754,9 @@ void ShadyLua::LualibBattle(lua_State* L) {
                 .addProperty("parentPlayerB", &SokuLib::v2::GameObject::parentPlayerB)
                 .addProperty("parentObjectB", &SokuLib::v2::GameObject::parentB)
 
+                .addProperty("gpShort", ShadyLua::ArrayRef_from(&SokuLib::v2::GameObject::gpShort), true)
+                .addProperty("gpFloat", ShadyLua::ArrayRef_from(&SokuLib::v2::GameObject::gpFloat), true)
+
                 .addFunction("getChildrenB", battle_GameObject_getChildren)
                 .addFunction("setTail", &SokuLib::v2::GameObject::setTail)
                 .addFunction("getCustomData", battle_GameObject_getCustomData)
@@ -777,8 +792,11 @@ void ShadyLua::LualibBattle(lua_State* L) {
                 .addProperty("confusionDebuffTimer", &SokuLib::v2::Player::confusionDebuffTimer, true)
                 .addProperty("SORDebuffTimer", &SokuLib::v2::Player::SORDebuffTimer, true)
                 .addProperty("healCharmTimer", &SokuLib::v2::Player::healCharmTimer, true)
-
+                
+                .addProperty("input", MEMBER_ADDRESS(SokuLib::KeyInputLight, SokuLib::v2::Player, inputData.keyInput), false)
+                .addProperty("inputBuffered", MEMBER_ADDRESS(SokuLib::KeyInputLight, SokuLib::v2::Player, inputData.bufferedKeyInput), false)
                 .addProperty("gpShort", ShadyLua::ArrayRef_from(&SokuLib::v2::Player::gpShort), true)
+                .addProperty("gpFloat", ShadyLua::ArrayRef_from(&SokuLib::v2::Player::gpFloat), true)
 
                 .addProperty("handCount", MEMBER_ADDRESS(unsigned char, SokuLib::v2::Player, handInfo.cardCount), false)
                 .addFunction("handGetId", battle_Player_handGetId)
