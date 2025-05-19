@@ -15,7 +15,7 @@ namespace ShadyLua {
         using fnDestroy_t = void (*)(void* userdata);
 
         lua_State* const L;
-        std::mutex mutex;
+        std::recursive_mutex mutex;
         void* const userdata;
     protected:
         fnOpen_t fnOpen;

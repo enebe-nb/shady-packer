@@ -71,6 +71,7 @@ namespace {
 
         bool call(cpustate& state, bool isRegisterWritable = false) {
             if (!enabled) return false;
+            std::lock_guard scriptGuard(ShadyLua::ScriptMap[L]->mutex);
 
             lua_rawgeti(L, LUA_REGISTRYINDEX, ref);
             if (isRegisterWritable) Stack<cpustate&>::push(L, state);
