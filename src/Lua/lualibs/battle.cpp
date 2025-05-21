@@ -564,6 +564,20 @@ static std::string battle_GameObject_getCustomData(SokuLib::v2::GameObject* obje
     int size = luaL_checkinteger(L, 2);
     return std::string((const char*)object->customData, size);
 }
+static int battle_GameObject_getCustomDataRef(lua_State* L)
+{
+    auto o = Stack<SokuLib::v2::GameObject*>::get(L, 1);
+    Stack<ShadyLua::VarArrayRef<float>>::push(L, ShadyLua::VarArrayRef<float>(o->customData, 0));
+    return 1;
+}
+static int battle_GameObject_setCustomDataRef(lua_State* L)
+{
+    auto o = Stack<SokuLib::v2::GameObject*>::get(L, 1);
+    if (!lua_istable(L, 2)) luaL_argerror(L, 2, "expected a table element.");
+    auto t = Stack<std::vector<float>>::get(L, 2);
+    memcpy(o->customData, t.data(), t.size() * sizeof(float));
+    return 0;
+}
 
 static SokuLib::v2::GameObject* battle_GameObject_createObject(SokuLib::v2::GameObject* object, lua_State* L) {
     int actionId = luaL_checkinteger(L, 2);
@@ -686,17 +700,6 @@ template <typename T> static inline T& castFromPtr(size_t addr) { return *(T*)ad
 void ShadyLua::LualibBattle(lua_State* L) {
     getGlobalNamespace(L)
         .beginNamespace("battle")
-            .beginClass<SokuLib::KeyInputLight>("KeyInputLight")
-                .addStaticFunction("fromPtr", castFromPtr<SokuLib::KeyInputLight>)
-                .addData("axisH", &SokuLib::KeyInputLight::horizontalAxis, false)
-                .addData("axisV", &SokuLib::KeyInputLight::verticalAxis, false)
-                .addData("a", &SokuLib::KeyInputLight::a, false)
-                .addData("b", &SokuLib::KeyInputLight::b, false)
-                .addData("c", &SokuLib::KeyInputLight::c, false)
-                .addData("d", &SokuLib::KeyInputLight::d, false)
-                .addData("change", &SokuLib::KeyInputLight::changeCard, false)
-                .addData("spell", &SokuLib::KeyInputLight::spellcard, false)
-            .endClass()
             .beginClass<SokuLib::RenderInfo>("RenderInfo")
                 .addStaticFunction("fromPtr", castFromPtr<SokuLib::RenderInfo>)
                 .addConstructor<void (*)()>()
@@ -730,6 +733,7 @@ void ShadyLua::LualibBattle(lua_State* L) {
 
                 .addProperty("hp", &SokuLib::v2::GameObjectBase::hp, true)
                 .addProperty("maxHp", &SokuLib::v2::GameObjectBase::maxHP, true)
+                .addProperty("skillIndex", &SokuLib::v2::GameObjectBase::skillIndex, true)
                 .addProperty("collisionType", MEMBER_ADDRESS(int, SokuLib::v2::GameObjectBase, collisionType), true)
                 .addProperty("collisionLimit", MEMBER_ADDRESS(unsigned char, SokuLib::v2::GameObjectBase, collisionLimit), true)
                 .addProperty("hitStop", &SokuLib::v2::GameObjectBase::hitStop, true)
@@ -751,9 +755,11 @@ void ShadyLua::LualibBattle(lua_State* L) {
             .deriveClass<SokuLib::v2::GameObject, SokuLib::v2::GameObjectBase>("Object")
                 .addStaticFunction("fromPtr", castFromPtr<SokuLib::v2::GameObject>)
                 .addProperty("lifetime", &SokuLib::v2::GameObject::lifetime, true)
+                .addProperty("layer", &SokuLib::v2::GameObject::layer, true)
                 .addProperty("parentPlayerB", &SokuLib::v2::GameObject::parentPlayerB)
                 .addProperty("parentObjectB", &SokuLib::v2::GameObject::parentB)
-
+                
+                .addProperty("customData", battle_GameObject_getCustomDataRef, battle_GameObject_setCustomDataRef)
                 .addProperty("gpShort", ShadyLua::ArrayRef_from(&SokuLib::v2::GameObject::gpShort), true)
                 .addProperty("gpFloat", ShadyLua::ArrayRef_from(&SokuLib::v2::GameObject::gpFloat), true)
 

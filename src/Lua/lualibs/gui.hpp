@@ -95,7 +95,13 @@ namespace ShadyLua {
     };
 
     template<class T, std::size_t N> class ArrayRef : public std::array<T, N> {};
-    template <typename T, size_t N> static ShadyLua::ArrayRef<T, N>* ArrayRef_from(T(*ptr)[N]) { return (ShadyLua::ArrayRef<T, N>*)(ptr); }
+    template<class T> class VarArrayRef
+    {public:
+        T* const addr;
+        const size_t size;
+        VarArrayRef(T* a, size_t s=3):addr(a), size(s) {}
+    };
+    template <typename T, size_t N> static ShadyLua::ArrayRef<T, N>* ArrayRef_from(T(*ptr)[N]){ return (ShadyLua::ArrayRef<T, N>*)(ptr); }
     template <typename T, class C, size_t N> static ShadyLua::ArrayRef<T, N> C::* ArrayRef_from(T(C::*ptr)[N]) { return (ShadyLua::ArrayRef<T, N> C::*)(ptr); }
 }
 
@@ -106,7 +112,11 @@ struct Stack<ShadyLua::ArrayRef<T, N>> {
     static int __index(lua_State* L) {
         if (!lua_istable(L, 1)) return luaL_argerror(L, 1, "expected a table element.");
         int index = luaL_checkinteger(L, 2);
-        if (index <= 0 || index > N) return luaL_argerror(L, 2, "index out of bounds.");
+        if (index == 0 || index > int(N) || index < -int(N)) {
+            lua_pushnil(L);
+            return 1;//luaL_argerror(L, 2, "index out of bounds.");
+        }
+        index = (index - int(index > 0) + N) % N + 1;
 
         lua_getmetatable(L, 1);
         lua_pushstring(L, "__addr");
@@ -114,14 +124,15 @@ struct Stack<ShadyLua::ArrayRef<T, N>> {
         auto& self = *(ShadyLua::ArrayRef<T, N>*)(lua_topointer(L, -1));
         lua_pop(L, 2);
 
-        Stack<T>::push(L, self[index]);
+        Stack<T>::push(L, self[index-1]);
         return 1;
     }
 
     static int __newindex(lua_State* L) {
         if (!lua_istable(L, 1)) return luaL_argerror(L, 1, "expected a table element.");
         int index = luaL_checkinteger(L, 2);
-        if (index <= 0 || index > N) return luaL_argerror(L, 2, "index out of bounds.");
+        if (index == 0 || index > int(N) || index < -int(N)) return luaL_argerror(L, 2, "index out of bounds.");
+        index = (index - int(index > 0) + N) % N + 1;
         if (!Stack<T>::isInstance(L, 3)) return luaL_argerror(L, 3, "array can't accept this variable type.");
 
         lua_getmetatable(L, 1);
@@ -130,7 +141,7 @@ struct Stack<ShadyLua::ArrayRef<T, N>> {
         auto& self = *(ShadyLua::ArrayRef<T, N>*)(lua_topointer(L, -1));
         lua_pop(L, 2);
 
-        self[index] = Stack<T>::get(L, 3);
+        self[index-1] = Stack<T>::get(L, 3);
         return 0;
     }
 
@@ -138,10 +149,33 @@ struct Stack<ShadyLua::ArrayRef<T, N>> {
         lua_pushinteger(L, N);
         return 1;
     }
+    static int _next(lua_State* L) {//t, k
+        if (!lua_istable(L, 1)) return luaL_argerror(L, 1, "expected a table element.");
+        int index = 0;
+        if (lua_isinteger(L, 2))
+            index = luaL_checkinteger(L, 2);
+        ++index;
+        if (index > N) {
+            lua_pushnil(L);
+            return 1;
+        }
+        else {
+            lua_pushinteger(L, index);
+            lua_pushinteger(L, index);
+            lua_gettable(L, 1);
+        }
+        return 2;//k, v
+    }
+    static int __pairs(lua_State* L) {//t
+        lua_pushcfunction(L, &_next);
+        lua_pushvalue(L, 1);
+        lua_pushnil(L);
+        return 3;//next, t, k0
+    }
 
     static void push(lua_State* L, ShadyLua::ArrayRef<T, N> const& array) {
         lua_newtable(L);
-        lua_createtable(L, 0, 5);
+        lua_createtable(L, 0, 6);
         lua_pushvalue(L, -1);
         lua_setmetatable(L, -3);
 
@@ -156,6 +190,9 @@ struct Stack<ShadyLua::ArrayRef<T, N>> {
         lua_rawset(L, -3);
         lua_pushstring(L, "__len");
         lua_pushcfunction(L, &__len);
+        lua_rawset(L, -3);
+        lua_pushstring(L, "__pairs");
+        lua_pushcfunction(L, &__pairs);
         lua_rawset(L, -3);
         lua_pushstring(L, "__metatable");
         lua_pushnil(L);
@@ -184,5 +221,95 @@ struct Stack<ShadyLua::ArrayRef<T, N>> {
         return lua_istable(L, index) && get_length(L, index) == N;
     }
 };
+template <typename T>
+struct Stack<ShadyLua::VarArrayRef<T>>
+{
+    static int __index(lua_State* L) {
+        if (!lua_istable(L, 1)) return luaL_argerror(L, 1, "expected a table element.");
+        lua_getmetatable(L, 1);
+        lua_pushstring(L, "__size");
+        lua_rawget(L, -2);
+        size_t size = luaL_checkinteger(L, -1);
+        lua_pop(L, 1);
+        
+        int index = luaL_checkinteger(L, 2);
+        if (index <= 0 || size && index > size) return luaL_argerror(L, 2, "index out of bounds.");
 
+        lua_pushstring(L, "__addr");
+        lua_rawget(L, -2);
+        auto varray = (const T*)lua_topointer(L, -1);
+        lua_pop(L, 2);
+
+        Stack<T>::push(L, varray[index-1]);
+        return 1;
+    }
+
+    static int __newindex(lua_State* L) {
+        if (!lua_istable(L, 1)) return luaL_argerror(L, 1, "expected a table element.");
+        lua_getmetatable(L, 1);
+        lua_pushstring(L, "__size");
+        lua_rawget(L, -2);
+        size_t size = luaL_checkinteger(L, -1);
+        lua_pop(L, 1);
+        
+        int index = luaL_checkinteger(L, 2);
+        if (index <= 0 || size && index > size) return luaL_argerror(L, 2, "index out of bounds.");
+        if (!Stack<T>::isInstance(L, 3)) return luaL_argerror(L, 3, "array can't accept this variable type.");
+
+        lua_pushstring(L, "__addr");
+        lua_rawget(L, -2);
+        auto varray = (T*)lua_topointer(L, -1);
+        lua_pop(L, 2);
+
+        varray[index-1] = Stack<T>::get(L, 3);
+        return 0;
+    }
+
+    static int __len(lua_State* L) {
+        lua_getmetatable(L, 1);
+        lua_pushstring(L, "__size");
+        lua_rawget(L, -2);
+        int size = luaL_checkinteger(L, -1);
+        lua_pop(L, 2);
+        if (size)
+            lua_pushinteger(L, size);
+        else
+            lua_pushnil(L);
+        return 1;
+    }
+
+    static void push(lua_State* L, ShadyLua::VarArrayRef<T> const& varray) {
+        lua_newtable(L);
+        lua_createtable(L, 0, 6);
+        lua_pushvalue(L, -1);
+        lua_setmetatable(L, -3);
+
+        lua_pushstring(L, "__addr");
+        lua_pushlightuserdata(L, (void*)varray.addr);
+        lua_rawset(L, -3);
+        lua_pushstring(L, "__size");
+        lua_pushinteger(L, varray.size);
+        lua_rawset(L, -3);
+        lua_pushstring(L, "__index");
+        lua_pushcfunction(L, &__index);
+        lua_rawset(L, -3);
+        lua_pushstring(L, "__newindex");
+        lua_pushcfunction(L, &__newindex);
+        lua_rawset(L, -3);
+        lua_pushstring(L, "__len");
+        lua_pushcfunction(L, &__len);
+        lua_rawset(L, -3);
+        lua_pushstring(L, "__metatable");
+        lua_pushnil(L);
+        lua_rawset(L, -3);
+
+        lua_pop(L, 1);
+    }
+
+    static ShadyLua::VarArrayRef<T> get(lua_State* L, int index) = delete;
+
+    static bool isInstance(lua_State* L, int index) {
+        return lua_istable(L, index);
+    }
+};
 } // namespace luabridge
