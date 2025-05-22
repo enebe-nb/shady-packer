@@ -8,6 +8,19 @@ using namespace luabridge;
 
 #define MEMBER_ADDRESS(u,s,m) SokuLib::union_cast<u s::*>(&reinterpret_cast<char const volatile&>(((s*)0)->m))
 
+int ShadyLua::CustomDataProxy::__index(lua_State* L) {
+    int index = luaL_checkinteger(L, 2);
+    if (index <= 0) return luaL_argerror(L, 2, "index out of bounds.");
+    Stack<float>::push(L, ((float*)addr)[index - 1]);
+    return 1;
+}
+int ShadyLua::CustomDataProxy::__newindex(lua_State* L) {
+    int index = luaL_checkinteger(L, 2);
+    if (index <= 0) return luaL_argerror(L, 2, "index out of bounds.");
+    ((float*)addr)[index - 1] = Stack<float>::get(L, 3);
+    return 0;
+}
+
 namespace {
     struct playerDataHash {
         inline std::size_t operator()(const std::pair<lua_State*, SokuLib::v2::GameObjectBase*>& key) const {
@@ -564,7 +577,29 @@ static std::string battle_GameObject_getCustomData(SokuLib::v2::GameObject* obje
     int size = luaL_checkinteger(L, 2);
     return std::string((const char*)object->customData, size);
 }
-
+static ShadyLua::CustomDataProxy battle_CustomData_fromPtr(int addr) {
+    return ShadyLua::CustomDataProxy((void*)addr);
+}
+static int battle_GameObject_getCustomDataProxy(lua_State* L) {
+    auto o = Stack<SokuLib::v2::GameObject*>::get(L, 1);
+    Stack<ShadyLua::CustomDataProxy>::push(L, ShadyLua::CustomDataProxy(o->customData));
+    return 1;
+}
+static int battle_GameObject_setCustomDataProxy(lua_State* L) {
+    auto o = Stack<SokuLib::v2::GameObject*>::get(L, 1);
+    if (Stack<ShadyLua::CustomDataProxy>::isInstance(L, 2)) {
+        // TODO ignore on same addr
+        //      and maybe replace otherwise
+        //      take care with memory leaks
+    }
+    else if (lua_istable(L, 2)) {
+        LuaRef ref = LuaRef::fromStack(L, 2);
+        auto len = ref.length();
+        for (int i = 0; i < len; ++i) o->customData[i] = ref[i + 1].cast<float>();
+    }
+    else return luaL_argerror(L, 2, "expected a table element.");
+    return 0;
+}
 static SokuLib::v2::GameObject* battle_GameObject_createObject(SokuLib::v2::GameObject* object, lua_State* L) {
     int actionId = luaL_checkinteger(L, 2);
     float x = luaL_checknumber(L, 3);
@@ -697,9 +732,16 @@ void ShadyLua::LualibBattle(lua_State* L) {
                 .addData("yRotation", &SokuLib::RenderInfo::yRotation, true)
                 .addData("zRotation", &SokuLib::RenderInfo::zRotation, true)
             .endClass()
+            .beginClass<ShadyLua::CustomDataProxy>("CustomData")
+                .addStaticFunction("fromPtr", battle_CustomData_fromPtr)
+                .addFunction("__index", &ShadyLua::CustomDataProxy::__index)
+                .addFunction("__newindex", &ShadyLua::CustomDataProxy::__newindex)
+                .addFunction("__len", &ShadyLua::CustomDataProxy::__len)
+            .endClass()
             .beginClass<SokuLib::v2::GameObjectBase>("ObjectBase")
                 .addStaticFunction("fromPtr", castFromPtr<SokuLib::v2::GameObjectBase>)
                 .addProperty("ptr", battle_GameObjectBase_getPtr, 0)
+                .addProperty("center", &SokuLib::v2::GameObjectBase::center, true)
                 .addProperty("position", &SokuLib::v2::GameObjectBase::position, true)
                 .addProperty("speed", &SokuLib::v2::GameObjectBase::speed, true)
                 .addProperty("gravity", &SokuLib::v2::GameObjectBase::gravity, true)
@@ -718,6 +760,7 @@ void ShadyLua::LualibBattle(lua_State* L) {
 
                 .addProperty("hp", &SokuLib::v2::GameObjectBase::hp, true)
                 .addProperty("maxHp", &SokuLib::v2::GameObjectBase::maxHP, true)
+                .addProperty("skillIndex", &SokuLib::v2::GameObjectBase::skillIndex, true)
                 .addProperty("collisionType", MEMBER_ADDRESS(int, SokuLib::v2::GameObjectBase, collisionType), true)
                 .addProperty("collisionLimit", MEMBER_ADDRESS(unsigned char, SokuLib::v2::GameObjectBase, collisionLimit), true)
                 .addProperty("hitStop", &SokuLib::v2::GameObjectBase::hitStop, true)
@@ -739,8 +782,13 @@ void ShadyLua::LualibBattle(lua_State* L) {
             .deriveClass<SokuLib::v2::GameObject, SokuLib::v2::GameObjectBase>("Object")
                 .addStaticFunction("fromPtr", castFromPtr<SokuLib::v2::GameObject>)
                 .addProperty("lifetime", &SokuLib::v2::GameObject::lifetime, true)
+                .addProperty("layer", &SokuLib::v2::GameObject::layer, true)
                 .addProperty("parentPlayerB", &SokuLib::v2::GameObject::parentPlayerB)
                 .addProperty("parentObjectB", &SokuLib::v2::GameObject::parentB)
+                
+                .addProperty("customData", battle_GameObject_getCustomDataProxy, battle_GameObject_setCustomDataProxy)
+                .addProperty("gpShort", ShadyLua::ArrayRef_from(&SokuLib::v2::GameObject::gpShort), true)
+                .addProperty("gpFloat", ShadyLua::ArrayRef_from(&SokuLib::v2::GameObject::gpFloat), true)
 
                 .addFunction("getChildrenB", battle_GameObject_getChildren)
                 .addFunction("setTail", &SokuLib::v2::GameObject::setTail)
@@ -777,8 +825,11 @@ void ShadyLua::LualibBattle(lua_State* L) {
                 .addProperty("confusionDebuffTimer", &SokuLib::v2::Player::confusionDebuffTimer, true)
                 .addProperty("SORDebuffTimer", &SokuLib::v2::Player::SORDebuffTimer, true)
                 .addProperty("healCharmTimer", &SokuLib::v2::Player::healCharmTimer, true)
-
+                
+                .addProperty("input", MEMBER_ADDRESS(SokuLib::KeyInputLight, SokuLib::v2::Player, inputData.keyInput), false)
+                .addProperty("inputBuffered", MEMBER_ADDRESS(SokuLib::KeyInputLight, SokuLib::v2::Player, inputData.bufferedKeyInput), false)
                 .addProperty("gpShort", ShadyLua::ArrayRef_from(&SokuLib::v2::Player::gpShort), true)
+                .addProperty("gpFloat", ShadyLua::ArrayRef_from(&SokuLib::v2::Player::gpFloat), true)
 
                 .addProperty("handCount", MEMBER_ADDRESS(unsigned char, SokuLib::v2::Player, handInfo.cardCount), false)
                 .addFunction("handGetId", battle_Player_handGetId)
