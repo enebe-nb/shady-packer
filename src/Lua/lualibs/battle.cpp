@@ -8,6 +8,19 @@ using namespace luabridge;
 
 #define MEMBER_ADDRESS(u,s,m) SokuLib::union_cast<u s::*>(&reinterpret_cast<char const volatile&>(((s*)0)->m))
 
+int ShadyLua::CustomDataProxy::__index(lua_State* L) {
+    int index = luaL_checkinteger(L, 2);
+    if (index <= 0) return luaL_argerror(L, 2, "index out of bounds.");
+    Stack<float>::push(L, ((float*)addr)[index - 1]);
+    return 1;
+}
+int ShadyLua::CustomDataProxy::__newindex(lua_State* L) {
+    int index = luaL_checkinteger(L, 2);
+    if (index <= 0) return luaL_argerror(L, 2, "index out of bounds.");
+    ((float*)addr)[index - 1] = Stack<float>::get(L, 3);
+    return 0;
+}
+
 namespace {
     struct playerDataHash {
         inline std::size_t operator()(const std::pair<lua_State*, SokuLib::v2::GameObjectBase*>& key) const {
@@ -564,21 +577,29 @@ static std::string battle_GameObject_getCustomData(SokuLib::v2::GameObject* obje
     int size = luaL_checkinteger(L, 2);
     return std::string((const char*)object->customData, size);
 }
-static int battle_GameObject_getCustomDataRef(lua_State* L)
-{
+static ShadyLua::CustomDataProxy battle_CustomData_fromPtr(int addr) {
+    return ShadyLua::CustomDataProxy((void*)addr);
+}
+static int battle_GameObject_getCustomDataProxy(lua_State* L) {
     auto o = Stack<SokuLib::v2::GameObject*>::get(L, 1);
-    Stack<ShadyLua::VarArrayRef<float>>::push(L, ShadyLua::VarArrayRef<float>(o->customData, 0));
+    Stack<ShadyLua::CustomDataProxy>::push(L, ShadyLua::CustomDataProxy(o->customData));
     return 1;
 }
-static int battle_GameObject_setCustomDataRef(lua_State* L)
-{
+static int battle_GameObject_setCustomDataProxy(lua_State* L) {
     auto o = Stack<SokuLib::v2::GameObject*>::get(L, 1);
-    if (!lua_istable(L, 2)) luaL_argerror(L, 2, "expected a table element.");
-    auto t = Stack<std::vector<float>>::get(L, 2);
-    memcpy(o->customData, t.data(), t.size() * sizeof(float));
+    if (Stack<ShadyLua::CustomDataProxy>::isInstance(L, 2)) {
+        // TODO ignore on same addr
+        //      and maybe replace otherwise
+        //      take care with memory leaks
+    }
+    else if (lua_istable(L, 2)) {
+        LuaRef ref = LuaRef::fromStack(L, 2);
+        auto len = ref.length();
+        for (int i = 0; i < len; ++i) o->customData[i] = ref[i + 1].cast<float>();
+    }
+    else return luaL_argerror(L, 2, "expected a table element.");
     return 0;
 }
-
 static SokuLib::v2::GameObject* battle_GameObject_createObject(SokuLib::v2::GameObject* object, lua_State* L) {
     int actionId = luaL_checkinteger(L, 2);
     float x = luaL_checknumber(L, 3);
@@ -711,6 +732,12 @@ void ShadyLua::LualibBattle(lua_State* L) {
                 .addData("yRotation", &SokuLib::RenderInfo::yRotation, true)
                 .addData("zRotation", &SokuLib::RenderInfo::zRotation, true)
             .endClass()
+            .beginClass<ShadyLua::CustomDataProxy>("CustomData")
+                .addStaticFunction("fromPtr", battle_CustomData_fromPtr)
+                .addFunction("__index", &ShadyLua::CustomDataProxy::__index)
+                .addFunction("__newindex", &ShadyLua::CustomDataProxy::__newindex)
+                .addFunction("__len", &ShadyLua::CustomDataProxy::__len)
+            .endClass()
             .beginClass<SokuLib::v2::GameObjectBase>("ObjectBase")
                 .addStaticFunction("fromPtr", castFromPtr<SokuLib::v2::GameObjectBase>)
                 .addProperty("ptr", battle_GameObjectBase_getPtr, 0)
@@ -759,7 +786,7 @@ void ShadyLua::LualibBattle(lua_State* L) {
                 .addProperty("parentPlayerB", &SokuLib::v2::GameObject::parentPlayerB)
                 .addProperty("parentObjectB", &SokuLib::v2::GameObject::parentB)
                 
-                .addProperty("customData", battle_GameObject_getCustomDataRef, battle_GameObject_setCustomDataRef)
+                .addProperty("customData", battle_GameObject_getCustomDataProxy, battle_GameObject_setCustomDataProxy)
                 .addProperty("gpShort", ShadyLua::ArrayRef_from(&SokuLib::v2::GameObject::gpShort), true)
                 .addProperty("gpFloat", ShadyLua::ArrayRef_from(&SokuLib::v2::GameObject::gpFloat), true)
 
