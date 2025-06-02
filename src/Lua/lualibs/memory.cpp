@@ -97,6 +97,7 @@ namespace {
 
         int luacall(lua_State* L2) {
             if (!enabled) return 0;
+            std::lock_guard scriptGuard(ShadyLua::ScriptMap[L]->mutex);
 
             size_t c = argc < lua_gettop(L2) ? argc : lua_gettop(L2);
             lua_rawgeti(L, LUA_REGISTRYINDEX, ref);
