@@ -256,6 +256,28 @@ static int soku_CharacterName(lua_State* L) {
     } return 1;
 }
 
+static auto argFadeOut = reinterpret_cast<int* const>(0x0043FF4A);
+static auto argFadeIn = reinterpret_cast<int* const>(0x0043FFFD);
+static int soku_PlayBGM(lua_State* L) {
+    const char* path = luaL_checkstring(L, 1);
+    int fadeOut= max(luaL_optinteger(L, 2, 1000), 0);
+    int fadeIn = max(luaL_optinteger(L, 3, 500), 0);
+    
+    DWORD old1, old2;
+    VirtualProtect(reinterpret_cast<LPVOID>(argFadeOut), 4, PAGE_EXECUTE_READWRITE, &old1);
+    VirtualProtect(reinterpret_cast<LPVOID>(argFadeIn), 4, PAGE_EXECUTE_READWRITE, &old2);
+    int orgOut = *argFadeOut;
+    *argFadeOut = fadeOut;
+    int orgIn = *argFadeIn;
+    *argFadeIn = fadeIn;
+    SokuLib::playBGM(path);
+    *argFadeOut = orgOut;
+    *argFadeIn = orgIn;
+    VirtualProtect(reinterpret_cast<LPVOID>(argFadeOut), 4, old1, &old1);
+    VirtualProtect(reinterpret_cast<LPVOID>(argFadeIn), 4, old2, &old2);
+    return 0;
+}
+
 static int soku_checkFKey(lua_State* L) {
     const int argc = lua_gettop(L);
     int key = luaL_checkinteger(L, 1);
@@ -370,6 +392,8 @@ void ShadyLua::LualibSoku(lua_State* L) {
             .addFunction("playSE", soku_PlaySFX)
             .addFunction("playSFX", soku_PlaySFX)
             .addFunction("characterName", soku_CharacterName)
+            
+            .addFunction("playBGM", soku_PlayBGM)
 
             .addCFunction("SubscribePlayerInfo", soku_SubscribeEvent<Event::PLAYERINFO>)
             .addCFunction("SubscribeSceneChange", soku_SubscribeEvent<Event::SCENECHANGE>)

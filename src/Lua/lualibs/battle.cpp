@@ -532,6 +532,19 @@ static int battle_GameObjectBase_setDir(lua_State* L) {
     return 0;
 }
 
+static int battle_GameObjectBase_getShadowOn(lua_State* L) {
+    auto o = Stack<SokuLib::v2::GameObjectBase*>::get(L, 1);
+    lua_pushboolean(L, o->isActive);
+    return 1;
+}
+static int battle_GameObjectBase_setShadowOn(lua_State* L) {
+    auto o = Stack<SokuLib::v2::GameObjectBase*>::get(L, 1);
+    o->isActive = lua_toboolean(L, 2);
+    if (o->isActive)
+        o->unknown138 = -6;
+    return 0;
+}
+
 static ShadyLua::Renderer::Effect* battle_GameObjectBase_createEffect(SokuLib::v2::GameObjectBase* object, lua_State* L) {
     auto fxmanager = *reinterpret_cast<SokuLib::v2::EffectManager_Effect**>(0x8985f0);
     int actionId = luaL_checkinteger(L, 2);
@@ -747,6 +760,9 @@ void ShadyLua::LualibBattle(lua_State* L) {
                 .addProperty("gravity", &SokuLib::v2::GameObjectBase::gravity, true)
                 .addProperty("direction", battle_GameObjectBase_getDir, battle_GameObjectBase_setDir)
                 .addProperty("renderInfo", &SokuLib::v2::GameObjectBase::renderInfos, true)
+                .addProperty("isGui", &SokuLib::v2::GameObjectBase::isGui, true)
+                .addProperty("shadowOn", battle_GameObjectBase_getShadowOn, battle_GameObjectBase_setShadowOn)
+                .addProperty("shadowOffset", &SokuLib::v2::GameObjectBase::unknown138, true)
                 .addProperty("actionId", MEMBER_ADDRESS(unsigned short, SokuLib::v2::GameObjectBase, frameState.actionId), false)
                 .addProperty("sequenceId", MEMBER_ADDRESS(unsigned short, SokuLib::v2::GameObjectBase, frameState.sequenceId), false)
                 .addProperty("poseId", MEMBER_ADDRESS(unsigned short, SokuLib::v2::GameObjectBase, frameState.poseId), false)
