@@ -259,10 +259,13 @@ static int soku_CharacterName(lua_State* L) {
 static auto argFadeOut = reinterpret_cast<int* const>(0x0043FF4A);
 static auto argFadeIn = reinterpret_cast<int* const>(0x0043FFFD);
 static int soku_PlayBGM(lua_State* L) {
-    const char* path = luaL_optstring(L, 1, "");
+    const char* path = luaL_optstring(L, 1, 0);
     int fadeOut= max(luaL_optinteger(L, 2, 1000), 0);
     int fadeIn = max(luaL_optinteger(L, 3, 500), 0);
-    
+    if (!path) {
+        reinterpret_cast<void(__cdecl*)(int, int)>(0x0043e180)(fadeOut, 0);
+        return 0;
+    }
     DWORD old1, old2;
     VirtualProtect(reinterpret_cast<LPVOID>(argFadeOut), 4, PAGE_EXECUTE_READWRITE, &old1);
     VirtualProtect(reinterpret_cast<LPVOID>(argFadeIn), 4, PAGE_EXECUTE_READWRITE, &old2);
