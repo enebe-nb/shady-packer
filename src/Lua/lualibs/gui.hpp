@@ -17,12 +17,16 @@ namespace ShadyLua {
 
     class MenuCursorProxy : public SokuLib::MenuCursor {
     public:
-        int width; bool active = true;
+        int width; bool active = true, visible = true, triggered = false;
         std::vector<std::pair<int,int>> positions;
+        int sfxId = -1;
 
         MenuCursorProxy(int w, bool horz, int max = 1, int pos = 0);
+        int getPosition(lua_State* L);
         void setPosition(int i, int x, int y);
-        void setRange(int x, int y, int dx = 0, int dy = 0);
+        void setPageRows(int rows);
+        int setRange(lua_State* L);
+        inline void render() { SokuLib::MenuCursor::render(positions[pos - pgPos].first, positions[pos - pgPos].second, width); }
     };
 
     class EffectManagerProxy : public SokuLib::v2::EffectManager_Select {
@@ -105,7 +109,8 @@ namespace ShadyLua {
             return luaL_error(L, "This object has unconfirmed length.");
         }
     };
-    template<class T, std::size_t N> class ArrayRef : public std::array<T, N> {};
+
+    template <class T, std::size_t N> class ArrayRef : public std::array<T, N> {};
     template <typename T, size_t N> static ShadyLua::ArrayRef<T, N>* ArrayRef_from(T(*ptr)[N]){ return (ShadyLua::ArrayRef<T, N>*)(ptr); }
     template <typename T, class C, size_t N> static ShadyLua::ArrayRef<T, N> C::* ArrayRef_from(T(C::*ptr)[N]) { return (ShadyLua::ArrayRef<T, N> C::*)(ptr); }
 }
