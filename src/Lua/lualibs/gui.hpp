@@ -18,11 +18,30 @@ namespace ShadyLua {
     class MenuCursorProxy : public SokuLib::MenuCursor {
     public:
         int width; bool active = true;
+        const int* valueAddr2 = 0;
         std::vector<std::pair<int,int>> positions;
+        int sfxId=-1;
 
         MenuCursorProxy(int w, bool horz, int max = 1, int pos = 0);
+        virtual bool update();
+        inline void render() {
+            MenuCursor::render(positions[pos].first, positions[pos].second, width);
+        }
+        int getPosition(lua_State* L);
         void setPosition(int i, int x, int y);
         void setRange(int x, int y, int dx = 0, int dy = 0);
+        int setSfx(lua_State* L);
+    };
+    class MenuCursorMat : public MenuCursorProxy{
+    public:
+        int columns, rows;
+        SokuLib::MenuCursor cursor1;
+        SokuLib::MenuCursor cursor2;
+        MenuCursorMat(int w, bool horz, int max, int pos, int r, int c);
+        bool update() override;
+        //void render();
+        void setGrid(int x, int y, int dx, int dy);
+
     };
 
     class EffectManagerProxy : public SokuLib::v2::EffectManager_Select {
@@ -32,7 +51,7 @@ namespace ShadyLua {
 
     class Renderer {
     public:
-        std::deque<MenuCursorProxy> cursors;
+        std::deque<MenuCursorProxy*> cursors;
         SokuLib::CDesign guiSchema;
         std::multimap<int, SpriteProxy> sprites;
         EffectManagerProxy effects;
@@ -40,7 +59,11 @@ namespace ShadyLua {
         bool isActive = true;
 
         using Effect = SokuLib::v2::SelectEffectObject;
-        ~Renderer() {guiSchema.clear();}
+        ~Renderer() {
+            for (auto cursor : cursors)
+                delete cursor;
+            guiSchema.clear();
+        }
         void update();
         void render();
 
@@ -48,6 +71,7 @@ namespace ShadyLua {
         int createText(lua_State* L);
         int createEffect(lua_State* L);
         template<bool> int createCursor(lua_State* L);
+        template<bool> int createCursorMat(lua_State* L);
         int destroy(lua_State* L);
         void clear();
     };
