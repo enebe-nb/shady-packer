@@ -259,7 +259,7 @@ static int soku_CharacterName(lua_State* L) {
 static auto argFadeOut = reinterpret_cast<int* const>(0x0043FF4A);
 static auto argFadeIn = reinterpret_cast<int* const>(0x0043FFFD);
 static int soku_PlayBGM(lua_State* L) {
-    const char* path = luaL_checkstring(L, 1);
+    const char* path = luaL_optstring(L, 1, "");
     int fadeOut= max(luaL_optinteger(L, 2, 1000), 0);
     int fadeIn = max(luaL_optinteger(L, 3, 500), 0);
     
@@ -389,11 +389,12 @@ void ShadyLua::LualibSoku(lua_State* L) {
             .addVariable("P2", &SokuLib::rightPlayerInfo)
             .addVariable<unsigned char>("sceneId", (unsigned char *)&SokuLib::sceneId, false)
             .addFunction("checkFKey", soku_checkFKey)
-            .addFunction("playSE", soku_PlaySFX)
-            .addFunction("playSFX", soku_PlaySFX)
             .addFunction("characterName", soku_CharacterName)
             
+            .addFunction("playSE", soku_PlaySFX)
+                .addFunction("playSFX", soku_PlaySFX)
             .addFunction("playBGM", soku_PlayBGM)
+
 
             .addCFunction("SubscribePlayerInfo", soku_SubscribeEvent<Event::PLAYERINFO>)
             .addCFunction("SubscribeSceneChange", soku_SubscribeEvent<Event::SCENECHANGE>)
