@@ -25,6 +25,7 @@ namespace ShadyLua {
         int getPosition(lua_State* L);
         void setPosition(int i, int x, int y);
         void setPageRows(int rows);
+        void _setRange(int x, int y, int dx, int dy);
         int setRange(lua_State* L);
         inline void render() { SokuLib::MenuCursor::render(positions[pos - pgPos].first, positions[pos - pgPos].second, width); }
     };
@@ -52,6 +53,7 @@ namespace ShadyLua {
         int createText(lua_State* L);
         int createEffect(lua_State* L);
         template<bool> int createCursor(lua_State* L);
+        int createCursorMat(lua_State* L);
         int destroy(lua_State* L);
         void clear();
     };

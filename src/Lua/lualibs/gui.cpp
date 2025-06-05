@@ -12,6 +12,29 @@ namespace {
     struct ValueProxy {
         union { float number; int gauge; };
     };
+
+    class CursorMat {
+    public:
+        typedef ShadyLua::MenuCursorProxy Cursor;
+        Cursor& row;
+        Cursor& col;
+        int dx = 0;
+
+        int getPosition(lua_State* L);
+        int setGrid(lua_State* L);
+        void _update() const;
+
+        inline CursorMat(Cursor& row, Cursor& col) : row(row), col(col) { row.visible = false; }
+        inline bool getActive() const { return row.active; }
+        inline void setActive(bool v) { row.active = col.active = v; }
+        inline bool getVisible() const { return col.visible; }
+        inline void setVisible(bool v) { col.visible = v; }
+        inline bool getTriggered() const { _update(); return row.triggered || col.triggered; }
+        inline int getIndex() const { _update(); return row.pos*col.max + col.pos; }
+        inline void setIndex(int v) { row.pos = v/col.max; col.pos = v%col.max; }
+        inline int getSfx() const { return row.sfxId; }
+        inline void setSfx(int v) { row.sfxId = col.sfxId = v; }
+    };
 }
 
 static ValueProxy* gui_design_getValue(SokuLib::CDesign::Object* object) {
@@ -140,6 +163,12 @@ void ShadyLua::MenuCursorProxy::setPageRows(int rows) {
     else positions.resize(max);
 }
 
+void ShadyLua::MenuCursorProxy::_setRange(int x, int y, int dx, int dy) {
+    for (int i = 0; i < positions.size(); ++i) {
+        positions[i].first = x + i*dx; positions[i].second = y + i*dy;
+    }
+}
+
 int ShadyLua::MenuCursorProxy::setRange(lua_State* L) {
     int x = luaL_checkinteger(L, 2);
     int y = luaL_checkinteger(L, 3);
@@ -147,9 +176,8 @@ int ShadyLua::MenuCursorProxy::setRange(lua_State* L) {
     int dy = luaL_optinteger(L, 5, 0);
     if (lua_gettop(L) >= 6) setPageRows(luaL_checkinteger(L, 6));
 
-    for (int i = 0; i < positions.size(); ++i) {
-        positions[i].first = x + i*dx; positions[i].second = y + i*dy;
-    } return 0;
+    _setRange(x, y, dx, dy);
+    return 0;
 }
 
 int ShadyLua::MenuCursorProxy::getPosition(lua_State* L) {
@@ -248,6 +276,47 @@ int ShadyLua::Renderer::createCursor(lua_State* L) {
     int pos = (argc < 4) ? 0 : luaL_checkinteger(L, 4);
     auto& cursor = cursors.emplace_back(width, HORZ, max, pos);
     Stack<MenuCursorProxy*>::push(L, &cursor);
+    return 1;
+}
+
+int ::CursorMat::getPosition(lua_State* L) {
+    int i = luaL_checkinteger(L, 2);
+    int j = luaL_checkinteger(L, 3);
+    if (i < 0 || i > col.positions.size()) return luaL_argerror(L, 2, "index out of bounds");
+    if (j < 0 || j > row.positions.size()) return luaL_argerror(L, 3, "index out of bounds");
+    // TODO range check
+    lua_pushinteger(L, col.positions.at(i).first);
+    lua_pushinteger(L, row.positions.at(j).second);
+    return 2;
+}
+
+int ::CursorMat::setGrid(lua_State* L) {
+    int x = luaL_checkinteger(L, 2);
+    int y = luaL_checkinteger(L, 3);
+    int dx = luaL_optinteger(L, 4, 0);
+    int dy = luaL_optinteger(L, 5, 0);
+
+    row._setRange(x, y, 0, dy);
+    col._setRange(x, y, dx, 0);
+    this->dx = dx;
+    return 0;
+}
+
+void ::CursorMat::_update() const {
+    if (row.triggered) {
+        auto& pos = row.positions.at(row.pos);
+        col._setRange(pos.first, pos.second, dx, 0);
+    }
+}
+
+int ShadyLua::Renderer::createCursorMat(lua_State* L) {
+    const int argc = lua_gettop(L);
+    int width = luaL_checkinteger(L, 2);
+    int cols = (argc < 3) ? 1 : luaL_checkinteger(L, 3);
+    int rows = (argc < 4) ? 1 : luaL_checkinteger(L, 4);
+
+    RefCountedPtr<CursorMat> cursor(new CursorMat(cursors.emplace_back(width, true, rows), cursors.emplace_back(width, false, cols)));
+    luabridge::push(L, cursor);
     return 1;
 }
 
@@ -387,6 +456,7 @@ void ShadyLua::LualibGui(lua_State* L) {
                 .addFunction("createEffect", &ShadyLua::Renderer::createEffect)
                 .addFunction("createCursorH", &ShadyLua::Renderer::createCursor<true>)
                 .addFunction("createCursorV", &ShadyLua::Renderer::createCursor<false>)
+                .addFunction("createCursorMat", &ShadyLua::Renderer::createCursorMat)
 
                 .addFunction("destroy", &ShadyLua::Renderer::destroy) // TODO test to set nil to things
             .endClass()
@@ -452,6 +522,7 @@ void ShadyLua::LualibGui(lua_State* L) {
             .beginClass<ShadyLua::MenuCursorProxy>("Cursor")
                 .addData("isActive", &MenuCursorProxy::active, true)
                 .addData("isVisible", &MenuCursorProxy::visible, true)
+                .addData("hasTriggered", &MenuCursorProxy::triggered, false)
                 .addData("index", &MenuCursorProxy::pos, true)
                 .addData("page", &MenuCursorProxy::pgPos, false)
                 .addData("sfxId", &MenuCursorProxy::sfxId, true)
@@ -461,6 +532,15 @@ void ShadyLua::LualibGui(lua_State* L) {
                 .addFunction("setRange", &MenuCursorProxy::setRange)
                 .addFunction("pgUp", &MenuCursorProxy::pgUp)
                 .addFunction("pgDn", &MenuCursorProxy::pgDn)
+            .endClass()
+            .beginClass<CursorMat>("CursorMat")
+                .addProperty("isActive", &CursorMat::getActive, &CursorMat::setActive)
+                .addProperty("isVisible", &CursorMat::getVisible, &CursorMat::setVisible)
+                .addProperty("hasTriggered", &CursorMat::getTriggered)
+                .addProperty("index", &CursorMat::getIndex, &CursorMat::setIndex)
+                .addProperty("sfxId", &CursorMat::getSfx, &CursorMat::setSfx)
+                .addFunction("getPosition", &CursorMat::getPosition)
+                .addFunction("setGrid", &CursorMat::setGrid)
             .endClass()
             .beginClass<ShadyLua::EffectManagerProxy>("EffectManager")
                 .addFunction("loadResource", &ShadyLua::EffectManagerProxy::loadPattern)
