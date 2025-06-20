@@ -22,6 +22,7 @@ namespace ShadyLua {
         std::vector<std::pair<int,int>> positions;
         int sfxId=-1;
 
+        virtual ~MenuCursorProxy() = default;
         MenuCursorProxy(int w, bool horz, int max = 1, int pos = 0);
         virtual bool update();
         inline void render() {
@@ -51,7 +52,7 @@ namespace ShadyLua {
 
     class Renderer {
     public:
-        std::deque<MenuCursorProxy*> cursors;
+        std::list<MenuCursorProxy*> cursors;
         SokuLib::CDesign guiSchema;
         std::multimap<int, SpriteProxy> sprites;
         EffectManagerProxy effects;
