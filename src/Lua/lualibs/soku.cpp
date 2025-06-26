@@ -25,9 +25,6 @@ namespace {
     std::unordered_set<std::pair<int, ShadyLua::LuaScript*>, eventHash> eventMap[Event::Count];
     std::shared_mutex eventMapLock;
 
-    template <int value> static inline int* enumMap()
-        {static const int valueHolder = value; return (int*)&valueHolder;}
-
     struct charbuf : std::streambuf {
         charbuf(const char* begin, const char* end) {
             this->setg((char*)begin, (char*)begin, (char*)end);
@@ -293,43 +290,50 @@ static int soku_checkFKey(lua_State* L) {
 
 template<> struct luabridge::Stack<SokuLib::Character> : EnumStack<SokuLib::Character> {};
 template<> struct luabridge::Stack<SokuLib::Stage> : EnumStack<SokuLib::Stage> {};
-namespace {
-    using T = float;
-    using Vec2 = SokuLib::Vector2<T>;
-    static Vec2 Vec2_unm(const Vec2* self) {
-        auto& v = *self;//Stack<SokuLib::Vector2f>::get(L, 1);
-        return Vec2{ -v.x, -v.y};
-    }
-    static float Vec2_length(const Vec2* self) {
-        auto& v = *self;//Stack<Vector2f>::get(L, 1);
-        return sqrt(pow(v.x, 2) + pow(v.y, 2));
-    }
-    static float Vec2_angle(const Vec2* self) {
-        auto& v = *self;//Stack<Vector2f>::get(L, 1);
-        return (atan2(v.y, v.x)*180.0/acos(-1));
-    }
-    static std::string Vec2_tostring(const Vec2* self) {
-        return std::format("({}, {})", self->x, self->y);
-    }
-    /*static int Vec2_add(lua_State* L) {
-        bool i1 = Stack<Vec2>::isInstance(L, 1);
-        bool i2 = Stack<Vec2>::isInstance(L, 2);
-        switch (i1 + i2) {
-        default:
-            luaL_argerror(L, 2, "only expression like num+Vector, Vector+num, or Vector+Vector is accepted");
-            break;
-        case 2:
-            luabridge::push(L, Stack<Vec2>::get(L, 1) + Stack<Vec2>::get(L, 2));
-            return 1;
-        case 1:
-            auto v = Stack<Vec2>::get(L, i1 ? 1 : 2);
-            T b = Stack<T>::get(L, i2 ? 1 : 2);
-            luabridge::push(L, Vec2(v.x + b, v.y + b));
-            return 1;
-        }
-        return 0;
-    }*/
+
+static inline SokuLib::Vector2f soku_vec2_getOrConvert(lua_State* L, int index) {
+    if (Stack<SokuLib::Vector2f>::isInstance(L, index))
+        return Stack<SokuLib::Vector2f>::get(L, index);
+    return SokuLib::Vector2f(lua_tonumber(L, index), lua_tonumber(L, index));
 }
+
+static inline int soku_vec2_add(lua_State* L) {
+    SokuLib::Vector2f a(soku_vec2_getOrConvert(L, 1));
+    SokuLib::Vector2f b(soku_vec2_getOrConvert(L, 2));
+    luabridge::push(L, a+b);
+    return 1;
+}
+
+static inline int soku_vec2_sub(lua_State* L) {
+    SokuLib::Vector2f a(soku_vec2_getOrConvert(L, 1));
+    SokuLib::Vector2f b(soku_vec2_getOrConvert(L, 2));
+    luabridge::push(L, a-b);
+    return 1;
+}
+
+static inline int soku_vec2_mul(lua_State* L) {
+    SokuLib::Vector2f a(soku_vec2_getOrConvert(L, 1));
+    SokuLib::Vector2f b(soku_vec2_getOrConvert(L, 2));
+    luabridge::push(L, a*b);
+    return 1;
+}
+
+static inline SokuLib::Vector2f soku_vec2_unm(const SokuLib::Vector2f* self) {
+    return SokuLib::Vector2f{-self->x, -self->y};
+}
+
+static inline float soku_vec2_length(const SokuLib::Vector2f* self) {
+    return sqrt(pow(self->x, 2) + pow(self->y, 2));
+}
+
+static inline float soku_vec2_angle(const SokuLib::Vector2f* self) {
+    return (atan2(self->y, self->x)*180.0/acos(-1));
+}
+
+static inline std::string soku_vec2_tostring(const SokuLib::Vector2f* self) {
+    return std::format("({}, {})", self->x, self->y);
+}
+
 template <typename T> static inline T& castFromPtr(size_t addr) { return *(T*)addr; }
 
 void ShadyLua::LualibSoku(lua_State* L) {
@@ -447,18 +451,20 @@ void ShadyLua::LualibSoku(lua_State* L) {
                 .addStaticFunction("fromPtr", castFromPtr<SokuLib::Vector2f>)
                 .addData("x", &SokuLib::Vector2f::x, true)
                 .addData("y", &SokuLib::Vector2f::y, true)
-                .addFunction("__tostring", Vec2_tostring)
-                //damn luabridge didn't support call from num+-*/Vector
-                .addFunction<Vec2, const Vec2&>("__add", &SokuLib::Vector2f::operator+)
-                .addFunction<Vec2, const Vec2&>("__sub", &SokuLib::Vector2f::operator-)
-                .addFunction<Vec2, const float&>("__mul", &SokuLib::Vector2f::operator*)
-                .addFunction<Vec2, const float&>("__div", &SokuLib::Vector2f::operator/)
-                .addFunction("__unm", Vec2_unm)
-                .addFunction<bool, const Vec2&>("__eq", &SokuLib::Vector2f::operator==)
-                .addFunction("length", Vec2_length)
-                .addFunction("angle", Vec2_angle)
+                .addFunction("__tostring", soku_vec2_tostring)
+                .addFunction("__div", &SokuLib::Vector2f::operator/<float>)
+                .addFunction("__unm", soku_vec2_unm)
+                .addFunction("__eq", &SokuLib::Vector2f::operator==<float>)
+                .addFunction("length", soku_vec2_length)
+                .addFunction("angle", soku_vec2_angle)
                 .addFunction("rotate", &SokuLib::Vector2f::rotate)
             .endClass()
         .endNamespace()
     ;
+
+    auto Class = getGlobalNamespace(L).beginNamespace("soku").beginClass<SokuLib::Vector2f>("Vector2f");
+        lua_pushcfunction(L, soku_vec2_add); rawsetfield(L, -3, "__add");
+        lua_pushcfunction(L, soku_vec2_sub); rawsetfield(L, -3, "__sub");
+        lua_pushcfunction(L, soku_vec2_mul); rawsetfield(L, -3, "__mul");
+    Class.endClass().endNamespace();
 }

@@ -633,47 +633,24 @@ static LuaRef battle_GameObject_getChildren(SokuLib::v2::GameObject* object, lua
     }
     return table;
 }
-namespace {//traits
-template <typename T> struct mem_fn_traits;
-template <typename Class, typename Ret, typename... Args>
-struct mem_fn_traits<Ret(Class::*)(Args...)> {
-    using fn_type = Ret(Class::*)(Args...);
-    using class_type = Class;
-    using return_type = Ret;
-    using arguments = std::tuple<Args...>;
-    //inline constexpr static fn_type invoke(fn_type) { return f; }
-};
-template <typename Class, typename Ret, typename... Args>
-struct mem_fn_overload {
-    inline constexpr auto operator()(Ret(Class::* f)(Args...)) -> Ret(Class::*)(Args...) {
-        return f;
-    }
-    inline constexpr auto operator()(Ret(Class::* f)(Args...) const) -> Ret(Class::*)(Args...)const {
-        return f;
-    }
-};
-    static auto create_object_invoker = mem_fn_overload<SokuLib::v2::Player, SokuLib::v2::GameObject*, short, float, float, char, char, float*, unsigned int>{};
-    template <auto mem_fn> using class_create_object = mem_fn_traits<decltype(mem_fn)>::class_type;
-}
-template <auto VTableCreateObject>
-static SokuLib::v2::GameObject* battle_createObject(class_create_object<VTableCreateObject>* base, lua_State* L) {
-    int actionId = luaL_checkinteger(L, 2);
-    int index = 3;
+
+template <class Class, SokuLib::v2::GameObject* (Class::*Func)(short, float, float, char, char, float*, unsigned int)>
+static SokuLib::v2::GameObject* battle_createObject(Class* base, lua_State* L) {
+    int index = 2;
+    int actionId = luaL_checkinteger(L, index++);
+
     float x, y;
     if (Stack<SokuLib::Vector2f>::isInstance(L, index)) {
-        auto xy = Stack<SokuLib::Vector2f>::get(L, index++);//3
+        auto xy = Stack<SokuLib::Vector2f>::get(L, index++);
         x = xy.x; y = xy.y;
+    } else {
+        x = luaL_optnumber(L, index++, base->position.x);
+        y = luaL_optnumber(L, index++, base->position.y);
     }
-    //else if (lua_istable(L, index)) {
-    //    auto xy = Stack<std::vector<float>>::get(L, index++);//3
-    //    x = xy[0]; y = xy[1];
-    //}
-    else {
-        x = luaL_optnumber(L, index++, base->position.x);//3
-        y = luaL_optnumber(L, index++, base->position.y);//4
-    }
+
     char direction = luaL_optinteger(L, index++, base->direction);
     char layer = luaL_optinteger(L, index++, 1);
+
     size_t dataSize = 0;
     const char* data = nullptr;
     std::vector<float> fdata;
@@ -697,7 +674,8 @@ static SokuLib::v2::GameObject* battle_createObject(class_create_object<VTableCr
         break;
     default: luaL_argerror(L, index++, "optional argument can only accept integer, string or table of numbers");
     }
-    return (base->*VTableCreateObject)(actionId, x, y, direction, layer, dataSize ? (float*)data : nullptr, dataSize);
+
+    return (base->*Func)(actionId, x, y, direction, layer, dataSize ? (float*)data : nullptr, dataSize);
 }
 
 static int battle_Player_handGetId(SokuLib::v2::Player* player, lua_State* L) {
@@ -817,8 +795,8 @@ void ShadyLua::LualibBattle(lua_State* L) {
                 .addFunction("checkProjectileHit", &SokuLib::v2::GameObject::checkProjectileHit)
                 .addFunction("checkTurnIntoCrystals", &SokuLib::v2::GameObject::checkTurnIntoCrystals)
 
-                .addFunction("createObject", battle_createObject<&SokuLib::v2::GameObject::createObject>)
-                .addFunction("createChild", battle_createObject<&SokuLib::v2::GameObject::createChild>)
+                .addFunction("createObject", battle_createObject<SokuLib::v2::GameObject, &SokuLib::v2::GameObject::createObject>)
+                .addFunction("createChild", battle_createObject<SokuLib::v2::GameObject, &SokuLib::v2::GameObject::createChild>)
             .endClass()
 
             .deriveClass<SokuLib::v2::Player, SokuLib::v2::GameObjectBase>("Player")
@@ -858,7 +836,7 @@ void ShadyLua::LualibBattle(lua_State* L) {
                 .addFunction("handGetId", battle_Player_handGetId)
                 .addFunction("handGetCost", battle_Player_handGetCost)
 
-                .addFunction("createObject", battle_createObject<create_object_invoker(&SokuLib::v2::Player::createObject)>)
+                .addFunction("createObject", battle_createObject<SokuLib::v2::Player, &SokuLib::v2::Player::createObject>)
                 .addFunction("updateGroundMovement", &SokuLib::v2::Player::updateGroundMovement)
                 .addFunction("updateAirMovement", &SokuLib::v2::Player::decideShotAngle)
                 .addFunction("decideShotAngle", &SokuLib::v2::Player::decideShotAngle)
