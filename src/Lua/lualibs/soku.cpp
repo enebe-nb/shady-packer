@@ -312,9 +312,9 @@ static inline int soku_vec2_sub(lua_State* L) {
 }
 
 static inline int soku_vec2_mul(lua_State* L) {
-    SokuLib::Vector2f a(soku_vec2_getOrConvert(L, 1));
-    SokuLib::Vector2f b(soku_vec2_getOrConvert(L, 2));
-    luabridge::push(L, a*b);
+    const bool isOnLeft = Stack<SokuLib::Vector2f>::isInstance(L, 1);
+    if (isOnLeft && Stack<SokuLib::Vector2f>::isInstance(L, 2)) return luaL_error(L, "Can't multiply two vectors");
+    luabridge::push(L, Stack<SokuLib::Vector2f>::get(L, isOnLeft ? 1 : 2) * (float)lua_tonumber(L, isOnLeft ? 2 : 1));
     return 1;
 }
 
@@ -332,6 +332,14 @@ static inline float soku_vec2_angle(const SokuLib::Vector2f* self) {
 
 static inline std::string soku_vec2_tostring(const SokuLib::Vector2f* self) {
     return std::format("({}, {})", self->x, self->y);
+}
+
+static inline float soku_vec2_cross(const SokuLib::Vector2f* self, const SokuLib::Vector2f* other) {
+    return self->x*other->y - self->y*other->x;
+}
+
+static inline float soku_vec2_dot(const SokuLib::Vector2f* self, const SokuLib::Vector2f* other) {
+    return self->x*other->x + self->y*other->y;
 }
 
 template <typename T> static inline T& castFromPtr(size_t addr) { return *(T*)addr; }
@@ -458,6 +466,8 @@ void ShadyLua::LualibSoku(lua_State* L) {
                 .addFunction("length", soku_vec2_length)
                 .addFunction("angle", soku_vec2_angle)
                 .addFunction("rotate", &SokuLib::Vector2f::rotate)
+                .addFunction("cross", soku_vec2_cross)
+                .addFunction("dot", soku_vec2_dot)
             .endClass()
         .endNamespace()
     ;
