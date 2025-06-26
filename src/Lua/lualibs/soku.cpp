@@ -293,6 +293,44 @@ static int soku_checkFKey(lua_State* L) {
 
 template<> struct luabridge::Stack<SokuLib::Character> : EnumStack<SokuLib::Character> {};
 template<> struct luabridge::Stack<SokuLib::Stage> : EnumStack<SokuLib::Stage> {};
+namespace {
+    using T = float;
+    using Vec2 = SokuLib::Vector2<T>;
+    static Vec2 Vec2_unm(const Vec2* self) {
+        auto& v = *self;//Stack<SokuLib::Vector2f>::get(L, 1);
+        return Vec2{ -v.x, -v.y};
+    }
+    static float Vec2_length(const Vec2* self) {
+        auto& v = *self;//Stack<Vector2f>::get(L, 1);
+        return sqrt(pow(v.x, 2) + pow(v.y, 2));
+    }
+    static float Vec2_angle(const Vec2* self) {
+        auto& v = *self;//Stack<Vector2f>::get(L, 1);
+        return (atan2(v.y, v.x)*180.0/acos(-1));
+    }
+    static std::string Vec2_tostring(const Vec2* self) {
+        return std::format("({}, {})", self->x, self->y);
+    }
+    /*static int Vec2_add(lua_State* L) {
+        bool i1 = Stack<Vec2>::isInstance(L, 1);
+        bool i2 = Stack<Vec2>::isInstance(L, 2);
+        switch (i1 + i2) {
+        default:
+            luaL_argerror(L, 2, "only expression like num+Vector, Vector+num, or Vector+Vector is accepted");
+            break;
+        case 2:
+            luabridge::push(L, Stack<Vec2>::get(L, 1) + Stack<Vec2>::get(L, 2));
+            return 1;
+        case 1:
+            auto v = Stack<Vec2>::get(L, i1 ? 1 : 2);
+            T b = Stack<T>::get(L, i2 ? 1 : 2);
+            luabridge::push(L, Vec2(v.x + b, v.y + b));
+            return 1;
+        }
+        return 0;
+    }*/
+}
+template <typename T> static inline T& castFromPtr(size_t addr) { return *(T*)addr; }
 
 void ShadyLua::LualibSoku(lua_State* L) {
     getGlobalNamespace(L)
@@ -406,8 +444,20 @@ void ShadyLua::LualibSoku(lua_State* L) {
             .addFunction("UnsubscribeEvent", soku_UnsubscribeEvent)
             .beginClass<SokuLib::Vector2f>("Vector2f")
                 .addConstructor<void (*)(float, float)>()
+                .addStaticFunction("fromPtr", castFromPtr<SokuLib::Vector2f>)
                 .addData("x", &SokuLib::Vector2f::x, true)
                 .addData("y", &SokuLib::Vector2f::y, true)
+                .addFunction("__tostring", Vec2_tostring)
+                //damn luabridge didn't support call from num+-*/Vector
+                .addFunction<Vec2, const Vec2&>("__add", &SokuLib::Vector2f::operator+)
+                .addFunction<Vec2, const Vec2&>("__sub", &SokuLib::Vector2f::operator-)
+                .addFunction<Vec2, const float&>("__mul", &SokuLib::Vector2f::operator*)
+                .addFunction<Vec2, const float&>("__div", &SokuLib::Vector2f::operator/)
+                .addFunction("__unm", Vec2_unm)
+                .addFunction<bool, const Vec2&>("__eq", &SokuLib::Vector2f::operator==)
+                .addFunction("length", Vec2_length)
+                .addFunction("angle", Vec2_angle)
+                .addFunction("rotate", &SokuLib::Vector2f::rotate)
             .endClass()
         .endNamespace()
     ;

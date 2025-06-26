@@ -633,10 +633,30 @@ static LuaRef battle_GameObject_getChildren(SokuLib::v2::GameObject* object, lua
     }
     return table;
 }
-
-#define VTFUN_CREATE_OBJECT(T, name) battle_createObject<T, &T::name>
-template<typename T, SokuLib::v2::GameObject* (T::*VTableCreateObject)(short, float, float, char, char, float*, unsigned int)>
-static SokuLib::v2::GameObject* battle_createObject(T* base, lua_State* L) {
+namespace {//traits
+template <typename T> struct mem_fn_traits;
+template <typename Class, typename Ret, typename... Args>
+struct mem_fn_traits<Ret(Class::*)(Args...)> {
+    using fn_type = Ret(Class::*)(Args...);
+    using class_type = Class;
+    using return_type = Ret;
+    using arguments = std::tuple<Args...>;
+    //inline constexpr static fn_type invoke(fn_type) { return f; }
+};
+template <typename Class, typename Ret, typename... Args>
+struct mem_fn_overload {
+    inline constexpr auto operator()(Ret(Class::* f)(Args...)) -> Ret(Class::*)(Args...) {
+        return f;
+    }
+    inline constexpr auto operator()(Ret(Class::* f)(Args...) const) -> Ret(Class::*)(Args...)const {
+        return f;
+    }
+};
+    static auto create_object_invoker = mem_fn_overload<SokuLib::v2::Player, SokuLib::v2::GameObject*, short, float, float, char, char, float*, unsigned int>{};
+    template <auto mem_fn> using class_create_object = mem_fn_traits<decltype(mem_fn)>::class_type;
+}
+template <auto VTableCreateObject>
+static SokuLib::v2::GameObject* battle_createObject(class_create_object<VTableCreateObject>* base, lua_State* L) {
     int actionId = luaL_checkinteger(L, 2);
     int index = 3;
     float x, y;
@@ -797,8 +817,8 @@ void ShadyLua::LualibBattle(lua_State* L) {
                 .addFunction("checkProjectileHit", &SokuLib::v2::GameObject::checkProjectileHit)
                 .addFunction("checkTurnIntoCrystals", &SokuLib::v2::GameObject::checkTurnIntoCrystals)
 
-                .addFunction("createObject", VTFUN_CREATE_OBJECT(SokuLib::v2::GameObject, createObject))
-                .addFunction("createChild", VTFUN_CREATE_OBJECT(SokuLib::v2::GameObject, createChild))
+                .addFunction("createObject", battle_createObject<&SokuLib::v2::GameObject::createObject>)
+                .addFunction("createChild", battle_createObject<&SokuLib::v2::GameObject::createChild>)
             .endClass()
 
             .deriveClass<SokuLib::v2::Player, SokuLib::v2::GameObjectBase>("Player")
@@ -838,7 +858,7 @@ void ShadyLua::LualibBattle(lua_State* L) {
                 .addFunction("handGetId", battle_Player_handGetId)
                 .addFunction("handGetCost", battle_Player_handGetCost)
 
-                .addFunction("createObject", VTFUN_CREATE_OBJECT(SokuLib::v2::Player, createObject))
+                .addFunction("createObject", battle_createObject<create_object_invoker(&SokuLib::v2::Player::createObject)>)
                 .addFunction("updateGroundMovement", &SokuLib::v2::Player::updateGroundMovement)
                 .addFunction("updateAirMovement", &SokuLib::v2::Player::decideShotAngle)
                 .addFunction("decideShotAngle", &SokuLib::v2::Player::decideShotAngle)
