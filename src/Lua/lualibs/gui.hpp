@@ -36,7 +36,6 @@ namespace ShadyLua {
         int getPosition(lua_State* L);
         void setPosition(int i, int x, int y);
         int setRange(lua_State* L);
-        //int setSfx(lua_State* L) { sfxId = luaL_optinteger(L, 2, -1); return 0; }
         inline bool updateProxy();
         inline void render() { SokuLib::MenuCursor::render(positions[pos - pgPos].first, positions[pos - pgPos].second, width); }
     };

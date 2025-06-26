@@ -177,7 +177,7 @@ void ShadyLua::MenuCursorProxy::setPosition(int i, int x, int y) {
 }
 
 void ShadyLua::Renderer::update() {
-    if (!(BoxSprite && BoxSprite->active)) for (auto& cursor : cursors) {
+    for (auto& cursor : cursors) {
         if (!cursor.active) continue;
         if (cursor.updateProxy() && cursor.sfxId >= 0)
             SokuLib::playSEWaveBuffer(cursor.sfxId);
@@ -216,10 +216,9 @@ void ShadyLua::Renderer::render() {
         for (auto iter = range.first; iter != range.second; ++iter) {
             if (iter->second.isEnabled) iter->second.render(0, 0); // TODO check position
         }
+        // Render Message Box
+        if (i == 0 && showType > 0) reinterpret_cast<void(__stdcall*)(void)>(0x4439f0)();
     }
-
-    // Render Message Box
-    if (showType > 0) reinterpret_cast<void(__stdcall*)(void)>(0x4439f0)();
 }
 
 //(const char* name = 0, int offsetX = 0, int offsetY = 0, int width = -1, int height = -1, int anchorX = 0, int anchorY = 0, int layer = 0);
@@ -326,6 +325,7 @@ void ShadyLua::Renderer::clear() {
 bool ShadyLua::Renderer::ShowMessage(const char* text) {
     bool old = BoxSprite && BoxSprite->active;
     reinterpret_cast<void(__stdcall*)(const char*)>(0x443900)(text);
+    activeLayers.insert(0);
     showType = 1;
     return old;
 }
@@ -333,6 +333,7 @@ bool ShadyLua::Renderer::ShowMessage(const char* text) {
 bool ShadyLua::Renderer::ShowChoice(const char* text, bool defaultYes) {
     bool old = BoxSprite && BoxSprite->active;
     reinterpret_cast<void(__stdcall*)(const char*, bool)>(0x443730)(text, defaultYes);
+    activeLayers.insert(0);
     showType = 2;
     return old;
 }
