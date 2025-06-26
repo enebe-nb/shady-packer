@@ -46,12 +46,19 @@ namespace ShadyLua {
         int loadPattern(lua_State* L);
     };
 
+    static auto& BoxSprite = *(SokuLib::CDesign::Sprite**)0x89a390;
+    static auto& ButtonNoSpriteSelected = *(SokuLib::CDesign::Sprite**)0x89a440;
+    static auto& ButtonNoSprite = *(SokuLib::CDesign::Sprite**)0x89a448;
+    static auto& ButtonYesSpriteSelected = *(SokuLib::CDesign::Sprite**)0x89a43c;
+    static auto& ButtonYesSprite = *(SokuLib::CDesign::Sprite**)0x89a444;
+
     class Renderer {
     public:
         std::deque<MenuCursorProxy> cursors;
         SokuLib::CDesign guiSchema;
         std::multimap<int, SpriteProxy> sprites;
         EffectManagerProxy effects;
+        int showType = 0, showResult = -1;
         std::set<char> activeLayers;
         bool isActive = true;
 
@@ -68,13 +75,12 @@ namespace ShadyLua {
         template<bool> int createCursor(lua_State* L);
         int destroy(lua_State* L);
         void clear();
+
+        bool ShowMessage(const char* text);
+        bool ShowChoice(const char* text, bool defaultYes);
+        bool RemoveShow();
     };
 
-    static auto& BoxSprite = *(SokuLib::CDesign::Sprite**)0x89a390;
-    static auto& ButtonNoSpriteSelected = *(SokuLib::CDesign::Sprite**)0x89a440;
-    static auto& ButtonNoSprite = *(SokuLib::CDesign::Sprite**)0x89a448;
-    static auto& ButtonYesSpriteSelected = *(SokuLib::CDesign::Sprite**)0x89a43c;
-    static auto& ButtonYesSprite = *(SokuLib::CDesign::Sprite**)0x89a444;
     class MenuProxy : public SokuLib::IMenu {
     private:
         const int processHandler;
@@ -89,16 +95,6 @@ namespace ShadyLua {
         void _() override;
         int onProcess() override;
         int onRender() override;
-
-        int state = 0;//none, checked, exit
-        bool choice = false;//no, yes
-        inline static int kind() { return (BoxSprite && BoxSprite->active) + (ButtonYesSprite && ButtonYesSprite->active) + (ButtonNoSprite && ButtonNoSprite->active); }
-        bool ShowMessage(const char* text);
-        bool ShowChoice(const char* text, bool defaultYes);
-        bool RemoveMessage();
-        int updateMsgBox();//0:none, 1:checked, 2:exit
-        int updateChoiceBox();//0:none, 2:exit, 3:no, 4:yes
-        static void renderBox();
     };
 
     class SceneProxy {

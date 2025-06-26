@@ -177,11 +177,28 @@ void ShadyLua::MenuCursorProxy::setPosition(int i, int x, int y) {
 }
 
 void ShadyLua::Renderer::update() {
-    for (auto& cursor : cursors) {
+    if (!(BoxSprite && BoxSprite->active)) for (auto& cursor : cursors) {
         if (!cursor.active) continue;
         if (cursor.updateProxy() && cursor.sfxId >= 0)
             SokuLib::playSEWaveBuffer(cursor.sfxId);
     }
+
+    switch (showType) {
+    case 0:
+        showResult = -1;
+        break;
+    case 1:
+        // Update Message Box and get result
+        showResult = reinterpret_cast<int(__stdcall*)(void)>(0x443960)();
+        if (showResult > 0) showType = 0;
+        break;
+    case 2:
+        // Update Choice Box and get result
+        showResult = reinterpret_cast<int(__stdcall*)(void)>(0x4437d0)();
+        if (showResult > 0) showType = 0;
+        break;
+    }
+
     effects.Update();
 }
 
@@ -199,9 +216,10 @@ void ShadyLua::Renderer::render() {
         for (auto iter = range.first; iter != range.second; ++iter) {
             if (iter->second.isEnabled) iter->second.render(0, 0); // TODO check position
         }
-        if (i == 0 && ShadyLua::MenuProxy::kind())
-            ShadyLua::MenuProxy::renderBox();
     }
+
+    // Render Message Box
+    if (showType > 0) reinterpret_cast<void(__stdcall*)(void)>(0x4439f0)();
 }
 
 //(const char* name = 0, int offsetX = 0, int offsetY = 0, int width = -1, int height = -1, int anchorX = 0, int anchorY = 0, int layer = 0);
@@ -305,6 +323,26 @@ void ShadyLua::Renderer::clear() {
     activeLayers.clear();
 }
 
+bool ShadyLua::Renderer::ShowMessage(const char* text) {
+    bool old = BoxSprite && BoxSprite->active;
+    reinterpret_cast<void(__stdcall*)(const char*)>(0x443900)(text);
+    showType = 1;
+    return old;
+}
+
+bool ShadyLua::Renderer::ShowChoice(const char* text, bool defaultYes) {
+    bool old = BoxSprite && BoxSprite->active;
+    reinterpret_cast<void(__stdcall*)(const char*, bool)>(0x443730)(text, defaultYes);
+    showType = 2;
+    return old;
+}
+
+bool ShadyLua::Renderer::RemoveShow() {
+    bool old = BoxSprite && BoxSprite->active;
+    reinterpret_cast<void(__stdcall*)(void)>(0x4439c0)();
+    return old;
+}
+
 static int font_loadFontFile(lua_State* L) {
     auto readFile = luabridge::getGlobal(L, "readfile");
     const char* filepath = luaL_checkstring(L, 1);
@@ -322,17 +360,7 @@ void ShadyLua::MenuProxy::_() {}
 int ShadyLua::MenuProxy::onProcess() {
     if (!ShadyLua::ScriptMap.contains(script->L))  return 0;
     int ret = 1;
-    switch (kind()) {
-    case 1:
-        state = updateMsgBox();
-        choice = false;
-        break;
-    case 2: case 3:
-        int result = updateChoiceBox();
-        state = result>2 ? 1 : result;
-        choice = result==3;
-        break;
-    }
+
     renderer.update();
     if (processHandler != LUA_REFNIL) { 
         std::lock_guard scriptGuard(script->mutex);
@@ -352,40 +380,7 @@ int ShadyLua::MenuProxy::onProcess() {
 
 int ShadyLua::MenuProxy::onRender() {
     renderer.render();
-    //if (kind()) renderBox();
     return 1;
-}
-
-bool ShadyLua::MenuProxy::ShowMessage(const char* text) {
-    bool old = BoxSprite && BoxSprite->active;
-    reinterpret_cast<void(__stdcall*)(const char*)>(0x443900)(text);
-    renderer.activeLayers.insert(0);
-    return old;
-}
-
-bool ShadyLua::MenuProxy::ShowChoice(const char* text, bool defaultYes) {
-    bool old = BoxSprite && BoxSprite->active;
-    reinterpret_cast<void(__stdcall*)(const char*, bool)>(0x443730)(text, defaultYes);
-    renderer.activeLayers.insert(0);
-    return old;
-}
-
-bool ShadyLua::MenuProxy::RemoveMessage() {
-    bool old = BoxSprite && BoxSprite->active;
-    reinterpret_cast<void(__stdcall*)(void)>(0x443730)();
-    return old;
-}
-
-int ShadyLua::MenuProxy::updateMsgBox() {
-    return reinterpret_cast<int(__stdcall*)(void)>(0x443960)();
-}
-
-int ShadyLua::MenuProxy::updateChoiceBox() {
-    return reinterpret_cast<int(__stdcall*)(void)>(0x4437d0)();
-}
-
-void ShadyLua::MenuProxy::renderBox() {
-    return reinterpret_cast<void(__stdcall*)(void)>(0x4439f0)();
 }
 
 int ShadyLua::EffectManagerProxy::loadPattern(lua_State* L) {
@@ -449,17 +444,24 @@ void ShadyLua::LualibGui(lua_State* L) {
                 .addFunction("createCursorH", &ShadyLua::Renderer::createCursor<true>)
                 .addFunction("createCursorV", &ShadyLua::Renderer::createCursor<false>)
                 .addFunction("destroy", &ShadyLua::Renderer::destroy) // TODO test to set nil to things
+
+                .addData("showResult", &ShadyLua::Renderer::showResult, false)
+                .addFunction("ShowMessage", &ShadyLua::Renderer::ShowMessage)
+                .addFunction("ShowChoice", &ShadyLua::Renderer::ShowChoice)
+                .addFunction("RemoveMessage", &ShadyLua::Renderer::RemoveShow)
+
+                .addStaticProperty("MSG_CLOSED", enumMap<-1>(), false)
+                .addStaticProperty("MSG_WAIT", enumMap<0>(), false)
+                .addStaticProperty("MSG_OK", enumMap<1>(), false)
+                .addStaticProperty("MSG_CANCEL", enumMap<2>(), false)
+                .addStaticProperty("MSG_NO", enumMap<3>(), false)
+                .addStaticProperty("MSG_YES", enumMap<4>(), false)
             .endClass()
             .beginClass<ShadyLua::MenuProxy>("Menu")
                 .addProperty("renderer", gui_menu_getRenderer, 0)
                 .addProperty("input", gui_getInput, 0)
                 .addData("data", &MenuProxy::data, true)
 
-                .addData("msgState", &MenuProxy::state, false)
-                .addData("choice", &MenuProxy::choice, false)
-                .addFunction("ShowMessage", &MenuProxy::ShowMessage)
-                .addFunction("ShowChoice", &MenuProxy::ShowChoice)
-                .addFunction("RemoveMessage", &MenuProxy::RemoveMessage)
             .endClass()
             .beginClass<ShadyLua::SceneProxy>("Scene")
                 .addProperty("renderer", gui_scene_getRenderer, 0)
