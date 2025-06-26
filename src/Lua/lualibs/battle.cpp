@@ -532,13 +532,38 @@ static int battle_GameObjectBase_setDir(lua_State* L) {
     return 0;
 }
 
+static int battle_GameObjectBase_getShadowOn(lua_State* L) {
+    auto o = Stack<SokuLib::v2::GameObjectBase*>::get(L, 1);
+    lua_pushboolean(L, o->isActive);
+    return 1;
+}
+static int battle_GameObjectBase_setShadowOn(lua_State* L) {
+    auto o = Stack<SokuLib::v2::GameObjectBase*>::get(L, 1);
+    o->isActive = lua_toboolean(L, 2);
+    if (o->isActive)
+        o->unknown138 = -6;
+    return 0;
+}
+
 static ShadyLua::Renderer::Effect* battle_GameObjectBase_createEffect(SokuLib::v2::GameObjectBase* object, lua_State* L) {
     auto fxmanager = *reinterpret_cast<SokuLib::v2::EffectManager_Effect**>(0x8985f0);
     int actionId = luaL_checkinteger(L, 2);
-    float x = luaL_checknumber(L, 3);
-    float y = luaL_checknumber(L, 4);
-    char direction = luaL_optinteger(L, 5, object->direction);
-    char layer = luaL_optinteger(L, 6, 1);
+    int index = 3;
+    float x, y;
+    if (Stack<SokuLib::Vector2f>::isInstance(L, index)) {
+        auto xy = Stack<SokuLib::Vector2f>::get(L, index++);//3
+        x = xy.x; y = xy.y;
+    }
+    //else if (lua_istable(L, index)) {
+    //    auto xy = Stack<std::vector<float>>::get(L, index++);//3
+    //    x = xy[0]; y = xy[1];
+    //}
+    else {
+        x = luaL_optnumber(L, index++, object->position.x);//3
+        y = luaL_optnumber(L, index++, object->position.y);//4
+    }
+    char direction = luaL_optinteger(L, index++, object->direction);
+    char layer = luaL_optinteger(L, index++, 1);
     auto fx = fxmanager->CreateEffect(actionId, x, y, direction, layer, (int)object);
     return (ShadyLua::Renderer::Effect*)fx;
 }
@@ -600,55 +625,6 @@ static int battle_GameObject_setCustomDataProxy(lua_State* L) {
     else return luaL_argerror(L, 2, "expected a table element.");
     return 0;
 }
-static SokuLib::v2::GameObject* battle_GameObject_createObject(SokuLib::v2::GameObject* object, lua_State* L) {
-    int actionId = luaL_checkinteger(L, 2);
-    float x = luaL_checknumber(L, 3);
-    float y = luaL_checknumber(L, 4);
-    char direction = luaL_optinteger(L, 5, object->direction);
-    char layer = luaL_optinteger(L, 6, 1);
-    size_t dataSize = 0;
-    const char* data = nullptr;
-    std::vector<float> fdata;
-    switch(lua_type(L, 7)) {
-        case LUA_TNONE: break;
-        case LUA_TTABLE:
-            fdata = Stack<std::vector<float>>::get(L, 7);
-            data = reinterpret_cast<const char*>(fdata.data());
-            dataSize = fdata.size();
-            break;
-        case LUA_TSTRING: 
-            data = lua_tolstring(L, 7, &dataSize);
-            dataSize /= 4;
-            break;
-        default: luaL_argerror(L, 7, "optional argument can only accept string or table of numbers");
-    }
-    return object->createObject(actionId, x, y, direction, layer, dataSize? (float*)data : 0, dataSize);
-}
-
-static SokuLib::v2::GameObject* battle_GameObject_createChild(SokuLib::v2::GameObject* object, lua_State* L) {
-    int actionId = luaL_checkinteger(L, 2);
-    float x = luaL_checknumber(L, 3);
-    float y = luaL_checknumber(L, 4);
-    char direction = luaL_optinteger(L, 5, object->direction);
-    char layer = luaL_optinteger(L, 6, 1);
-    size_t dataSize = 0;
-    const char* data = nullptr;
-    std::vector<float> fdata;
-    switch(lua_type(L, 7)) {
-        case LUA_TNONE: break;
-        case LUA_TTABLE:
-            fdata = Stack<std::vector<float>>::get(L, 7);
-            data = reinterpret_cast<const char*>(fdata.data());
-            dataSize = fdata.size();
-            break;
-        case LUA_TSTRING: 
-            data = lua_tolstring(L, 7, &dataSize);
-            dataSize /= 4;
-            break;
-        default: luaL_argerror(L, 7, "optional argument can only accept string or table of numbers");
-    }
-    return object->createChild(actionId, x, y, direction, layer, dataSize? (float*)data : 0, dataSize);
-}
 
 static LuaRef battle_GameObject_getChildren(SokuLib::v2::GameObject* object, lua_State* L) {
     LuaRef table = newTable(L);
@@ -657,30 +633,71 @@ static LuaRef battle_GameObject_getChildren(SokuLib::v2::GameObject* object, lua
     }
     return table;
 }
-
-static SokuLib::v2::GameObject* battle_Player_createObject(SokuLib::v2::Player* player, lua_State* L) {
+namespace {//traits
+template <typename T> struct mem_fn_traits;
+template <typename Class, typename Ret, typename... Args>
+struct mem_fn_traits<Ret(Class::*)(Args...)> {
+    using fn_type = Ret(Class::*)(Args...);
+    using class_type = Class;
+    using return_type = Ret;
+    using arguments = std::tuple<Args...>;
+    //inline constexpr static fn_type invoke(fn_type) { return f; }
+};
+template <typename Class, typename Ret, typename... Args>
+struct mem_fn_overload {
+    inline constexpr auto operator()(Ret(Class::* f)(Args...)) -> Ret(Class::*)(Args...) {
+        return f;
+    }
+    inline constexpr auto operator()(Ret(Class::* f)(Args...) const) -> Ret(Class::*)(Args...)const {
+        return f;
+    }
+};
+    static auto create_object_invoker = mem_fn_overload<SokuLib::v2::Player, SokuLib::v2::GameObject*, short, float, float, char, char, float*, unsigned int>{};
+    template <auto mem_fn> using class_create_object = mem_fn_traits<decltype(mem_fn)>::class_type;
+}
+template <auto VTableCreateObject>
+static SokuLib::v2::GameObject* battle_createObject(class_create_object<VTableCreateObject>* base, lua_State* L) {
     int actionId = luaL_checkinteger(L, 2);
-    float x = luaL_checknumber(L, 3);
-    float y = luaL_checknumber(L, 4);
-    char direction = luaL_optinteger(L, 5, player->direction);
-    char layer = luaL_optinteger(L, 6, 1);
+    int index = 3;
+    float x, y;
+    if (Stack<SokuLib::Vector2f>::isInstance(L, index)) {
+        auto xy = Stack<SokuLib::Vector2f>::get(L, index++);//3
+        x = xy.x; y = xy.y;
+    }
+    //else if (lua_istable(L, index)) {
+    //    auto xy = Stack<std::vector<float>>::get(L, index++);//3
+    //    x = xy[0]; y = xy[1];
+    //}
+    else {
+        x = luaL_optnumber(L, index++, base->position.x);//3
+        y = luaL_optnumber(L, index++, base->position.y);//4
+    }
+    char direction = luaL_optinteger(L, index++, base->direction);
+    char layer = luaL_optinteger(L, index++, 1);
     size_t dataSize = 0;
     const char* data = nullptr;
     std::vector<float> fdata;
-    switch(lua_type(L, 7)) {
-        case LUA_TNONE: break;
-        case LUA_TTABLE:
-            fdata = Stack<std::vector<float>>::get(L, 7);
-            data = reinterpret_cast<const char*>(fdata.data());
-            dataSize = fdata.size();
-            break;
-        case LUA_TSTRING: 
-            data = lua_tolstring(L, 7, &dataSize);
-            dataSize /= 4;
-            break;
-        default: luaL_argerror(L, 7, "optional argument can only accept string or table of numbers");
+    int sequenceId = 0;
+    switch (lua_type(L, index)) {
+    case LUA_TNUMBER:
+        sequenceId = luaL_checkinteger(L, index++);
+    case LUA_TNONE:
+        fdata.assign(3, 0); fdata[2] = sequenceId;
+        data = reinterpret_cast<const char*>(fdata.data());
+        dataSize = 3;
+        break;
+    case LUA_TTABLE:
+        fdata = Stack<std::vector<float>>::get(L, index++);
+        data = reinterpret_cast<const char*>(fdata.data());
+        dataSize = fdata.size();
+        break;
+    case LUA_TSTRING:
+        data = lua_tolstring(L, index++, &dataSize);
+        dataSize /= 4;
+        break;
+    default: luaL_argerror(L, index++, "optional argument can only accept integer, string or table of numbers");
     }
-    return player->objectList->createObject(0, player, (SokuLib::Action)actionId, x, y, direction, layer, dataSize ? (void*)data : 0, dataSize);
+    return (base->*VTableCreateObject)(actionId, x, y, direction, layer, dataSize ? (float*)data : nullptr, dataSize);
 }
 
 static int battle_Player_handGetId(SokuLib::v2::Player* player, lua_State* L) {
@@ -747,6 +764,9 @@ void ShadyLua::LualibBattle(lua_State* L) {
                 .addProperty("gravity", &SokuLib::v2::GameObjectBase::gravity, true)
                 .addProperty("direction", battle_GameObjectBase_getDir, battle_GameObjectBase_setDir)
                 .addProperty("renderInfo", &SokuLib::v2::GameObjectBase::renderInfos, true)
+                .addProperty("isGui", &SokuLib::v2::GameObjectBase::isGui, true)
+                .addProperty("shadowOn", battle_GameObjectBase_getShadowOn, battle_GameObjectBase_setShadowOn)
+                .addProperty("shadowOffset", &SokuLib::v2::GameObjectBase::unknown138, true)
                 .addProperty("actionId", MEMBER_ADDRESS(unsigned short, SokuLib::v2::GameObjectBase, frameState.actionId), false)
                 .addProperty("sequenceId", MEMBER_ADDRESS(unsigned short, SokuLib::v2::GameObjectBase, frameState.sequenceId), false)
                 .addProperty("poseId", MEMBER_ADDRESS(unsigned short, SokuLib::v2::GameObjectBase, frameState.poseId), false)
@@ -797,13 +817,16 @@ void ShadyLua::LualibBattle(lua_State* L) {
                 .addFunction("checkProjectileHit", &SokuLib::v2::GameObject::checkProjectileHit)
                 .addFunction("checkTurnIntoCrystals", &SokuLib::v2::GameObject::checkTurnIntoCrystals)
 
-                .addFunction("createObject", battle_GameObject_createObject)
-                .addFunction("createChild", battle_GameObject_createChild)
+                .addFunction("createObject", battle_createObject<&SokuLib::v2::GameObject::createObject>)
+                .addFunction("createChild", battle_createObject<&SokuLib::v2::GameObject::createChild>)
             .endClass()
 
             .deriveClass<SokuLib::v2::Player, SokuLib::v2::GameObjectBase>("Player")
                 .addStaticFunction("fromPtr", castFromPtr<SokuLib::v2::Player>)
                 .addProperty("character", MEMBER_ADDRESS(int, SokuLib::v2::Player, characterIndex), false)
+                .addProperty("isRight", &SokuLib::v2::Player::teamId, false)
+                .addProperty("teamId", &SokuLib::v2::Player::teamId, false)
+                .addProperty("paletteId", &SokuLib::v2::Player::paletteId, false)
                 .addProperty("unknown4A6", &SokuLib::v2::Player::spellStopCounter, true)
                 .addProperty("spellStopCounter", &SokuLib::v2::Player::spellStopCounter, true)
                 .addProperty("groundDashCount", MEMBER_ADDRESS(unsigned char, SokuLib::v2::Player, groundDashCount), true)
@@ -835,7 +858,7 @@ void ShadyLua::LualibBattle(lua_State* L) {
                 .addFunction("handGetId", battle_Player_handGetId)
                 .addFunction("handGetCost", battle_Player_handGetCost)
 
-                .addFunction("createObject", battle_Player_createObject)
+                .addFunction("createObject", battle_createObject<create_object_invoker(&SokuLib::v2::Player::createObject)>)
                 .addFunction("updateGroundMovement", &SokuLib::v2::Player::updateGroundMovement)
                 .addFunction("updateAirMovement", &SokuLib::v2::Player::decideShotAngle)
                 .addFunction("decideShotAngle", &SokuLib::v2::Player::decideShotAngle)

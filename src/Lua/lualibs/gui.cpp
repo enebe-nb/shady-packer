@@ -122,8 +122,53 @@ int ShadyLua::SpriteProxy::setText(lua_State* L) {
 
 ShadyLua::MenuCursorProxy::MenuCursorProxy(int w, bool horz, int max, int pos) {
     width = w;
-    set(horz ? &SokuLib::inputMgrs.input.horizontalAxis :&SokuLib::inputMgrs.input.verticalAxis, max, pos);
+    valueAddr2 = !horz ? &SokuLib::inputMgrs.input.horizontalAxis : &SokuLib::inputMgrs.input.verticalAxis;
+    set(horz ? &SokuLib::inputMgrs.input.horizontalAxis :&SokuLib::inputMgrs.input.verticalAxis, max, 0);
+    setIndex(pos);
     positions.resize(max);
+}
+bool ShadyLua::MenuCursorProxy::updateProxy() {
+    bool moving = MenuCursor::update();
+    if (!dRows) pgPos = 0;//fix
+    else if (valueAddr2) {
+        auto c = abs(*valueAddr2);
+        switch ((c == 1 || c > 30 && c % 6 == 0) ? *valueAddr2 / c : 0) {
+        case -1:    pgUp(); moving = true; break;
+        case 1:     pgDn(); moving = true; break;
+        default: break;
+        }
+    }
+    return moving;
+}
+
+void ShadyLua::MenuCursorProxy::setPageRows(int rows) {
+    if (dRows == rows) return;
+
+    dRows = rows;
+    pgPos = 0;
+    if (dRows > 0) positions.resize(dRows);
+    else positions.resize(max);
+}
+
+int ShadyLua::MenuCursorProxy::setRange(lua_State* L) {
+    int x = luaL_checkinteger(L, 2);
+    int y = luaL_checkinteger(L, 3);
+    int dx = luaL_optinteger(L, 4, 0);
+    int dy = luaL_optinteger(L, 5, 0);
+    if (lua_gettop(L) >= 6) setPageRows(luaL_checkinteger(L, 6));
+
+    for (int i = 0; i < positions.size(); ++i) {
+        positions[i].first = x + i * dx; positions[i].second = y + i * dy;
+    } return 0;
+}
+
+int ShadyLua::MenuCursorProxy::getPosition(lua_State* L) {
+    int index = luaL_checkinteger(L, 2);
+    if (index < 0 || index >= positions.size()) return luaL_argerror(L, 2, "index out of bounds");
+    auto& entry = positions.at(index);
+    lua_pushinteger(L, entry.first);
+    lua_pushinteger(L, entry.second);
+    return 2;
 }
 
 void ShadyLua::MenuCursorProxy::setPosition(int i, int x, int y) {
@@ -131,14 +176,12 @@ void ShadyLua::MenuCursorProxy::setPosition(int i, int x, int y) {
     positions[i].first = x; positions[i].second = y;
 }
 
-void ShadyLua::MenuCursorProxy::setRange(int x, int y, int dx, int dy) {
-    for (int i = 0; i < positions.size(); ++i) {
-        positions[i].first = x + i*dx; positions[i].second = y + i*dy;
-    }
-}
-
 void ShadyLua::Renderer::update() {
-    for(auto& cursor : cursors) if (cursor.active) cursor.update();
+    for (auto& cursor : cursors) {
+        if (!cursor.active) continue;
+        if (cursor.updateProxy() && cursor.sfxId >= 0)
+            SokuLib::playSEWaveBuffer(cursor.sfxId);
+    }
     effects.Update();
 }
 
@@ -146,7 +189,7 @@ void ShadyLua::Renderer::render() {
     if (!isActive) return;
 
     for(auto& cursor : cursors) {
-        cursor.render(cursor.positions[cursor.pos].first, cursor.positions[cursor.pos].second, cursor.width);
+        if (cursor.visible) cursor.render();
     }
 
     if (guiSchema.objects.size()) guiSchema.render4();
@@ -156,6 +199,8 @@ void ShadyLua::Renderer::render() {
         for (auto iter = range.first; iter != range.second; ++iter) {
             if (iter->second.isEnabled) iter->second.render(0, 0); // TODO check position
         }
+        if (i == 0 && ShadyLua::MenuProxy::kind())
+            ShadyLua::MenuProxy::renderBox();
     }
 }
 
@@ -220,8 +265,10 @@ int ShadyLua::Renderer::createCursor(lua_State* L) {
     const int argc = lua_gettop(L);
     int width = luaL_checkinteger(L, 2);
     int max = (argc < 3) ? 1 : luaL_checkinteger(L, 3);
+    max = max(max, 1);
     int pos = (argc < 4) ? 0 : luaL_checkinteger(L, 4);
     auto& cursor = cursors.emplace_back(width, HORZ, max, pos);
+    cursor.sfxId = 0x27;//default switch se
     Stack<MenuCursorProxy*>::push(L, &cursor);
     return 1;
 }
@@ -239,10 +286,12 @@ int ShadyLua::Renderer::destroy(lua_State* L) {
             auto effect = Stack<Effect*>::get(L, i);
             effect->unknown158 = false;
         } else if (Stack<MenuCursorProxy*>::Helper::isInstance(L, i)) {
+            if (cursors.empty()) continue;
             auto cursor = Stack<MenuCursorProxy*>::get(L, i);
-            for (auto iter = cursors.begin(); iter != cursors.end(); ++iter) {
-                if (cursor == iter.operator->()) { cursors.erase(iter); break; }
-            }
+            // just hide it, unless it is on ends
+            if (&cursors.back() == cursor) cursors.pop_back();
+            else if (&cursors.front() == cursor) cursors.pop_front();
+            else cursor->active = cursor->visible = false;
         }
     }
     return 0;
@@ -273,6 +322,17 @@ void ShadyLua::MenuProxy::_() {}
 int ShadyLua::MenuProxy::onProcess() {
     if (!ShadyLua::ScriptMap.contains(script->L))  return 0;
     int ret = 1;
+    switch (kind()) {
+    case 1:
+        state = updateMsgBox();
+        choice = false;
+        break;
+    case 2: case 3:
+        int result = updateChoiceBox();
+        state = result>2 ? 1 : result;
+        choice = result==3;
+        break;
+    }
     renderer.update();
     if (processHandler != LUA_REFNIL) { 
         std::lock_guard scriptGuard(script->mutex);
@@ -292,12 +352,40 @@ int ShadyLua::MenuProxy::onProcess() {
 
 int ShadyLua::MenuProxy::onRender() {
     renderer.render();
+    //if (kind()) renderBox();
     return 1;
 }
 
 bool ShadyLua::MenuProxy::ShowMessage(const char* text) {
-    reinterpret_cast<void (__stdcall *)(const char*)>(0x443900)(text);
-    return true;
+    bool old = BoxSprite && BoxSprite->active;
+    reinterpret_cast<void(__stdcall*)(const char*)>(0x443900)(text);
+    renderer.activeLayers.insert(0);
+    return old;
+}
+
+bool ShadyLua::MenuProxy::ShowChoice(const char* text, bool defaultYes) {
+    bool old = BoxSprite && BoxSprite->active;
+    reinterpret_cast<void(__stdcall*)(const char*, bool)>(0x443730)(text, defaultYes);
+    renderer.activeLayers.insert(0);
+    return old;
+}
+
+bool ShadyLua::MenuProxy::RemoveMessage() {
+    bool old = BoxSprite && BoxSprite->active;
+    reinterpret_cast<void(__stdcall*)(void)>(0x443730)();
+    return old;
+}
+
+int ShadyLua::MenuProxy::updateMsgBox() {
+    return reinterpret_cast<int(__stdcall*)(void)>(0x443960)();
+}
+
+int ShadyLua::MenuProxy::updateChoiceBox() {
+    return reinterpret_cast<int(__stdcall*)(void)>(0x4437d0)();
+}
+
+void ShadyLua::MenuProxy::renderBox() {
+    return reinterpret_cast<void(__stdcall*)(void)>(0x4439f0)();
 }
 
 int ShadyLua::EffectManagerProxy::loadPattern(lua_State* L) {
@@ -360,7 +448,6 @@ void ShadyLua::LualibGui(lua_State* L) {
                 .addFunction("createEffect", &ShadyLua::Renderer::createEffect)
                 .addFunction("createCursorH", &ShadyLua::Renderer::createCursor<true>)
                 .addFunction("createCursorV", &ShadyLua::Renderer::createCursor<false>)
-
                 .addFunction("destroy", &ShadyLua::Renderer::destroy) // TODO test to set nil to things
             .endClass()
             .beginClass<ShadyLua::MenuProxy>("Menu")
@@ -368,7 +455,11 @@ void ShadyLua::LualibGui(lua_State* L) {
                 .addProperty("input", gui_getInput, 0)
                 .addData("data", &MenuProxy::data, true)
 
-                //.addFunction("ShowMessage", &MenuProxy::ShowMessage)
+                .addData("msgState", &MenuProxy::state, false)
+                .addData("choice", &MenuProxy::choice, false)
+                .addFunction("ShowMessage", &MenuProxy::ShowMessage)
+                .addFunction("ShowChoice", &MenuProxy::ShowChoice)
+                .addFunction("RemoveMessage", &MenuProxy::RemoveMessage)
             .endClass()
             .beginClass<ShadyLua::SceneProxy>("Scene")
                 .addProperty("renderer", gui_scene_getRenderer, 0)
@@ -424,9 +515,17 @@ void ShadyLua::LualibGui(lua_State* L) {
             .endClass()
             .beginClass<ShadyLua::MenuCursorProxy>("Cursor")
                 .addData("isActive", &MenuCursorProxy::active, true)
-                .addData("index", &MenuCursorProxy::pos, true)
+                .addData("isVisible", &MenuCursorProxy::visible, true)
+                .addData("max", &MenuCursorProxy::max, false)
+                .addProperty("index", &ShadyLua::MenuCursorProxy::getIndex, &ShadyLua::MenuCursorProxy::setIndex)
+                .addData("page", &MenuCursorProxy::pgPos, false)
+                .addData("sfxId", &MenuCursorProxy::sfxId, true)//negative number to disable
+                .addFunction("getPosition", &MenuCursorProxy::getPosition)
                 .addFunction("setPosition", &MenuCursorProxy::setPosition)
+                .addFunction("setPageRows", &MenuCursorProxy::setPageRows)//zero to disable
                 .addFunction("setRange", &MenuCursorProxy::setRange)
+                .addFunction("pgUp", &MenuCursorProxy::pgUp)
+                .addFunction("pgDn", &MenuCursorProxy::pgDn)
             .endClass()
             .beginClass<ShadyLua::EffectManagerProxy>("EffectManager")
                 .addFunction("loadResource", &ShadyLua::EffectManagerProxy::loadPattern)

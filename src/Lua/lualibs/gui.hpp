@@ -17,12 +17,28 @@ namespace ShadyLua {
 
     class MenuCursorProxy : public SokuLib::MenuCursor {
     public:
-        int width; bool active = true;
+        int width; bool active = true, visible=true;
+        const int* valueAddr2 = 0;
         std::vector<std::pair<int,int>> positions;
+        int sfxId=-1;
 
         MenuCursorProxy(int w, bool horz, int max = 1, int pos = 0);
+        inline int getIndex() const { return pos; }
+        inline void setIndex(int i) {
+            pos = i >= 0 ? i % max : max-1 + (i+1) % max;
+            if (!dRows) return;
+            if (pgPos + dRows <= pos)
+                pgPos = (pos - dRows) + 1;
+            if (pos < pgPos)
+                pgPos = pos;
+        }
+        void setPageRows(int rows);
+        int getPosition(lua_State* L);
         void setPosition(int i, int x, int y);
-        void setRange(int x, int y, int dx = 0, int dy = 0);
+        int setRange(lua_State* L);
+        //int setSfx(lua_State* L) { sfxId = luaL_optinteger(L, 2, -1); return 0; }
+        inline bool updateProxy();
+        inline void render() { SokuLib::MenuCursor::render(positions[pos - pgPos].first, positions[pos - pgPos].second, width); }
     };
 
     class EffectManagerProxy : public SokuLib::v2::EffectManager_Select {
@@ -40,7 +56,9 @@ namespace ShadyLua {
         bool isActive = true;
 
         using Effect = SokuLib::v2::SelectEffectObject;
-        ~Renderer() {guiSchema.clear();}
+        ~Renderer() {
+            guiSchema.clear();
+        }
         void update();
         void render();
 
@@ -52,6 +70,11 @@ namespace ShadyLua {
         void clear();
     };
 
+    static auto& BoxSprite = *(SokuLib::CDesign::Sprite**)0x89a390;
+    static auto& ButtonNoSpriteSelected = *(SokuLib::CDesign::Sprite**)0x89a440;
+    static auto& ButtonNoSprite = *(SokuLib::CDesign::Sprite**)0x89a448;
+    static auto& ButtonYesSpriteSelected = *(SokuLib::CDesign::Sprite**)0x89a43c;
+    static auto& ButtonYesSprite = *(SokuLib::CDesign::Sprite**)0x89a444;
     class MenuProxy : public SokuLib::IMenu {
     private:
         const int processHandler;
@@ -67,7 +90,15 @@ namespace ShadyLua {
         int onProcess() override;
         int onRender() override;
 
+        int state = 0;//none, checked, exit
+        bool choice = false;//no, yes
+        inline static int kind() { return (BoxSprite && BoxSprite->active) + (ButtonYesSprite && ButtonYesSprite->active) + (ButtonNoSprite && ButtonNoSprite->active); }
         bool ShowMessage(const char* text);
+        bool ShowChoice(const char* text, bool defaultYes);
+        bool RemoveMessage();
+        int updateMsgBox();//0:none, 1:checked, 2:exit
+        int updateChoiceBox();//0:none, 2:exit, 3:no, 4:yes
+        static void renderBox();
     };
 
     class SceneProxy {
