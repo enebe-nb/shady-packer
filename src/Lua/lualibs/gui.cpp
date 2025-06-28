@@ -320,6 +320,7 @@ void ShadyLua::Renderer::clear() {
     sprites.clear();
     effects.ClearPattern();
     activeLayers.clear();
+    RemoveShow();
 }
 
 bool ShadyLua::Renderer::ShowMessage(const char* text) {

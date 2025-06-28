@@ -64,6 +64,7 @@ namespace ShadyLua {
         using Effect = SokuLib::v2::SelectEffectObject;
         ~Renderer() {
             guiSchema.clear();
+            RemoveShow();
         }
         void update();
         void render();
