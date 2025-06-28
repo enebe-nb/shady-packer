@@ -177,7 +177,7 @@ void ShadyLua::MenuCursorProxy::setPosition(int i, int x, int y) {
 }
 
 void ShadyLua::Renderer::update() {
-    for (auto& cursor : cursors) {
+    if (!BoxSprite || !BoxSprite->active) for (auto& cursor : cursors) {
         if (!cursor.active) continue;
         if (cursor.updateProxy() && cursor.sfxId >= 0)
             SokuLib::playSEWaveBuffer(cursor.sfxId);
@@ -320,28 +320,32 @@ void ShadyLua::Renderer::clear() {
     sprites.clear();
     effects.ClearPattern();
     activeLayers.clear();
+    RemoveShow();
 }
 
 bool ShadyLua::Renderer::ShowMessage(const char* text) {
     bool old = BoxSprite && BoxSprite->active;
+    if (old && !showType) return false;//occupied
     reinterpret_cast<void(__stdcall*)(const char*)>(0x443900)(text);
     activeLayers.insert(0);
     showType = 1;
-    return old;
+    return true;
 }
 
 bool ShadyLua::Renderer::ShowChoice(const char* text, bool defaultYes) {
     bool old = BoxSprite && BoxSprite->active;
+    if (old && !showType) return false;//occupied
     reinterpret_cast<void(__stdcall*)(const char*, bool)>(0x443730)(text, defaultYes);
     activeLayers.insert(0);
     showType = 2;
-    return old;
+    return true;
 }
 
 bool ShadyLua::Renderer::RemoveShow() {
     bool old = BoxSprite && BoxSprite->active;
+    if (old && !showType) return false;//occupied
     reinterpret_cast<void(__stdcall*)(void)>(0x4439c0)();
-    return old;
+    return true;
 }
 
 static int font_loadFontFile(lua_State* L) {
@@ -455,8 +459,8 @@ void ShadyLua::LualibGui(lua_State* L) {
                 .addStaticProperty("MSG_WAIT", enumMap<0>(), false)
                 .addStaticProperty("MSG_OK", enumMap<1>(), false)
                 .addStaticProperty("MSG_CANCEL", enumMap<2>(), false)
-                .addStaticProperty("MSG_NO", enumMap<3>(), false)
-                .addStaticProperty("MSG_YES", enumMap<4>(), false)
+                .addStaticProperty("MSG_YES", enumMap<3>(), false)
+                .addStaticProperty("MSG_NO", enumMap<4>(), false)
             .endClass()
             .beginClass<ShadyLua::MenuProxy>("Menu")
                 .addProperty("renderer", gui_menu_getRenderer, 0)
