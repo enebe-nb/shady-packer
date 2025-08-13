@@ -831,6 +831,10 @@ void ShadyLua::LualibBattle(lua_State* L) {
                 .addProperty("SORDebuffTimer", &SokuLib::v2::Player::SORDebuffTimer, true)
                 .addProperty("healCharmTimer", &SokuLib::v2::Player::healCharmTimer, true)
                 
+                .addProperty("skillLevelA", ShadyLua::ArrayRef_castFrom<int>(&SokuLib::v2::Player::effectiveSkillLevel), false)
+                .addProperty("effectiveskillLevel", ShadyLua::ArrayRef_castFrom<int>(&SokuLib::v2::Player::effectiveSkillLevel), false)
+                .addProperty("skillLevelB", ShadyLua::ArrayRef_castFrom<int>(&SokuLib::v2::Player::skilledSkillLevel), false)
+                .addProperty("skilledSkillLevel", ShadyLua::ArrayRef_castFrom<int>(&SokuLib::v2::Player::skilledSkillLevel), false)
                 .addProperty("input", MEMBER_ADDRESS(SokuLib::KeyInputLight, SokuLib::v2::Player, inputData.keyInput), false)
                 .addProperty("inputBuffered", MEMBER_ADDRESS(SokuLib::KeyInputLight, SokuLib::v2::Player, inputData.bufferedKeyInput), false)
                 .addProperty("gpShort", ShadyLua::ArrayRef_from(&SokuLib::v2::Player::gpShort), true)
