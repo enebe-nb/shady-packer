@@ -2,6 +2,7 @@
 #include "../logger.hpp"
 #include <LuaBridge/RefCountedPtr.h>
 #include "../script.hpp"
+#include <UnionCast.hpp>
 
 using namespace luabridge;
 
@@ -201,7 +202,10 @@ void ShadyLua::Renderer::update() {
 
     effects.Update();
 }
-
+ namespace {
+    static const auto setRenderMode = SokuLib::union_cast<void (SokuLib::Renderer::*)(int)>(0x404b80);
+    static const auto renderMode = SokuLib::union_cast<int SokuLib::Renderer::*>(0xC);
+}
 void ShadyLua::Renderer::render() {
     if (!isActive) return;
 
@@ -210,8 +214,10 @@ void ShadyLua::Renderer::render() {
     }
 
     if (guiSchema.objects.size()) guiSchema.render4();
+    auto old = SokuLib::renderer.*renderMode;
     for (auto i : activeLayers) {
-        effects.Render(i);
+        effects.Render(i);//this sets mode to 2
+        (SokuLib::renderer.*setRenderMode)(old);
         auto range = sprites.equal_range(i);
         for (auto iter = range.first; iter != range.second; ++iter) {
             if (iter->second.isEnabled) iter->second.render(0, 0); // TODO check position
