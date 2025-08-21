@@ -202,9 +202,10 @@ void ShadyLua::Renderer::update() {
 
     effects.Update();
 }
-
-static const auto setRenderMode = SokuLib::union_cast<void (SokuLib::Renderer::*)(int)>(0x404b80);
-static const auto renderMode = SokuLib::union_cast<int SokuLib::Renderer::*>(0xC);
+ namespace {
+    static const auto setRenderMode = SokuLib::union_cast<void (SokuLib::Renderer::*)(int)>(0x404b80);
+    static const auto renderMode = SokuLib::union_cast<int SokuLib::Renderer::*>(0xC);
+}
 void ShadyLua::Renderer::render() {
     if (!isActive) return;
 
