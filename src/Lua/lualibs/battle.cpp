@@ -519,18 +519,21 @@ static int battle_GameObjectBase_getOpponent(lua_State* L) {
     return 1;
 }
 
-static int battle_GameObjectBase_getDir(lua_State* L) {
-    auto o = Stack<SokuLib::v2::GameObjectBase*>::get(L, 1);
-    lua_pushinteger(L, o->direction);
+template<typename Class, auto Field>
+static int battle_getByteField(lua_State* L) {
+    auto o = Stack<Class*>::get(L, 1);
+    lua_pushinteger(L, o->*Field);
     return 1;
 }
-
-static int battle_GameObjectBase_setDir(lua_State* L) {
-    auto o = Stack<SokuLib::v2::GameObjectBase*>::get(L, 1);
-    int value = luaL_checkinteger(L, 2);
-    o->direction = (SokuLib::Direction)value;
+template<typename Class, auto Field, typename Cast = char>
+static int battle_setByteField(lua_State* L) {
+    auto o = Stack<Class*>::get(L, 1);
+    o->*Field = (Cast)luaL_checkinteger(L, 2);
     return 0;
 }
+#define BYTE_FIELD_GETTER(t, f) battle_getByteField<t, &t::f>
+#define BYTE_FIELD_SETTER_CASTED(c, t, f) battle_setByteField<t, &t::f, c>
+#define BYTE_FIELD_SETTER(t, f) battle_setByteField<t, &t::f>
 
 static int battle_GameObjectBase_getShadowOn(lua_State* L) {
     auto o = Stack<SokuLib::v2::GameObjectBase*>::get(L, 1);
@@ -740,7 +743,7 @@ void ShadyLua::LualibBattle(lua_State* L) {
                 .addProperty("position", &SokuLib::v2::GameObjectBase::position, true)
                 .addProperty("speed", &SokuLib::v2::GameObjectBase::speed, true)
                 .addProperty("gravity", &SokuLib::v2::GameObjectBase::gravity, true)
-                .addProperty("direction", battle_GameObjectBase_getDir, battle_GameObjectBase_setDir)
+                .addProperty("direction", BYTE_FIELD_GETTER(SokuLib::v2::GameObjectBase, direction), BYTE_FIELD_SETTER_CASTED(SokuLib::Direction, SokuLib::v2::GameObjectBase, direction))
                 .addProperty("renderInfo", &SokuLib::v2::GameObjectBase::renderInfos, true)
                 .addProperty("isGui", &SokuLib::v2::GameObjectBase::isGui, true)
                 .addProperty("shadowOn", battle_GameObjectBase_getShadowOn, battle_GameObjectBase_setShadowOn)
@@ -758,7 +761,7 @@ void ShadyLua::LualibBattle(lua_State* L) {
 
                 .addProperty("hp", &SokuLib::v2::GameObjectBase::hp, true)
                 .addProperty("maxHp", &SokuLib::v2::GameObjectBase::maxHP, true)
-                .addProperty("skillIndex", &SokuLib::v2::GameObjectBase::skillIndex, true)
+                .addProperty("skillIndex", BYTE_FIELD_GETTER(SokuLib::v2::GameObjectBase, skillIndex), BYTE_FIELD_SETTER(SokuLib::v2::GameObjectBase, skillIndex))
                 .addProperty("collisionType", MEMBER_ADDRESS(int, SokuLib::v2::GameObjectBase, collisionType), true)
                 .addProperty("collisionLimit", MEMBER_ADDRESS(unsigned char, SokuLib::v2::GameObjectBase, collisionLimit), true)
                 .addProperty("hitStop", &SokuLib::v2::GameObjectBase::hitStop, true)
@@ -780,7 +783,7 @@ void ShadyLua::LualibBattle(lua_State* L) {
             .deriveClass<SokuLib::v2::GameObject, SokuLib::v2::GameObjectBase>("Object")
                 .addStaticFunction("fromPtr", castFromPtr<SokuLib::v2::GameObject>)
                 .addProperty("lifetime", &SokuLib::v2::GameObject::lifetime, true)
-                .addProperty("layer", &SokuLib::v2::GameObject::layer, true)
+                .addProperty("layer", BYTE_FIELD_GETTER(SokuLib::v2::GameObject, layer), BYTE_FIELD_SETTER(SokuLib::v2::GameObject, layer))
                 .addProperty("parentPlayerB", &SokuLib::v2::GameObject::parentPlayerB)
                 .addProperty("parentObjectB", &SokuLib::v2::GameObject::parentB)
                 
@@ -802,16 +805,17 @@ void ShadyLua::LualibBattle(lua_State* L) {
             .deriveClass<SokuLib::v2::Player, SokuLib::v2::GameObjectBase>("Player")
                 .addStaticFunction("fromPtr", castFromPtr<SokuLib::v2::Player>)
                 .addProperty("character", MEMBER_ADDRESS(int, SokuLib::v2::Player, characterIndex), false)
-                .addProperty("isRight", &SokuLib::v2::Player::teamId, false)
-                .addProperty("teamId", &SokuLib::v2::Player::teamId, false)
-                .addProperty("paletteId", &SokuLib::v2::Player::paletteId, false)
+                .addProperty("teamId", MEMBER_ADDRESS(unsigned char, SokuLib::v2::Player, teamId), false)
+                    .addProperty("isRight", MEMBER_ADDRESS(unsigned char, SokuLib::v2::Player, teamId), false)
+                .addProperty("paletteId", MEMBER_ADDRESS(unsigned char, SokuLib::v2::Player, paletteId), false)
                 .addProperty("unknown4A6", &SokuLib::v2::Player::spellStopCounter, true)
                 .addProperty("spellStopCounter", &SokuLib::v2::Player::spellStopCounter, true)
                 .addProperty("groundDashCount", MEMBER_ADDRESS(unsigned char, SokuLib::v2::Player, groundDashCount), true)
                 .addProperty("airDashCount", MEMBER_ADDRESS(unsigned char, SokuLib::v2::Player, airDashCount), true)
                 .addProperty("currentSpirit", &SokuLib::v2::Player::currentSpirit, false)
                 .addProperty("timeStop", &SokuLib::v2::Player::timeStop, false)
-
+                
+                .addProperty("redHp", &SokuLib::v2::Player::redHP, false)
                 .addProperty("comboRate", &SokuLib::v2::Player::comboRate, false)
                 .addProperty("comboCount", &SokuLib::v2::Player::comboCount, false)
                 .addProperty("comboDamage", &SokuLib::v2::Player::comboDamage, false)
@@ -827,6 +831,10 @@ void ShadyLua::LualibBattle(lua_State* L) {
                 .addProperty("SORDebuffTimer", &SokuLib::v2::Player::SORDebuffTimer, true)
                 .addProperty("healCharmTimer", &SokuLib::v2::Player::healCharmTimer, true)
                 
+                .addProperty("skillLevelA", ShadyLua::ArrayRef_castFrom<int>(&SokuLib::v2::Player::effectiveSkillLevel), true)
+                    .addProperty("effectiveSkillLevel", ShadyLua::ArrayRef_castFrom<int>(&SokuLib::v2::Player::effectiveSkillLevel), true)
+                .addProperty("skillLevelB", ShadyLua::ArrayRef_castFrom<int>(&SokuLib::v2::Player::skilledSkillLevel), true)
+                    .addProperty("skilledSkillLevel", ShadyLua::ArrayRef_castFrom<int>(&SokuLib::v2::Player::skilledSkillLevel), true)
                 .addProperty("input", MEMBER_ADDRESS(SokuLib::KeyInputLight, SokuLib::v2::Player, inputData.keyInput), false)
                 .addProperty("inputBuffered", MEMBER_ADDRESS(SokuLib::KeyInputLight, SokuLib::v2::Player, inputData.bufferedKeyInput), false)
                 .addProperty("gpShort", ShadyLua::ArrayRef_from(&SokuLib::v2::Player::gpShort), true)
@@ -838,8 +846,8 @@ void ShadyLua::LualibBattle(lua_State* L) {
 
                 .addFunction("createObject", battle_createObject<SokuLib::v2::Player, &SokuLib::v2::Player::createObject>)
                 .addFunction("updateGroundMovement", &SokuLib::v2::Player::updateGroundMovement)
-                .addFunction("updateAirMovement", &SokuLib::v2::Player::decideShotAngle)
                 .addFunction("decideShotAngle", &SokuLib::v2::Player::decideShotAngle)
+                    .addFunction("updateAirMovement", &SokuLib::v2::Player::decideShotAngle)
                 .addFunction("handleCardSwitch", &SokuLib::v2::Player::handleCardSwitch)
                 .addFunction("useSystemCard", &SokuLib::v2::Player::useSystemCard)
                 .addFunction("canSpendSpirit", &SokuLib::v2::Player::canSpendSpirit)
@@ -863,6 +871,7 @@ void ShadyLua::LualibBattle(lua_State* L) {
                 .addFunction("applyAirMechanics", &SokuLib::v2::Player::applyAirMechanics)
                 .addFunction("playSFX", &SokuLib::v2::Player::playSFX)
                 .addFunction("checkTurnAround", &SokuLib::v2::Player::checkTurnAround)
+                    .addFunction("unknown487C20", &SokuLib::v2::Player::checkTurnAround)
                 .addFunction("playSpellBackground", &SokuLib::v2::Player::playSpellBackground)
                 .addFunction("consumeSpirit", &SokuLib::v2::Player::consumeSpirit)
                 .addFunction("consumeCard", &SokuLib::v2::Player::consumeCard)
@@ -875,10 +884,10 @@ void ShadyLua::LualibBattle(lua_State* L) {
             .beginClass<SokuLib::PlayerInfo>("PlayerInfo")
                 .addStaticFunction("fromPtr", castFromPtr<SokuLib::PlayerInfo>)
                 .addProperty("character", MEMBER_ADDRESS(int, SokuLib::PlayerInfo, character), true)
-                .addProperty("isRight", &SokuLib::PlayerInfo::isRight, false)
                 .addProperty("teamId", &SokuLib::PlayerInfo::isRight, false)
-                .addProperty("palette", MEMBER_ADDRESS(unsigned char, SokuLib::PlayerInfo, palette), true)
+                    .addProperty("isRight", &SokuLib::PlayerInfo::isRight, false)
                 .addProperty("paletteId", MEMBER_ADDRESS(unsigned char, SokuLib::PlayerInfo, palette), true)
+                    .addProperty("palette", MEMBER_ADDRESS(unsigned char, SokuLib::PlayerInfo, palette), true)
                 .addProperty("inputType", &SokuLib::PlayerInfo::inputType, false)
                 .addProperty("deckId", &SokuLib::PlayerInfo::deck, true)
             .endClass()
