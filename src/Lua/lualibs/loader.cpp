@@ -151,10 +151,10 @@ static bool loader_removePackage(int childId, lua_State* L) {
 	return child;
 }
 
-static const char* loader_underlineToSlash(const char* filename) {
+static std::string loader_underlineToSlash(const char* filename) {
 	std::string s_filename(filename);
 	ShadyCore::Package::underlineToSlash(s_filename);
-	return s_filename.c_str();
+	return s_filename;
 }
 
 void ShadyLua::LualibLoader(lua_State* L, ShadyCore::PackageEx* package) {

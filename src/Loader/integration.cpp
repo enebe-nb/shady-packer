@@ -96,10 +96,10 @@ static bool loader_removeFile(const char* alias, lua_State* L) {
 	return ModPackage::basePackage->erase(s_alias);
 }
 
-static const char* loader_underlineToSlash(const char* filename) {
+static std::string loader_underlineToSlash(const char* filename) {
 	std::string s_filename(filename);
 	ShadyCore::Package::underlineToSlash(s_filename);
-	return s_filename.c_str();
+	return s_filename;
 }
 
 static ShadyCore::BasePackageEntry* _lua_find(ShadyCore::Package* base, ShadyCore::Package* owner, const char* filename) {
