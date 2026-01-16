@@ -256,7 +256,7 @@ static int soku_GetCharacterNames(lua_State* L) {
     return 1;
 }
 static int soku_CharacterName(lua_State* L) {
-    int id = luaL_checkinteger(L, 1);
+    auto id = static_cast<SokuLib::Character>(luaL_checkinteger(L, 1));
     //auto name = reinterpret_cast<const char* (*)(int id)>(0x0043F3F0)(id);// error when game start up
     //auto& CharacterNames= *reinterpret_cast<SokuLib::Map<int, SokuLib::String>*>(0x899cfc);
     if (auto it = CharacterNames.find(id); it != CharacterNames.end() && it->second) {
