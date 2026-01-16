@@ -15,6 +15,7 @@
 using namespace luabridge;
 
 std::unordered_map<DWORD, std::unique_ptr<ShadyLua::Hook>> ShadyLua::hooks;
+bool ShadyLua::isReady = false;
 
 namespace {
     enum Event {
@@ -45,6 +46,7 @@ using ReadyHook = ShadyLua::CallHook<0x007fb871, ReadyHook_replFn>;
 ReadyHook::typeFn ReadyHook::origFn = reinterpret_cast<ReadyHook::typeFn>(0x00407970);
 static bool __fastcall ReadyHook_replFn(void* unknown, int unused, void* data) {
     auto ret = ReadyHook::origFn(unknown, unused, data);
+	ShadyLua::isReady = true;
     std::shared_lock guard(eventMapLock);
     auto& listeners = eventMap[Event::READY];
     for(auto iter = listeners.begin(); iter != listeners.end(); ++iter) {
@@ -225,7 +227,7 @@ static int soku_SubscribeEvent(lua_State* L) {
 
     // iterators valid on insertion
     eventMap[eventType].insert(std::make_pair(callback, ShadyLua::ScriptMap[L]));
-    if constexpr(eventType == Event::READY) if (*(bool*)(0x89ff90 + 0x4c)) {
+    if constexpr(eventType == Event::READY) if (ShadyLua::isReady) {
         lua_rawgeti(L, LUA_REGISTRYINDEX, callback);
         if (lua_pcall(L, 0, 0, 0)) { Logger::Error(lua_tostring(L, -1)); lua_pop(L, 1); } 
     }
@@ -452,7 +454,7 @@ void ShadyLua::LualibSoku(lua_State* L) {
                 .addConstant<int>("HitEntity",          9)
                     .addConstant<int>("Type9",              9)
             .endNamespace()
-            .addProperty("isReady", (bool*)(0x89ff90 + 0x4c), false)
+            .addProperty("isReady", &ShadyLua::isReady, false)
             .addVariable("P1", &SokuLib::leftPlayerInfo)
             .addVariable("P2", &SokuLib::rightPlayerInfo)
             .addVariable<unsigned char>("sceneId", (unsigned char *)&SokuLib::sceneId, false)
