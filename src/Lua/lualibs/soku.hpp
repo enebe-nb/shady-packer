@@ -10,6 +10,8 @@
 #include <lua.h>
 
 namespace ShadyLua {
+    extern bool isReady;
+
     struct Hook {
         virtual ~Hook() = default;
     }; extern std::unordered_map<DWORD, std::unique_ptr<Hook>> hooks;
