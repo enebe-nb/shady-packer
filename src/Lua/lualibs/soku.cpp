@@ -243,11 +243,24 @@ static void soku_PlaySFX(int id) {
     reinterpret_cast<void (*)(int id)>(0x0043E1E0)(id);
 }
 
+namespace {
+    static auto& CharacterNames = *reinterpret_cast<SokuLib::Map<SokuLib::Character, SokuLib::String>*>(0x899cfc);
+}
+static int soku_GetCharacterNames(lua_State* L) {
+    lua_newtable(L);
+    for (auto& [id, name] : CharacterNames) {
+        lua_pushinteger(L, id);
+        lua_pushstring(L, name);
+        lua_settable(L, -3);
+    }
+    return 1;
+}
 static int soku_CharacterName(lua_State* L) {
     int id = luaL_checkinteger(L, 1);
-    auto name = reinterpret_cast<const char* (*)(int id)>(0x0043F3F0)(id);
-    if (name) {
-        lua_pushstring(L, name);
+    //auto name = reinterpret_cast<const char* (*)(int id)>(0x0043F3F0)(id);// error when game start up
+    //auto& CharacterNames= *reinterpret_cast<SokuLib::Map<int, SokuLib::String>*>(0x899cfc);
+    if (auto it = CharacterNames.find(id); it != CharacterNames.end() && it->second) {
+        lua_pushstring(L, it->second);
     } else {
         lua_pushnil(L);
     } return 1;
@@ -445,6 +458,7 @@ void ShadyLua::LualibSoku(lua_State* L) {
             .addVariable<unsigned char>("sceneId", (unsigned char *)&SokuLib::sceneId, false)
             .addFunction("checkFKey", soku_checkFKey)
             .addFunction("characterName", soku_CharacterName)
+            .addFunction("getCharacterTable", soku_GetCharacterNames)
             
             .addFunction("playSE", soku_PlaySFX)
                 .addFunction("playSFX", soku_PlaySFX)
