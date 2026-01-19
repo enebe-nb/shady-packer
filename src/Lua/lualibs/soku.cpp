@@ -307,8 +307,10 @@ static int soku_ReloadSE(lua_State* L) {
 	if (id < 0 || id >= 128) return luaL_error(L, "Failed to reload SE: index outside range. (0~127)");
     char buffer[] = "data/se/000.wav";
     sprintf(buffer, "data/se/%03d.wav", id);
+    (sfxManager.*SokuLib::union_cast<bool(SfxManager::*)(Handle)>(0x401bd0))(bufferSE[id]);// SfxManager::unloadSE
+    bufferSE[id] = 0;
     //__asm mov ecx, 0x89f9f8; reinterpret_cast<void(WINAPI*)(Handle*, char*)>(0x00401af0)(&bufferSE[id], buffer);
-    auto ret = (sfxManager.*SokuLib::union_cast<Handle*(SfxManager::*)(Handle*, char*)>(0x401af0))(&bufferSE[id], buffer);
+    auto ret = (sfxManager.*SokuLib::union_cast<Handle*(SfxManager::*)(Handle*, char*)>(0x401af0))(&bufferSE[id], buffer);// SfxManager::loadSE
     return lua_pushboolean(L, *ret), 1;
 }
 
