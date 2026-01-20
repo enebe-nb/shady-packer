@@ -135,6 +135,20 @@ static void _lua_destroy(void* userdata) {
     delete reinterpret_cast<_lua_loader*>(userdata);
 }
 
+static int _searcher_Lua(lua_State* L) {
+	const char* name = luaL_checkstring(L, 1);
+	auto script = ShadyLua::ScriptMap[L];
+	auto result = script->load(name); // maybe add file extension and handle dot separators like python
+	if (result != LUA_OK) {
+		return 1; // error message is probably already on stack else 
+	} else {
+		// module is already on stack
+		lua_pushstring(L, name);
+		return 2;
+	}
+}
+//static int _searcher_C(lua_State* L);
+
 static void LualibLoader(lua_State* L) {
 	luabridge::getGlobalNamespace(L)
 		.beginNamespace("loader")
@@ -143,6 +157,8 @@ static void LualibLoader(lua_State* L) {
 			.addFunction("removeFile", loader_removeFile)
 			.addCFunction("underlineToSlash", loader_underlineToSlash)
 		.endNamespace();
+	auto p = luabridge::getGlobal(L, "package");
+	p["searchers"].append(&_searcher_Lua);
 }
 
 void EnablePackage(ModPackage* p) {

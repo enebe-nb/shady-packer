@@ -242,7 +242,7 @@ static void soku_UnsubscribeEvent(int id, lua_State* L) {
 }
 
 static void soku_PlaySFX(int id) {
-    reinterpret_cast<void (*)(int id)>(0x0043E1E0)(id);
+    reinterpret_cast<void (__cdecl*)(int id)>(0x0043E1E0)(id);
 }
 
 namespace {
