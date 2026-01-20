@@ -242,7 +242,7 @@ static void soku_UnsubscribeEvent(int id, lua_State* L) {
 }
 
 static void soku_PlaySFX(int id) {
-    reinterpret_cast<void (*)(int id)>(0x0043E1E0)(id);
+    reinterpret_cast<void (__cdecl*)(int id)>(0x0043E1E0)(id);
 }
 
 namespace {
@@ -268,8 +268,10 @@ static int soku_CharacterName(lua_State* L) {
     } return 1;
 }
 
-static auto argFadeOut = reinterpret_cast<int* const>(0x0043FF4A);
-static auto argFadeIn = reinterpret_cast<int* const>(0x0043FFFD);
+namespace {
+    static auto argFadeOut = reinterpret_cast<int* const>(0x0043FF4A);
+    static auto argFadeIn = reinterpret_cast<int* const>(0x0043FFFD);
+}
 static int soku_PlayBGM(lua_State* L) {
     const char* path = luaL_optstring(L, 1, 0);
     int fadeOut= max(luaL_optinteger(L, 2, 1000), 0);
@@ -279,7 +281,7 @@ static int soku_PlayBGM(lua_State* L) {
         return 0;
     }
     DWORD old1, old2;
-    VirtualProtect(reinterpret_cast<LPVOID>(argFadeOut), 4, PAGE_EXECUTE_READWRITE, &old1);
+    VirtualProtect(reinterpret_cast<LPVOID>(argFadeOut), 4, PAGE_EXECUTE_READWRITE, &old1);//TODO: thread unsafe, might need to reimplement playBGM
     VirtualProtect(reinterpret_cast<LPVOID>(argFadeIn), 4, PAGE_EXECUTE_READWRITE, &old2);
     int orgOut = *argFadeOut;
     *argFadeOut = fadeOut;
@@ -291,6 +293,25 @@ static int soku_PlayBGM(lua_State* L) {
     VirtualProtect(reinterpret_cast<LPVOID>(argFadeOut), 4, old1, &old1);
     VirtualProtect(reinterpret_cast<LPVOID>(argFadeIn), 4, old2, &old2);
     return 0;
+}
+
+namespace {
+    using Handle = unsigned int;
+    Handle (&bufferSE)[128] = *reinterpret_cast<Handle(*)[128]>(0x899d60);
+    struct SfxManager {};
+	SfxManager& sfxManager = *reinterpret_cast<SfxManager*>(0x89f9f8);
+}
+static int soku_ReloadSE(lua_State* L) {
+    if (!ShadyLua::isReady) return lua_pushboolean(L, false), 1; //luaL_error(L, "Failed to reload SE: game not ready!");
+	int id = luaL_checkinteger(L, 1);
+	if (id < 0 || id >= 128) return luaL_error(L, "Failed to reload SE: index outside range. (0~127)");
+    char buffer[] = "data/se/000.wav";
+    sprintf(buffer, "data/se/%03d.wav", id);
+    (sfxManager.*SokuLib::union_cast<bool(SfxManager::*)(Handle)>(0x401bd0))(bufferSE[id]);// SfxManager::unloadSE
+    bufferSE[id] = 0;
+    //__asm mov ecx, 0x89f9f8; reinterpret_cast<void(WINAPI*)(Handle*, char*)>(0x00401af0)(&bufferSE[id], buffer);
+    auto ret = (sfxManager.*SokuLib::union_cast<Handle*(SfxManager::*)(Handle*, char*)>(0x401af0))(&bufferSE[id], buffer);// SfxManager::loadSE
+    return lua_pushboolean(L, *ret), 1;
 }
 
 static int soku_checkFKey(lua_State* L) {
@@ -466,6 +487,7 @@ void ShadyLua::LualibSoku(lua_State* L) {
                 .addFunction("playSFX", soku_PlaySFX)
             .addFunction("playBGM", soku_PlayBGM)
 
+            .addFunction("reloadSE", soku_ReloadSE)
 
             .addCFunction("SubscribePlayerInfo", soku_SubscribeEvent<Event::PLAYERINFO>)
             .addCFunction("SubscribeSceneChange", soku_SubscribeEvent<Event::SCENECHANGE>)

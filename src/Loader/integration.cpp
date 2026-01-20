@@ -96,10 +96,11 @@ static bool loader_removeFile(const char* alias, lua_State* L) {
 	return ModPackage::basePackage->erase(s_alias);
 }
 
-static std::string loader_underlineToSlash(const char* filename) {
-	std::string s_filename(filename);
+static int loader_underlineToSlash(lua_State* L) {
+	std::string s_filename = luaL_checkstring(L, 1);
 	ShadyCore::Package::underlineToSlash(s_filename);
-	return s_filename;
+	lua_pushstring(L, s_filename.c_str());
+	return 1;
 }
 
 static ShadyCore::BasePackageEntry* _lua_find(ShadyCore::Package* base, ShadyCore::Package* owner, const char* filename) {
@@ -134,14 +135,30 @@ static void _lua_destroy(void* userdata) {
     delete reinterpret_cast<_lua_loader*>(userdata);
 }
 
+static int _searcher_Lua(lua_State* L) {
+	const char* name = luaL_checkstring(L, 1);
+	auto script = ShadyLua::ScriptMap[L];
+	auto result = script->load(name); // maybe add file extension and handle dot separators like python
+	if (result != LUA_OK) {
+		return 1; // error message is probably already on stack else 
+	} else {
+		// module is already on stack
+		lua_pushstring(L, name);
+		return 2;
+	}
+}
+//static int _searcher_C(lua_State* L);
+
 static void LualibLoader(lua_State* L) {
 	luabridge::getGlobalNamespace(L)
 		.beginNamespace("loader")
 			.addFunction("addAlias", loader_addAlias)
 			.addFunction("addData", loader_addData)
 			.addFunction("removeFile", loader_removeFile)
-			.addFunction("underlineToSlash", loader_underlineToSlash)
+			.addCFunction("underlineToSlash", loader_underlineToSlash)
 		.endNamespace();
+	auto p = luabridge::getGlobal(L, "package");
+	p["searchers"].append(&_searcher_Lua);
 }
 
 void EnablePackage(ModPackage* p) {
