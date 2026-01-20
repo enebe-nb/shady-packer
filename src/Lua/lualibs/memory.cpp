@@ -69,13 +69,12 @@ namespace {
         bool enabled = true;
         inline Callback(lua_State* L, int ref, size_t argc) : L(L), ref(ref), argc(argc) {}
 
-        bool call(cpustate& state, bool isRegisterWritable = false) {
+        bool call(cpustate& state) {
             if (!enabled) return false;
             std::lock_guard scriptGuard(ShadyLua::ScriptMap[L]->mutex);
 
             lua_rawgeti(L, LUA_REGISTRYINDEX, ref);
-            if (isRegisterWritable) Stack<cpustate&>::push(L, state);
-            else Stack<const cpustate&>::push(L, state);
+            Stack<cpustate&>::push(L, state);
             int i = 0; while(i < argc) {
                 lua_pushinteger(L, ((int*)state.esp)[++i]);
             }
@@ -120,10 +119,9 @@ namespace {
 
     struct BaseHook {
         std::list<RefCountedObjectPtr<Callback>> callbacks;
-        virtual inline bool isRegisterWritable() { return false; }
 
         int __cdecl listener(cpustate state) {
-            for (auto& cb : callbacks) if (cb->call(state, isRegisterWritable())) return 1;
+            for (auto& cb : callbacks) if (cb->call(state)) return 1;
             return 0;
         }
 
@@ -135,7 +133,7 @@ namespace {
 
     struct CallHook : public BaseHook {
     protected:
-        const unsigned char shim[23] = {
+        const unsigned char shim[25] = {
             0x60,                           // pushad
             0x68, 0x00, 0x00, 0x00, 0x00,   // push this
             0xE8, 0x00, 0x00, 0x00, 0x00,   // call listener
@@ -145,11 +143,11 @@ namespace {
             0x75, 0x05,                     // jne skip:
             0xE9, 0x00, 0x00, 0x00, 0x00,   // jmp original_addr
             // skip:
-            0xC3,                           // ret
+            0xC3, 0x90, 0x90,               // ret ?
         };
 
     public:
-        inline CallHook(DWORD addr) : BaseHook((void*)shim, sizeof(shim)) {
+        inline CallHook(DWORD addr, unsigned short argv = 0) : BaseHook((void*)shim, sizeof(shim)) {
             DWORD oldProt;
             VirtualProtect((LPVOID)addr, 5, PAGE_EXECUTE_READWRITE, &oldProt);
             auto original = SokuLib::TamperNearJmpOpr(addr, shim);
@@ -158,6 +156,10 @@ namespace {
             *(int*)&shim[2] = (int)this;
             SokuLib::TamperNearJmpOpr((DWORD)&shim[6], &BaseHook::listener);
             SokuLib::TamperNearJmpOpr((DWORD)&shim[17], original);
+            if (argv > 0) {
+                *(unsigned char*)&shim[22] = (unsigned char)0xC2;
+                *(unsigned short*)&shim[23] = (unsigned short)argv*4;
+            }
         }
     };
 
@@ -204,7 +206,6 @@ namespace {
             0x90, 0x90, 0x90, 0x90,
             0x90, 0x90, 0x90, 0x90, 0x90,
         };
-        virtual inline bool isRegisterWritable() { return true; }
 
     public:
         inline TrampHook(DWORD addr, size_t opsize) : BaseHook((void*)shim, sizeof(shim)) {
@@ -359,11 +360,17 @@ static int memory_createvirtualcall(lua_State* L) {
     return 1;
 }
 
-static bool memory_hookcall(size_t addr, RefCountedObjectPtr<Callback> cb) {
+//static bool memory_hookcall(size_t addr, RefCountedObjectPtr<Callback> cb, unsigned short argv = 0) {
+static int memory_hookcall(lua_State* L) {
+    size_t addr = luaL_checkinteger(L, 1);
+    RefCountedObjectPtr<Callback> cb(Stack<Callback*>::get(L, 2));
+    unsigned short argv = luaL_optinteger(L, 3, 0);
+
     auto result = hookedAddr.insert(std::make_pair(addr, nullptr));
-    if (result.second) result.first->second = new CallHook(addr);
+    if (result.second) result.first->second = new CallHook(addr, argv);
     result.first->second->callbacks.push_back(cb);
-    return result.second;
+    lua_pushboolean(L, result.second);
+    return 1;
 }
 
 static bool memory_hookvtable(size_t addr, RefCountedObjectPtr<Callback> cb) {
