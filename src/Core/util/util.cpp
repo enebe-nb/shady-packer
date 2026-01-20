@@ -173,7 +173,8 @@ namespace {
 			CloseHandle(handle);
 		}
 
-		void doHandle() {
+		bool doHandle() {
+			bool modified = false;
 			DWORD bytes;
 			if (GetOverlappedResult(handle, &overlapped, &bytes, true)) {
 				FILE_NOTIFY_INFORMATION* info = reinterpret_cast<FILE_NOTIFY_INFORMATION*>(buffer);
@@ -187,19 +188,21 @@ namespace {
 					case FILE_ACTION_ADDED:
 					case FILE_ACTION_REMOVED:
 						if (watcher = _find(filename)) _push_unique({watcher, wasTree ? ShadyUtil::FileWatcher::MODIFIED : (ShadyUtil::FileWatcher::Action)info->Action});
-						break;
+						modified = true; break;
 					case FILE_ACTION_MODIFIED:
 						if (watcher = _find(filename)) _push_unique({watcher, (ShadyUtil::FileWatcher::Action)info->Action});
-						break;
+						modified = true; break;
 					case FILE_ACTION_RENAMED_OLD_NAME:
 						oldFilename = filename;
-						break;
+						modified = true; break;
 					case FILE_ACTION_RENAMED_NEW_NAME:
 						if (watcher = _find(oldFilename)) {
 							watcher->filename = filename;
 							_push_unique({watcher, ShadyUtil::FileWatcher::RENAMED});
+							modified = true; 
 						} else if (watcher = _find(filename)) {
 							_push_unique({watcher, ShadyUtil::FileWatcher::CREATED});
+							modified = true; 
 						} break;
 					}
 
@@ -211,6 +214,7 @@ namespace {
 			if (!ReadDirectoryChangesW(handle, buffer, bufferSize, true,
 				FILE_NOTIFY_CHANGE_FILE_NAME | FILE_NOTIFY_CHANGE_DIR_NAME | FILE_NOTIFY_CHANGE_LAST_WRITE,
 				nullptr, &overlapped, nullptr)) throw std::runtime_error("Fail to read directory (loop) " + std::to_string(GetLastError())); // TODO
+			return modified;
 		};
 
 		inline bool empty() { return files.empty(); };
@@ -222,8 +226,10 @@ namespace {
 
 	std::vector<HANDLE> handles;
 	std::vector<Delegate*> delegates;
-	std::mutex delegateMutex;
 }
+
+// static member instantiation
+std::mutex ShadyUtil::FileWatcher::delegateMutex;
 
 ShadyUtil::FileWatcher* ShadyUtil::FileWatcher::create(const std::filesystem::path& path) {
 	ShadyUtil::FileWatcher* watcher;
@@ -267,11 +273,15 @@ ShadyUtil::FileWatcher* ShadyUtil::FileWatcher::getNextChange() {
 	if (!lock.owns_lock()) return 0;
 
 	if (changes.empty() && handles.size()) {
-		DWORD result = WaitForMultipleObjects(handles.size(), handles.data(), false, 0);
-		if (result == WAIT_FAILED) throw std::runtime_error("FileWatcher wait failed: " + std::to_string(GetLastError())); // TODO
-		if (result >= WAIT_OBJECT_0 && result < WAIT_OBJECT_0 + handles.size()) {
-			delegates[result - WAIT_OBJECT_0]->doHandle();
-		}
+		bool modified;
+		do {
+			modified = false;
+			DWORD result = WaitForMultipleObjects(handles.size(), handles.data(), false, 0);
+			if (result == WAIT_FAILED) throw std::runtime_error("FileWatcher wait failed: " + std::to_string(GetLastError())); // TODO
+			if (result >= WAIT_OBJECT_0 && result < WAIT_OBJECT_0 + handles.size()) {
+				modified = delegates[result - WAIT_OBJECT_0]->doHandle();
+			}
+		} while (modified);
 	} if (changes.empty()) return 0;
 
 	auto watcher = changes.front().watcher;
