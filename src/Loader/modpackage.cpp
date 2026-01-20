@@ -360,8 +360,7 @@ void ModPackage::CheckUpdates() {
 		} }
 
 		if (package) {
-			static std::mutex localMutex;
-			std::lock_guard lock(localMutex);
+			std::lock_guard lock(ShadyUtil::FileWatcher::delegateMutex);
 		switch (current->action) {
 		case ShadyUtil::FileWatcher::CREATED:
 			EnablePackage(package);
