@@ -326,11 +326,10 @@ static int soku_ReloadSE(lua_State* L) {
 }
 
 static int soku_checkFKey(lua_State* L) {
-    const int argc = lua_gettop(L);
     int key = luaL_checkinteger(L, 1);
-    int m0 = (argc < 2) ? 0 : luaL_checkinteger(L, 2);
-    int m1 = (argc < 3) ? 0 : luaL_checkinteger(L, 3);
-    int m2 = (argc < 4) ? 0 : luaL_checkinteger(L, 4);
+    bool m0 = lua_isboolean(L, 2) && lua_toboolean(L, 2);
+    bool m1 = lua_isboolean(L, 3) && lua_toboolean(L, 3);
+    bool m2 = lua_isboolean(L, 4) && lua_toboolean(L, 4);
     luabridge::push(L, SokuLib::checkKeyOneshot(key, m0, m1, m2));
     return 1;
 }
@@ -483,8 +482,8 @@ void ShadyLua::LualibSoku(lua_State* L) {
                 .addConstant<int>("Grazed",             SokuLib::v2::GameObjectBase::COLLISION_TYPE_GRAZED)
                 .addConstant<int>("Armored",            SokuLib::v2::GameObjectBase::COLLISION_TYPE_ARMORED)
                 .addConstant<int>("BulletSameDensity",  SokuLib::v2::GameObjectBase::COLLISION_TYPE_BULLET_COLLIDE_SAME_DENSITY)
-                .addConstant<int>("HitEntity",          9)
-                    .addConstant<int>("Type9",              9)
+                .addConstant<int>("HitEntity",          SokuLib::v2::GameObjectBase::COLLISION_TYPE_HIT_ENTITY)
+                    .addConstant<int>("Type9",              SokuLib::v2::GameObjectBase::COLLISION_TYPE_HIT_ENTITY)
             .endNamespace()
             .addProperty("isReady", soku_isReady)
             .addVariable("P1", &SokuLib::leftPlayerInfo)
