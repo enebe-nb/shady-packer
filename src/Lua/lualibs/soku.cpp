@@ -202,6 +202,10 @@ static SokuLib::IScene* __fastcall SceneHook_replFn(void* sceneManager, int unus
     return scene;
 }
 
+static bool soku_isReady() {
+    return *reinterpret_cast<HANDLE*>(0x89ffe0) != 0; // mSokuLoopThread != NULL
+}
+
 void ShadyLua::RemoveEvents(LuaScript* script) {
     RemoveLoaderEvents(script);
     RemoveBattleEvents(script);
@@ -234,7 +238,7 @@ static int soku_SubscribeEvent(lua_State* L) {
 
     // iterators valid on insertion
     eventMap[eventType].insert(std::make_pair(callback, ShadyLua::ScriptMap[L]));
-    if constexpr(eventType == Event::READY) if (ShadyLua::isReady) {
+    if constexpr(eventType == Event::READY) if (soku_isReady()) {
         lua_rawgeti(L, LUA_REGISTRYINDEX, callback);
         if (lua_pcall(L, 0, 0, 0)) { Logger::Error(lua_tostring(L, -1)); lua_pop(L, 1); } 
     }
@@ -246,10 +250,6 @@ static void soku_UnsubscribeEvent(int id, lua_State* L) {
     std::unique_lock guard(eventMapLock);
     luaL_unref(L, LUA_REGISTRYINDEX, id);
     for (auto& map : eventMap) map.erase(std::make_pair(id, ShadyLua::ScriptMap[L]));
-}
-
-static bool soku_isReady() {
-    return *reinterpret_cast<HANDLE*>(0x89ffe0) != 0; // mSokuLoopThread != NULL
 }
 
 static void soku_PlaySFX(int id) {
