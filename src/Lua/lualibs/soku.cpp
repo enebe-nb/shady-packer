@@ -15,7 +15,6 @@
 using namespace luabridge;
 
 std::unordered_map<DWORD, std::unique_ptr<ShadyLua::Hook>> ShadyLua::hooks;
-bool ShadyLua::isReady = false;
 
 namespace {
     enum Event {
@@ -38,6 +37,15 @@ namespace {
             return static_cast<T>(Stack<std::underlying_type<T>::type>::get(L, index));
         }
     };
+
+    struct SFXManager {
+        inline unsigned int load(unsigned int& id, const char* soundPath) { return (this->*SokuLib::union_cast<unsigned int(SFXManager::*)(unsigned int&, const char*)>(0x401AF0))(id, soundPath); }
+        inline bool unload(unsigned int id) { return (this->*SokuLib::union_cast<bool(SFXManager::*)(unsigned int)>(0x401BD0))(id); }
+
+        static SFXManager& instance;
+    };
+
+    SFXManager& SFXManager::instance = *reinterpret_cast<SFXManager*>(0x89F9F8);
 }
 
 // ---- ReadyHook ----
@@ -46,7 +54,6 @@ using ReadyHook = ShadyLua::CallHook<0x007fb871, ReadyHook_replFn>;
 ReadyHook::typeFn ReadyHook::origFn = reinterpret_cast<ReadyHook::typeFn>(0x00407970);
 static bool __fastcall ReadyHook_replFn(void* unknown, int unused, void* data) {
     auto ret = ReadyHook::origFn(unknown, unused, data);
-	ShadyLua::isReady = true;
     std::shared_lock guard(eventMapLock);
     auto& listeners = eventMap[Event::READY];
     for(auto iter = listeners.begin(); iter != listeners.end(); ++iter) {
@@ -241,6 +248,10 @@ static void soku_UnsubscribeEvent(int id, lua_State* L) {
     for (auto& map : eventMap) map.erase(std::make_pair(id, ShadyLua::ScriptMap[L]));
 }
 
+static bool soku_isReady() {
+    return *reinterpret_cast<HANDLE*>(0x89ffe0) != 0; // mSokuLoopThread != NULL
+}
+
 static void soku_PlaySFX(int id) {
     reinterpret_cast<void (__cdecl*)(int id)>(0x0043E1E0)(id);
 }
@@ -295,23 +306,23 @@ static int soku_PlayBGM(lua_State* L) {
     return 0;
 }
 
-namespace {
-    using Handle = unsigned int;
-    Handle (&bufferSE)[128] = *reinterpret_cast<Handle(*)[128]>(0x899d60);
-    struct SfxManager {};
-	SfxManager& sfxManager = *reinterpret_cast<SfxManager*>(0x89f9f8);
-}
 static int soku_ReloadSE(lua_State* L) {
-    if (!ShadyLua::isReady) return lua_pushboolean(L, false), 1; //luaL_error(L, "Failed to reload SE: game not ready!");
-	int id = luaL_checkinteger(L, 1);
-	if (id < 0 || id >= 128) return luaL_error(L, "Failed to reload SE: index outside range. (0~127)");
+    if (!soku_isReady()) {
+        lua_pushboolean(L, false);
+        return 1;
+    } // silent skip "game is not ready!"
+
+    int id = luaL_checkinteger(L, 1);
+    if (id < 0 || id >= 128) return luaL_error(L, "Failed to reload SE: index outside range. (0~127)");
     char buffer[] = "data/se/000.wav";
     sprintf(buffer, "data/se/%03d.wav", id);
-    (sfxManager.*SokuLib::union_cast<bool(SfxManager::*)(Handle)>(0x401bd0))(bufferSE[id]);// SfxManager::unloadSE
-    bufferSE[id] = 0;
-    //__asm mov ecx, 0x89f9f8; reinterpret_cast<void(WINAPI*)(Handle*, char*)>(0x00401af0)(&bufferSE[id], buffer);
-    auto ret = (sfxManager.*SokuLib::union_cast<Handle*(SfxManager::*)(Handle*, char*)>(0x401af0))(&bufferSE[id], buffer);// SfxManager::loadSE
-    return lua_pushboolean(L, *ret), 1;
+
+    const auto sfxMap = *reinterpret_cast<unsigned int(*)[128]>(0x899d60);
+    if (sfxMap[id]) SFXManager::instance.unload(sfxMap[id]);
+    SFXManager::instance.load(sfxMap[id], buffer);
+
+    lua_pushboolean(L, sfxMap[id]);
+    return 1;
 }
 
 static int soku_checkFKey(lua_State* L) {
@@ -475,7 +486,7 @@ void ShadyLua::LualibSoku(lua_State* L) {
                 .addConstant<int>("HitEntity",          9)
                     .addConstant<int>("Type9",              9)
             .endNamespace()
-            .addProperty("isReady", &ShadyLua::isReady, false)
+            .addProperty("isReady", soku_isReady)
             .addVariable("P1", &SokuLib::leftPlayerInfo)
             .addVariable("P2", &SokuLib::rightPlayerInfo)
             .addVariable<unsigned char>("sceneId", (unsigned char *)&SokuLib::sceneId, false)
