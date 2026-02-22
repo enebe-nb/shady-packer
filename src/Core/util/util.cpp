@@ -178,7 +178,7 @@ namespace {
 			DWORD bytes;
 			if (GetOverlappedResult(handle, &overlapped, &bytes, true)) {
 				FILE_NOTIFY_INFORMATION* info = reinterpret_cast<FILE_NOTIFY_INFORMATION*>(buffer);
-				std::wstring_view oldFilename;
+				std::wstring oldFilename;
 				if (bytes) for(;;) {
 					std::wstring filename;
 					bool wasTree = _trunk(std::wstring_view(info->FileName, info->FileNameLength/sizeof(WCHAR)), filename);
@@ -197,12 +197,11 @@ namespace {
 						modified = true; break;
 					case FILE_ACTION_RENAMED_NEW_NAME:
 						if (watcher = _find(oldFilename)) {
-							watcher->filename = filename;
-							_push_unique({watcher, ShadyUtil::FileWatcher::RENAMED});
-							modified = true; 
+							_push_unique({watcher, wasTree ? ShadyUtil::FileWatcher::MODIFIED : ShadyUtil::FileWatcher::REMOVED});
+							modified = true;
 						} else if (watcher = _find(filename)) {
-							_push_unique({watcher, ShadyUtil::FileWatcher::CREATED});
-							modified = true; 
+							_push_unique({watcher, wasTree ? ShadyUtil::FileWatcher::MODIFIED : ShadyUtil::FileWatcher::CREATED});
+							modified = true;
 						} break;
 					}
 

@@ -30,6 +30,43 @@ namespace {
     const ShadyCore::FileType::Type _ResourceProxy<ShadyCore::Palette>::staticType =        ShadyCore::FileType::TYPE_PALETTE;
     const ShadyCore::FileType::Type _ResourceProxy<ShadyCore::Image>::staticType =          ShadyCore::FileType::TYPE_IMAGE;
     const ShadyCore::FileType::Type _ResourceProxy<ShadyCore::Sfx>::staticType =            ShadyCore::FileType::TYPE_SFX;
+
+    struct SFXManager {
+        SokuLib::HandleManager<SokuLib::WaveData*> handlesA;
+        SokuLib::HandleManager<SokuLib::DSBuffer*> handlesB;
+        SokuLib::DSBuffer buffers[32];
+        SokuLib::DS3DBuffer buffers3D[32];
+        char unknown448[8];
+        float volume, volumeCoef;
+
+        inline unsigned int load(unsigned int& id, const char* soundPath) { return (this->*SokuLib::union_cast<unsigned int(SFXManager::*)(unsigned int&, const char*)>(0x401AF0))(id, soundPath); }
+        inline bool unload(unsigned int id) { return (this->*SokuLib::union_cast<bool(SFXManager::*)(unsigned int)>(0x401BD0))(id); }
+        inline void play(unsigned int id) { return (this->*SokuLib::union_cast<void(SFXManager::*)(unsigned int)>(0x401D50))(id); }
+        inline void setItemVolume(unsigned int id, float value) { return (this->*SokuLib::union_cast<void(SFXManager::*)(unsigned int, float)>(0x401CE0))(id, value); }
+
+        static SFXManager& instance;
+    };
+
+    SFXManager& SFXManager::instance = *reinterpret_cast<SFXManager*>(0x89F9F8);
+
+    class SoundEffectProxy : public luabridge::RefCountedObject {
+        unsigned int id = 0;
+    public:
+        inline SoundEffectProxy(const char* path) {
+            SFXManager::instance.load(id, path);
+            if (!id) throw std::runtime_error("SFX Manager: failed to load sound effect");
+        }
+
+        inline SoundEffectProxy(unsigned int id) : id(id) {}
+
+        inline ~SoundEffectProxy() {
+            SFXManager::instance.unload(id);
+        }
+
+        inline void play() {
+            if (id) SFXManager::instance.play(id);
+        }
+    };
 }
 
 void ShadyLua::ResourceProxy::push(lua_State* L) {
@@ -245,6 +282,45 @@ static int resource_Sfx_setData(lua_State* L) {
     return 0;
 }
 
+static RefCountedObjectPtr<SoundEffectProxy> resource_Sfx_parse(_ResourceProxy<ShadyCore::Sfx>* data) {
+    unsigned int id;
+    auto& buffer = *SFXManager::instance.handlesB.Allocate(id);
+    buffer = SokuLib::New<SokuLib::DSBuffer>(1);
+    if (buffer) { // inline constructor
+        buffer->vtable = (void**)0x008713a8;
+        buffer->dsHandle = 0;
+        buffer->bufferSize = 0;
+    } else throw std::runtime_error("failed to allocate memory.");
+
+    if (buffer->dsHandle) {
+        reinterpret_cast<void (WINAPI*)(void*)>(*((void**)((*(int*)buffer->dsHandle)+0x08)))(buffer->dsHandle); // dx->Release()
+        buffer->dsHandle = 0;
+    }
+
+    buffer->bufferSize = data->get().size;
+    // initialize DSBuffer
+    if ((buffer->*SokuLib::union_cast<bool (SokuLib::DSBuffer::*)(ShadyCore::Sfx&, size_t)>(buffer->vtable[0]))(data->get(), data->get().size)) {
+        void *pAudioA, *pAudioB;
+        unsigned long sAudioA, sAudioB;
+
+        auto result = reinterpret_cast<HRESULT (WINAPI*)(void*, DWORD, DWORD, LPVOID*, LPDWORD, LPVOID*, LPDWORD, DWORD)>(*((void**)((*(int*)buffer->dsHandle)+0x2C)))
+            (buffer->dsHandle, 0, buffer->bufferSize, &pAudioA, &sAudioA, &pAudioB, &sAudioB, 2); // dx->Lock()
+
+        if (result >= 0) {
+            std::memcpy(pAudioA, data->get().data, buffer->bufferSize);
+            reinterpret_cast<void (WINAPI*)(void*, LPVOID*, LPDWORD, LPVOID*, LPDWORD)>(*((void**)((*(int*)buffer->dsHandle)+0x4C)))
+                (buffer->dsHandle, &pAudioA, &sAudioA, &pAudioB, &sAudioB); // dx->Unlock()
+        } else throw std::runtime_error("failed to load directx sound.");
+    } else {
+        (buffer->*SokuLib::union_cast<void (SokuLib::DSBuffer::*)(bool)>(buffer->vtable[1]))(true); // destructor
+        SFXManager::instance.handlesB.Deallocate(id);
+        throw std::runtime_error("failed to load sound effect.");
+    }
+
+    SFXManager::instance.setItemVolume(id, SFXManager::instance.volume * SFXManager::instance.volumeCoef);
+    return new SoundEffectProxy(id);
+}
+
 template <typename T, ShadyCore::FileType::Type U> static inline RefCountedObjectPtr<_ResourceProxy<T>> castResourceProxy(size_t addr) {
     return (_ResourceProxy<T>*)(new ShadyLua::ResourceProxy((T*)addr, U, false));
 }
@@ -305,6 +381,11 @@ void ShadyLua::LualibResource(lua_State* L) {
                 .addProperty("blockAlign", resource_Sfx_getBlockAlign, resource_Sfx_setBlockAlign)
                 .addProperty("bitsPerSample", resource_Sfx_getBPS, resource_Sfx_setBPS)
                 .addProperty("data", resource_Sfx_getData, resource_Sfx_setData)
+                .addFunction("parse", resource_Sfx_parse)
+            .endClass()
+            .beginClass<SoundEffectProxy>("SoundInstance")
+                .addConstructor<void (*)(const char*)>()
+                .addFunction("play", &SoundEffectProxy::play)
             .endClass()
         .endNamespace()
     ;
