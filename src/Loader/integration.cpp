@@ -136,16 +136,19 @@ static void _lua_destroy(void* userdata) {
 }
 
 static int _searcher_Lua(lua_State* L) {
-	const char* name = luaL_checkstring(L, 1);
+	size_t nameSize = 0;
+	const char* name = luaL_checklstring(L, 1, &nameSize);
+	char* nameWithSep = new char[nameSize + 1];
+	std::replace_copy(name, name + nameSize, nameWithSep, '.', '/');
+	nameWithSep[nameSize] = '\0';
+
 	auto script = ShadyLua::ScriptMap[L];
-	auto result = script->load(name); // maybe add file extension and handle dot separators like python
-	if (result != LUA_OK) {
-		return 1; // error message is probably already on stack else 
-	} else {
-		// module is already on stack
-		lua_pushstring(L, name);
-		return 2;
-	}
+	auto result = script->require(nameWithSep, name, "?.lua;?\\init.lua");
+	delete[] nameWithSep;
+
+	return result == LUA_OK ? 2 : 1;
+	// stack has error message on failure
+	// or module chunk and name on success
 }
 //static int _searcher_C(lua_State* L);
 

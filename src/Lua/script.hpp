@@ -28,7 +28,8 @@ namespace ShadyLua {
         LuaScript(LuaScript&&) = delete;
         virtual ~LuaScript();
 
-        virtual int load(const char* filename, const char* mode = 0);
+        int load(const char* filename, const char* mode = 0);
+        int require(const char* filename, const char* modulename, const std::string& searchpath);
         inline File* openFile(const char* filename) { return fnOpen(userdata, filename); }
         inline void closeFile(File* file) { return fnClose(userdata, file); }
         int run();

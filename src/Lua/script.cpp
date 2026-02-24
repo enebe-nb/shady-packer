@@ -67,6 +67,26 @@ int ShadyLua::LuaScript::load(const char* filename, const char* mode) {
     return result;
 }
 
+int ShadyLua::LuaScript::require(const char* filename, const char* modulename, const std::string& searchpath) {
+    std::istringstream list(searchpath);
+    for(std::string search; std::getline(list, search, ';');) {
+        Reader reader;
+        const char* path = luaL_gsub(L, search.c_str(), LUA_PATH_MARK, filename);
+        reader.file = this->openFile(path);
+        lua_pop(L, 1);
+
+        if (!reader.file) continue;
+        int result = lua_load(L, (lua_Reader)Reader::read, &reader, modulename, NULL);
+        this->closeFile(reader.file);
+        if (result != LUA_OK) { lua_pushstring(L, modulename); }
+        else { Logger::Error(lua_tostring(L, 1)); }
+        return result;
+    }
+
+    lua_pushfstring(L, "Module '%s' not found!\n", modulename);
+    return LUA_ERRFILE;
+}
+
 ShadyLua::LuaScriptFS::LuaScriptFS(const std::filesystem::path& basePath)
     : LuaScript(this, LuaScriptFS::fnOpen, LuaScriptFS::fnClose), basePath(basePath), package(basePath) {
     LualibLoader(L, &package);
