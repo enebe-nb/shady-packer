@@ -78,7 +78,7 @@ int ShadyLua::LuaScript::require(const char* filename, const char* modulename, c
         if (!reader.file) continue;
         int result = lua_load(L, (lua_Reader)Reader::read, &reader, modulename, NULL);
         this->closeFile(reader.file);
-        if (result != LUA_OK) { lua_pushstring(L, modulename); }
+        if (result == LUA_OK) { lua_pushstring(L, modulename); }
         else { Logger::Error(lua_tostring(L, 1)); }
         return result;
     }
