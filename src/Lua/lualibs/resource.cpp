@@ -32,10 +32,13 @@ namespace {
     const ShadyCore::FileType::Type _ResourceProxy<ShadyCore::Sfx>::staticType =            ShadyCore::FileType::TYPE_SFX;
 
     struct SFXManager {
-        SokuLib::HandleManager<SokuLib::WaveData*> handlesA;
-        SokuLib::HandleManager<SokuLib::DSBuffer*> handlesB;
-        SokuLib::DSBuffer buffers[32];
-        SokuLib::DS3DBuffer buffers3D[32];
+        struct DSBuffer { void** vtable; void* dsHandle; int bufferSize; };
+        struct DS3DBuffer { void** vtable; void* dsHandle; int bufferSize; void* ds3dBuffer; };
+
+        SokuLib::HandleManager<void*> handlesA;
+        SokuLib::HandleManager<DSBuffer*> handlesB;
+        DSBuffer buffers[32];
+        DS3DBuffer buffers3D[32];
         char unknown448[8];
         float volume, volumeCoef;
 
@@ -285,7 +288,7 @@ static int resource_Sfx_setData(lua_State* L) {
 static RefCountedObjectPtr<SoundEffectProxy> resource_Sfx_parse(_ResourceProxy<ShadyCore::Sfx>* data) {
     unsigned int id;
     auto& buffer = *SFXManager::instance.handlesB.Allocate(id);
-    buffer = SokuLib::New<SokuLib::DSBuffer>(1);
+    buffer = SokuLib::New<SFXManager::DSBuffer>(1);
     if (buffer) { // inline constructor
         buffer->vtable = (void**)0x008713a8;
         buffer->dsHandle = 0;
@@ -299,7 +302,7 @@ static RefCountedObjectPtr<SoundEffectProxy> resource_Sfx_parse(_ResourceProxy<S
 
     buffer->bufferSize = data->get().size;
     // initialize DSBuffer
-    if ((buffer->*SokuLib::union_cast<bool (SokuLib::DSBuffer::*)(ShadyCore::Sfx&, size_t)>(buffer->vtable[0]))(data->get(), data->get().size)) {
+    if ((buffer->*SokuLib::union_cast<bool (SFXManager::DSBuffer::*)(ShadyCore::Sfx&, size_t)>(buffer->vtable[0]))(data->get(), data->get().size)) {
         void *pAudioA, *pAudioB;
         unsigned long sAudioA, sAudioB;
 
@@ -312,7 +315,7 @@ static RefCountedObjectPtr<SoundEffectProxy> resource_Sfx_parse(_ResourceProxy<S
                 (buffer->dsHandle, &pAudioA, &sAudioA, &pAudioB, &sAudioB); // dx->Unlock()
         } else throw std::runtime_error("failed to load directx sound.");
     } else {
-        (buffer->*SokuLib::union_cast<void (SokuLib::DSBuffer::*)(bool)>(buffer->vtable[1]))(true); // destructor
+        (buffer->*SokuLib::union_cast<void (SFXManager::DSBuffer::*)(bool)>(buffer->vtable[1]))(true); // destructor
         SFXManager::instance.handlesB.Deallocate(id);
         throw std::runtime_error("failed to load sound effect.");
     }
