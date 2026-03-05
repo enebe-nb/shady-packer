@@ -326,10 +326,11 @@ static int soku_ReloadSE(lua_State* L) {
 }
 
 static int soku_checkFKey(lua_State* L) {
+	//const int argc = lua_gettop(L);
     int key = luaL_checkinteger(L, 1);
-    bool m0 = lua_isboolean(L, 2) && lua_toboolean(L, 2);
-    bool m1 = lua_isboolean(L, 3) && lua_toboolean(L, 3);
-    bool m2 = lua_isboolean(L, 4) && lua_toboolean(L, 4);
+    bool m0 = !lua_isnoneornil(L, 2) && (lua_isboolean(L, 2) ? lua_toboolean(L, 2) : luaL_error(L, "argument #%d must be boolean", 2));
+	bool m1 = !lua_isnoneornil(L, 3) && (lua_isboolean(L, 3) ? lua_toboolean(L, 3) : luaL_error(L, "argument #%d must be boolean", 3));
+	bool m2 = !lua_isnoneornil(L, 4) && (lua_isboolean(L, 4) ? lua_toboolean(L, 4) : luaL_error(L, "argument #%d must be boolean", 4));
     luabridge::push(L, SokuLib::checkKeyOneshot(key, m0, m1, m2));
     return 1;
 }
