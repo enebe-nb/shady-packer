@@ -580,4 +580,18 @@ void ShadyLua::LualibGui(lua_State* L) {
             .endClass()
         .endNamespace()
     ;
+    RegisterIPCUserdata<ShadyLua::Renderer>(L);
+    RegisterIPCUserdata<ShadyLua::MenuProxy>(L);
+    RegisterIPCUserdata<ShadyLua::SceneProxy>(L);
+    RegisterIPCUserdata<ShadyLua::SpriteProxy>(L);
+    RegisterIPCUserdata<ShadyLua::MenuCursorProxy>(L);
+    RegisterIPCUserdata<ShadyLua::EffectManagerProxy>(L);
+    RegisterIPCUserdata<ShadyLua::Renderer::Effect>(L);
+    RegisterIPCUserdata<ShadyLua::FontProxy>(L);
+
+    RegisterIPCUserdata<SokuLib::KeyInputLight, false>(L);
+    RegisterIPCUserdata<SokuLib::KeyInput, false>(L);
+    RegisterIPCUserdata<SokuLib::CDesign>(L);
+    RegisterIPCUserdata<SokuLib::CDesign::Object>(L);
+    RegisterIPCUserdata<ValueProxy, true>(L);//...
 }

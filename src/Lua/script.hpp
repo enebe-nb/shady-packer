@@ -17,6 +17,7 @@ namespace ShadyLua {
         lua_State* const L;
         std::recursive_mutex mutex;
         void* const userdata;
+        std::unordered_map<const void*, void(*)(lua_State*, int, lua_State*)> IPCCopierBuffer;
     protected:
         fnOpen_t fnOpen;
         fnClose_t fnClose;

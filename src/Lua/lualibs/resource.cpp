@@ -392,4 +392,11 @@ void ShadyLua::LualibResource(lua_State* L) {
             .endClass()
         .endNamespace()
     ;
+    RegisterIPCUserdata<ResourceProxy>(L);
+    RegisterIPCUserdata<_ResourceProxy<ShadyCore::TextResource>>(L);
+    RegisterIPCUserdata<_ResourceProxy<ShadyCore::LabelResource>>(L);
+    RegisterIPCUserdata<_ResourceProxy<ShadyCore::Palette>>(L);
+    RegisterIPCUserdata<_ResourceProxy<ShadyCore::Image>>(L);
+    RegisterIPCUserdata<_ResourceProxy<ShadyCore::Sfx>>(L);
+    RegisterIPCUserdata<SoundEffectProxy>(L);
 }

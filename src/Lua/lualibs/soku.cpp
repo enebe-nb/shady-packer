@@ -528,4 +528,6 @@ void ShadyLua::LualibSoku(lua_State* L) {
         lua_pushcfunction(L, soku_vec2_sub); rawsetfield(L, -3, "__sub");
         lua_pushcfunction(L, soku_vec2_mul); rawsetfield(L, -3, "__mul");
     Class.endClass().endNamespace();
+
+    RegisterIPCUserdata<SokuLib::Vector2f, false>(L);
 }

@@ -245,6 +245,7 @@ namespace {
     };
     using SetCallbacks_t = void (*)(const RollCallbacks*);
     bool rollInit = false;
+	constexpr unsigned char LUA_TINTEGER = 0x80;
 }
 
 static void lua_serialize(std::ostream& stream, lua_State* L) {
@@ -253,9 +254,18 @@ static void lua_serialize(std::ostream& stream, lua_State* L) {
             Logger::Error("Lua Serialize: Unsupported lua type.");
         case LUA_TNIL: stream.put(LUA_TNIL); break;
         case LUA_TNUMBER: {
-            stream.put(LUA_TNUMBER);
-            auto v = lua_tonumber(L, -1);
-            stream.write((char*)&v, sizeof(v));
+#if LUA_VERSION_NUM >= 503
+            if (lua_isinteger(L, -1)) {
+				stream.put(LUA_TINTEGER);
+                auto v = lua_tointeger(L, -1);
+                stream.write((char*)&v, sizeof(v));
+            } else
+#endif      
+            {
+                stream.put(LUA_TNUMBER);
+                auto v = lua_tonumber(L, -1);
+                stream.write((char*)&v, sizeof(v));
+            }
         } break;
         case LUA_TBOOLEAN: {
             stream.put(LUA_TBOOLEAN);
@@ -292,6 +302,13 @@ static void lua_deserialize(std::istream& stream, lua_State* L) {
         default: 
             Logger::Error("Lua Serialize: Unsupported lua type.");
         case LUA_TNIL: lua_pushnil(L); break;
+#if LUA_VERSION_NUM >= 503
+        case LUA_TINTEGER: {
+            lua_Integer v;
+            stream.read((char*)&v, sizeof(v));
+            lua_pushinteger(L, v);
+		} break;
+#endif  
         case LUA_TNUMBER: {
             lua_Number v;
             stream.read((char*)&v, sizeof(v));
@@ -920,4 +937,12 @@ void ShadyLua::LualibBattle(lua_State* L) {
             .addFunction("random", battle_random)
         .endNamespace()
     ;
+    RegisterIPCUserdata<SokuLib::RenderInfo, false>(L);
+    RegisterIPCUserdata<ShadyLua::CustomDataProxy, false>(L);
+    RegisterIPCUserdata<SokuLib::v2::GameObjectBase>(L);
+    RegisterIPCUserdata<SokuLib::v2::GameObject>(L);
+    RegisterIPCUserdata<SokuLib::v2::Player>(L);
+    RegisterIPCUserdata<SokuLib::PlayerInfo, false>(L);
+    RegisterIPCUserdata<SokuLib::GameStartParams, false>(L);
+    RegisterIPCUserdata<SokuLib::BattleManager>(L);
 }
