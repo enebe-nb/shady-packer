@@ -9,6 +9,7 @@
 #include <cmath>
 #include <deque>
 #include <streambuf>
+#include <dsound.h>
 
 using namespace luabridge;
 
@@ -32,8 +33,8 @@ namespace {
     const ShadyCore::FileType::Type _ResourceProxy<ShadyCore::Sfx>::staticType =            ShadyCore::FileType::TYPE_SFX;
 
     struct SFXManager {
-        struct DSBuffer { void** vtable; void* dsHandle; int bufferSize; };
-        struct DS3DBuffer { void** vtable; void* dsHandle; int bufferSize; void* ds3dBuffer; };
+        struct DSBuffer { void** vtable; IDirectSoundBuffer8* dsHandle; int bufferSize; };
+        struct DS3DBuffer { void** vtable; IDirectSoundBuffer8* dsHandle; int bufferSize; IDirectSound3DBuffer8* ds3dBuffer; };
 
         SokuLib::HandleManager<void*> handlesA;
         SokuLib::HandleManager<DSBuffer*> handlesB;
@@ -46,6 +47,17 @@ namespace {
         inline bool unload(unsigned int id) { return (this->*SokuLib::union_cast<bool(SFXManager::*)(unsigned int)>(0x401BD0))(id); }
         inline void play(unsigned int id) { return (this->*SokuLib::union_cast<void(SFXManager::*)(unsigned int)>(0x401D50))(id); }
         inline void setItemVolume(unsigned int id, float value) { return (this->*SokuLib::union_cast<void(SFXManager::*)(unsigned int, float)>(0x401CE0))(id, value); }
+        
+        inline void stop(unsigned int id) {
+            auto dsbuffer = handlesB.Get(id);
+            if (!dsbuffer || !(*dsbuffer)->dsHandle) return;
+            auto handle = (*dsbuffer)->dsHandle;
+            DWORD status = 0;
+            handle->GetStatus(&status);
+            if (status & DSBSTATUS_PLAYING) {
+                handle->Stop();
+            }
+        }
 
         static SFXManager& instance;
     };
@@ -68,6 +80,10 @@ namespace {
 
         inline void play() {
             if (id) SFXManager::instance.play(id);
+        }
+
+        inline void stop() {
+            if (id) SFXManager::instance.stop(id);
         }
     };
 }
@@ -389,6 +405,7 @@ void ShadyLua::LualibResource(lua_State* L) {
             .beginClass<SoundEffectProxy>("SoundInstance")
                 .addConstructor<void (*)(const char*)>()
                 .addFunction("play", &SoundEffectProxy::play)
+                .addFunction("stop", &SoundEffectProxy::stop)
             .endClass()
         .endNamespace()
     ;
